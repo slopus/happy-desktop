@@ -1220,6 +1220,26 @@ export {
     type HappyAgentComputeSystemName,
 } from "./pages/settings/HappyAgentComputeSettings";
 export {
+    HAPPY_AGENT_ZONE_PALETTE,
+    HappyAgentPermissionsSettings,
+    HappyAgentZoneDeleteDialog,
+    HappyAgentZoneDetailsDialog,
+    HappyAgentZonePage,
+    HappyAgentZonePickDialog,
+    HappyAgentZoneMark,
+    type HappyAgentPermissionsSettingsProps,
+    type HappyAgentZoneCandidateRow,
+    type HappyAgentZoneColorName,
+    type HappyAgentZoneDeleteDialogProps,
+    type HappyAgentZoneDetailsDialogProps,
+    type HappyAgentZoneBotRow,
+    type HappyAgentZonePageProps,
+    type HappyAgentZonePickDialogProps,
+    type HappyAgentZoneDraftView,
+    type HappyAgentZonePersonRow,
+    type HappyAgentZoneRow,
+} from "./pages/settings/HappyAgentPermissionsSettings";
+export {
     HappyAgentCredentialImport,
     type HappyAgentCredentialImportProps,
     type HappyAgentCredentialImportRow,

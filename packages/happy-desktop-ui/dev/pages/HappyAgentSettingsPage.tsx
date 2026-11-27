@@ -748,7 +748,6 @@ const membersRoles = [
     { id: "owner", name: "Owner" },
     { id: "admin", name: "Admin" },
     { id: "member", name: "Member" },
-    { id: "viewer", name: "Viewer" },
 ];
 
 const membersInvites: readonly HappyAgentInviteRow[] = [

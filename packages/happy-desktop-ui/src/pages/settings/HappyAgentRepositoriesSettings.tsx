@@ -406,7 +406,7 @@ export interface HappyAgentRepositoryDialogProps {
     readonly check: HappyAgentRepositoryCheck;
     /** Whether the reader may change and remove it. */
     readonly manage: boolean;
-    /** Whether the reader may check access; viewers may not. */
+    /** Whether the reader may check access, which takes `content.write`. */
     readonly checkAllowed: boolean;
     readonly saving: boolean;
     /** Why the last change was refused. */

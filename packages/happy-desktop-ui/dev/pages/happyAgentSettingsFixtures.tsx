@@ -25,6 +25,7 @@ export const HAPPY_CLOUD_OWNER_SETTINGS_CATEGORIES: readonly HappyAgentSettingsC
     { icon: "settings", id: "general", label: "General", tone: "gray" },
     { icon: "users", id: "account", label: "Account", tone: "blue" },
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
+    { group: "Team", icon: "shield", id: "permissions", label: "Permissions", tone: "purple" },
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
     { group: "Team", icon: "zap", id: "payments", label: "Payments", tone: "green" },
     { group: "Admin", icon: "shield", id: "administration", label: "Administration", tone: "blue" },

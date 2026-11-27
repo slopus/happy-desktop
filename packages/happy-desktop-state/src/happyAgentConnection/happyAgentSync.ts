@@ -49,7 +49,11 @@ export type HappyCloudEventType =
     | "pipeline.updated"
     | "pipeline.run.updated"
     | "pipeline.node.updated"
-    | "pipeline.node.log";
+    | "pipeline.node.log"
+    | "zone.created"
+    | "zone.updated"
+    | "zone.deleted"
+    | "agent.zone";
 
 /**
  * Events the daemon sends that the published protocol package does not name

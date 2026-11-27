@@ -170,6 +170,7 @@ export interface HappyAgentSession {
     readonly featureAvailability: () =>
         | import("happy-desktop-state").FeatureAvailabilityStore
         | undefined;
+    readonly zones: () => import("happy-desktop-state").HappyAgentZonesStore | undefined;
     readonly pipelines: () => import("happy-desktop-state").PipelinesStore | undefined;
     readonly pipeline: (
         pipelineId: string,
@@ -782,6 +783,7 @@ export function happyAgentConnectionOpen(input: {
                     repositories: () => client.repositories(),
                     compute: () => client.compute(),
                     featureAvailability: () => client.featureAvailability(),
+                    zones: () => client.zones(),
                     pipelines: () => client.pipelines(),
                     pipeline: (pipelineId) => client.pipeline(pipelineId),
                     pipelineRun: (runId) => client.pipelineRun(runId),

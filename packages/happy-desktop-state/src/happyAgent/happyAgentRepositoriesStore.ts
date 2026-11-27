@@ -103,7 +103,7 @@ export interface HappyAgentRepositoriesSnapshot {
     readonly repositories: readonly HappyAgentRepository[];
     /** Whether the reader may add, change and delete repositories. */
     readonly manage: boolean;
-    /** Whether the reader may check access and list branches; viewers may not. */
+    /** Whether the reader may check access and list branches, which takes `content.write`. */
     readonly checkAllowed: boolean;
     /** Each repository's branches, once asked for with `branchesLoad`. */
     readonly branches: ReadonlyMap<string, HappyAgentRepositoryBranches>;
@@ -146,7 +146,7 @@ export interface HappyAgentRepositoriesStore {
     repositoryDelete(): Promise<void>;
     /**
      * Reads a repository's branches into `branches`, for its dialog. Read once per repository; a failed read is tried
-     * again on the next ask. Viewers may not list branches.
+     * again on the next ask. Listing them takes `content.write`.
      */
     branchesLoad(repositoryId: string): void;
     [Symbol.dispose](): void;

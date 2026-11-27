@@ -66,6 +66,7 @@ import {
     happyAgentRepositoriesStoreNoop,
     happyAgentPluginsStoreNone,
     happyAgentComputeStoreNoop,
+    happyAgentZonesStoreNoop,
     happyAgentOnboardingSettingsStoreNoop,
     happyAgentPaymentsStoreNoop,
     happyAgentDailyUsageStoreNoop,
@@ -141,6 +142,7 @@ import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import { AppOnboardingSettings } from "./AppOnboardingSettings";
 import { AppPaymentsSettings } from "./AppPaymentsSettings";
 import { AppComputeSettings } from "./AppComputeSettings";
+import { AppPermissionsSettings, appPermissionsHeading } from "./AppPermissionsSettings";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { AppClusterSecretSettings } from "./AppClusterSecretSettings";
 import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
@@ -181,6 +183,8 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { group: "Agents", icon: "lock", id: "secrets", label: "Secrets", tone: "green" },
     // Who is on a Happy Cloud server; offered only there.
     { group: "Team", icon: "users", id: "members", label: "Members", tone: "orange" },
+    // The team's zones and who may join each; offered only on Happy Cloud.
+    { group: "Team", icon: "shield", id: "permissions", label: "Permissions", tone: "purple" },
     // The team's code on a Happy Cloud server; offered only there.
     { group: "Team", icon: "repository", id: "repositories", label: "Repositories", tone: "gray" },
     // The team's credit and card; listed only where the server takes payments
@@ -454,6 +458,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     usage: "What each provider account has spent",
     repositories: "The code your team works on",
     compute: "The computers agents run on",
+    permissions: "The team's zones and who may join each",
     administration: "How this server is set up for everyone on it",
     danger: "Deleting this server for everyone",
     payments: "Credit, the card on file and what agents spend",
@@ -668,6 +673,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const stateOpen = section === "debug";
     const repositoriesStore = host?.session?.repositories?.();
     const computeStore = host?.session?.compute?.();
+    const zonesStore = host?.session?.zones?.();
     // A category the host cannot serve is left out of the list rather than
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
@@ -677,6 +683,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             (category.id !== "members" || membersStore !== undefined) &&
             (category.id !== "repositories" || repositoriesStore !== undefined) &&
             (category.id !== "compute" || computeStore !== undefined) &&
+            (category.id !== "permissions" || zonesStore !== undefined) &&
             (!ADMIN_CATEGORIES.has(category.id) || owner) &&
             (category.id !== "administration" ||
                 (onboardingSettingsStore !== undefined && onboardingSettings.available)) &&
@@ -852,6 +859,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (computeShown ?? happyAgentComputeStoreNoop).get,
         (computeShown ?? happyAgentComputeStoreNoop).get,
     );
+    // Zones are read, and followed through their events, only while
+    // Permissions is on screen.
+    const zonesShown = section === "permissions" ? zonesStore : undefined;
+    const zones = useSyncExternalStore(
+        (zonesShown ?? happyAgentZonesStoreNoop).subscribe,
+        (zonesShown ?? happyAgentZonesStoreNoop).get,
+        (zonesShown ?? happyAgentZonesStoreNoop).get,
+    );
     // AI providers exist only on Happy Cloud; the list is followed while
     // Providers is on screen.
     const cloudProvidersStore =
@@ -1013,13 +1028,16 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     const mobileLinkHeading = mobileLink
         ? happyAgentMobileLinkHeading(mobileLink.step, mobileLink.pairingOptions)
         : undefined;
+    // A zone's page is a page inside Permissions, its header leading back to the list.
+    const zoneHeading = zonesShown ? appPermissionsHeading(zones, zonesShown) : undefined;
+    const subpageHeading = mobileLinkHeading ?? zoneHeading;
     const content = (
         <HappyAgentSettingsShell
             activeCategoryId={section}
             categories={categories}
             description={
-                mobileLinkHeading
-                    ? mobileLinkHeading.description
+                subpageHeading
+                    ? subpageHeading.description
                     : section === "secrets" && happyCloud
                       ? "Keys and credentials agents use without seeing them"
                       : section === "instructions" && happyCloud
@@ -1028,9 +1046,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             }
             onCategorySelect={props.onCategorySelect}
             onClose={props.onClose}
-            {...(mobileLink ? { onBack: mobileLink.setup.close } : {})}
+            {...(mobileLink
+                ? { onBack: mobileLink.setup.close }
+                : zoneHeading
+                  ? { onBack: zoneHeading.onBack }
+                  : {})}
             title={
-                mobileLinkHeading?.title ??
+                subpageHeading?.title ??
                 categories.find((category) => category.id === section)?.label ??
                 "Settings"
             }
@@ -1732,6 +1754,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             ) : section === "compute" ? (
                 computeShown ? (
                     <AppComputeSettings snapshot={compute} store={computeShown} />
+                ) : null
+            ) : section === "permissions" ? (
+                zonesShown ? (
+                    <AppPermissionsSettings
+                        bots={host?.bots ?? []}
+                        snapshot={zones}
+                        store={zonesShown}
+                    />
                 ) : null
             ) : section === "danger" ? (
                 owner && membersStore ? (

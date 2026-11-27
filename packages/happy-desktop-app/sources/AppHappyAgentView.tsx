@@ -816,6 +816,8 @@ export interface AppHappyAgentSession {
     readonly payments?: () => import("happy-desktop-state").HappyAgentPaymentsStore | undefined;
     /** Settings › Compute, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly compute?: () => import("happy-desktop-state").HappyAgentComputeStore | undefined;
+    /** Settings › Permissions, on a Happy Cloud server; absent or undefined elsewhere. */
+    readonly zones?: () => import("happy-desktop-state").HappyAgentZonesStore | undefined;
     /** Settings › Usage's daily token history; absent or undefined where it cannot be read. */
     readonly dailyUsage?: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
     /**

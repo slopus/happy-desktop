@@ -74,7 +74,11 @@ export interface HappyAgentUserProfileStoreDeps {
 const PROFILE_POLL_INTERVAL_MS = 5_000;
 const RECENT_TASKS_LIMIT = 10;
 const WINDOWS: readonly HappyAgentUserProfileUsageWindow[] = ["hour", "day", "week", "month"];
-const BUILT_IN_ROLES: Readonly<Record<string, string>> = { owner: "Owner", member: "Member" };
+const BUILT_IN_ROLES: Readonly<Record<string, string>> = {
+    owner: "Owner",
+    admin: "Admin",
+    member: "Member",
+};
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
     return typeof value === "object" && value !== null

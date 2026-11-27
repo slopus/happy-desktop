@@ -1,0 +1,484 @@
+/*
+ * Settings › Permissions: the team's zones. A zone's colour is one of the
+ * fixed palette's tile hues, painted by the rules at the end of this file on
+ * whatever draws it: its mark, its colour label's dot and its picker swatch.
+ */
+
+/* A zone's picture, or its colour under its kind's white glyph. */
+.happy-agent-zones__mark {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--happy-tile-gray);
+    color: var(--button-primary-tint);
+}
+
+.happy-agent-zones__mark[data-size="medium"] {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+}
+
+.happy-agent-zones__mark[data-size="large"] {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.happy-agent-zones__mark-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-agent-zones__list {
+    display: flex;
+    flex-direction: column;
+}
+
+/* A zone's row, a button that opens its page. */
+.happy-agent-zones__row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    min-height: 56px;
+    margin: 0;
+    padding: 12px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--divider);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-agent-zones__row:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-agent-zones__row:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-agent-zones__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-agent-zones__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 28px;
+}
+
+.happy-agent-zones__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Default or Critical: a word in a quiet pill, in sentence case; Critical in red ink. */
+.happy-agent-zones__tag {
+    flex: none;
+    padding: 0 6px;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-agent-zones__tag[data-critical] {
+    border-color: var(--happy-tile-red);
+    color: var(--happy-tile-red);
+}
+
+.happy-agent-zones__color {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-zones__swatch-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--happy-tile-gray);
+}
+
+.happy-agent-zones__description {
+    color: var(--text);
+    font-size: 12px;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+}
+
+.happy-agent-zones__meta {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+}
+
+.happy-agent-zones__owner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-agent-zones__owner-name {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-zones__row-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-height: 28px;
+}
+
+.happy-agent-zones__none {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-zones__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-agent-zones__form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-agent-zones__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.happy-agent-zones__note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-zones__picture {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-agent-zones__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* A palette colour: a dot in a ring that is drawn only around the one chosen. */
+.happy-agent-zones__swatch {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+}
+
+.happy-agent-zones__swatch .happy-agent-zones__swatch-dot {
+    width: 18px;
+    height: 18px;
+}
+
+.happy-agent-zones__swatch[aria-checked="true"] {
+    border-color: var(--text);
+}
+
+.happy-agent-zones__swatch:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.happy-agent-zones__swatch:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy-agent-zones__options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-agent-zones__option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-agent-zones__option:hover:not(:disabled) {
+    background: var(--surface-ripple);
+}
+
+.happy-agent-zones__option[aria-checked="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-agent-zones__option:disabled {
+    cursor: default;
+}
+
+.happy-agent-zones__option:disabled .happy-agent-zones__option-text,
+.happy-agent-zones__option:disabled .happy-agent-zones__radio {
+    opacity: 0.45;
+}
+
+.happy-agent-zones__option:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+/* The radio's ring is the same box chosen or not; only its dot is filled in. */
+.happy-agent-zones__radio {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+}
+
+.happy-agent-zones__radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: transparent;
+}
+
+.happy-agent-zones__option[aria-checked="true"] .happy-agent-zones__radio {
+    border-color: var(--radio-active);
+}
+
+.happy-agent-zones__option[aria-checked="true"] .happy-agent-zones__radio::after {
+    background: var(--radio-active);
+}
+
+.happy-agent-zones__option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-zones__option-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-agent-zones__option-description {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* A zone page's header: its picture, name, badges and summary, and the
+   button to its details. */
+.happy-agent-zones__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.happy-agent-zones__name[data-size="large"] {
+    font-size: 17px;
+    line-height: 22px;
+}
+
+/* A member or bot a zone lists, on its page. */
+.happy-agent-zones__entry {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-zones__field-label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+/* The Critical switch in the details modal, its words beside it. */
+.happy-agent-zones__toggle {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Deleting, at the foot of the details modal. */
+.happy-agent-zones__danger {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-agent-zones__search {
+    display: flex;
+}
+
+/* Who may be added, in the add modals. */
+.happy-agent-zones__picks {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-zones__pick {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-zones__pick:last-child {
+    border-bottom: 0;
+}
+
+.happy-agent-zones__pick-label {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* A field's value where the reader may not change it. */
+.happy-agent-zones__value {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-zones__value[data-wrap] {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* The palette. */
+
+.happy-agent-zones__mark[data-color="gray"],
+[data-color="gray"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-gray);
+}
+
+.happy-agent-zones__mark[data-color="red"],
+[data-color="red"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-red);
+}
+
+.happy-agent-zones__mark[data-color="orange"],
+[data-color="orange"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-orange);
+}
+
+.happy-agent-zones__mark[data-color="amber"],
+[data-color="amber"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-amber);
+}
+
+.happy-agent-zones__mark[data-color="green"],
+[data-color="green"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-green);
+}
+
+.happy-agent-zones__mark[data-color="teal"],
+[data-color="teal"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-teal);
+}
+
+.happy-agent-zones__mark[data-color="blue"],
+[data-color="blue"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-blue);
+}
+
+.happy-agent-zones__mark[data-color="indigo"],
+[data-color="indigo"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-indigo);
+}
+
+.happy-agent-zones__mark[data-color="purple"],
+[data-color="purple"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-purple);
+}
+
+.happy-agent-zones__mark[data-color="pink"],
+[data-color="pink"] > .happy-agent-zones__swatch-dot {
+    background: var(--happy-tile-pink);
+}
