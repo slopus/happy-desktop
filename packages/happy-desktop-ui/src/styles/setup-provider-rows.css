@@ -1,0 +1,163 @@
+/*
+ * C-355 SetupProviderRows — one full-width row per AI provider on a setup
+ * page: mark, name, one line, and a chevron, in the onboarding ink so the
+ * rows read on the sky. Every row is 56px tall in every state (52px in a
+ * window under 700px tall), so a sign-in landing moves nothing.
+ */
+
+.happy-setup-provider-rows {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 480px;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+}
+
+.happy-setup-provider-rows__row {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    height: 56px;
+    padding: 0 12px 0 16px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+}
+
+.happy-setup-provider-rows__row[data-status="connected"] {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--success) 70%, transparent);
+}
+
+/* A window under 700px tall has 280px between its fades for the rows. */
+@container (max-height: 699px) {
+    .happy-setup-provider-rows {
+        gap: 4px;
+    }
+
+    .happy-setup-provider-rows__row {
+        height: 52px;
+    }
+}
+
+/* The whole row opens its dialog; the slot on the right sits above that. */
+.happy-setup-provider-rows__open {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-setup-provider-rows__open:disabled {
+    cursor: default;
+}
+
+.happy-setup-provider-rows__open::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    content: "";
+}
+
+.happy-setup-provider-rows__open:focus-visible::after {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy-setup-provider-rows__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+}
+
+.happy-setup-provider-rows__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-setup-provider-rows__name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-setup-provider-rows__line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-setup-provider-rows__line > .happy-icon {
+    flex: none;
+}
+
+.happy-setup-provider-rows__words {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-setup-provider-rows__row[data-status="connected"] .happy-setup-provider-rows__line {
+    color: var(--onboarding-foreground);
+    font-weight: 500;
+}
+
+.happy-setup-provider-rows__row[data-status="connected"]
+    .happy-setup-provider-rows__line
+    > .happy-icon {
+    color: var(--success);
+}
+
+.happy-setup-provider-rows__row[data-status="failed"] .happy-setup-provider-rows__line {
+    color: var(--onboarding-foreground);
+}
+
+.happy-setup-provider-rows__row[data-status="failed"]
+    .happy-setup-provider-rows__line
+    > .happy-icon {
+    color: var(--warning-critical);
+}
+
+.happy-setup-provider-rows__slot {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Every row keeps the chevron's box, pressable or not, so the slots line up. */
+.happy-setup-provider-rows__chevron {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    width: 14px;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+}

@@ -1,0 +1,108 @@
+/*
+ * C-356 SetupProviderDialog — a provider's numbered steps in a 480px card.
+ *
+ * The card hangs from the top of a 560px frame centred in the window, and is
+ * as tall as its steps, so its header and close button hold still while the
+ * steps change; only the bottom edge moves. This stands in for Modal's
+ * anchored frame until that lands, and goes when it does.
+ */
+
+.happy-modal-overlay > .happy-modal.happy-setup-provider-dialog {
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    height: 560px;
+    max-height: 100%;
+    /* The room below a short card is still the dim, which dismisses. */
+    pointer-events: none;
+}
+
+.happy-modal-overlay > .happy-modal.happy-setup-provider-dialog > .happy-modal__dialog {
+    max-height: 100%;
+    pointer-events: auto;
+}
+
+.happy-setup-provider-dialog .happy-modal__body {
+    min-height: 0;
+}
+
+/* The header chip: a 28px neutral box with the vendor's 16px mark. */
+.happy-setup-provider-dialog__chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy-setup-provider-dialog__steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-setup-provider-dialog__step {
+    display: flex;
+    gap: 8px;
+}
+
+.happy-setup-provider-dialog__number {
+    flex: none;
+    width: 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-setup-provider-dialog__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-setup-provider-dialog__body > .happy-text-field,
+.happy-setup-provider-dialog__body > .happy-setup-command {
+    align-self: stretch;
+}
+
+.happy-setup-provider-dialog__title {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-setup-provider-dialog__hint {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+    text-wrap: pretty;
+}
+
+.happy-setup-provider-dialog__hint[data-tone="danger"] {
+    color: var(--warning-critical);
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* The code a device sign-in asks for, set to be read across a room. */
+.happy-setup-provider-dialog__code {
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 0.08em;
+    user-select: all;
+}

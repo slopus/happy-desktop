@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
     LocalOnboardingScreen,
     type LocalOnboardingAssistant,
+    type LocalOnboardingAssistantId,
     type LocalOnboardingView,
 } from "../../src/LocalOnboardingScreen";
 import type { OnboardingNodeIdentity } from "../../src/OnboardingNode";
@@ -103,7 +104,7 @@ function onboarding(
  * Subscriptions where Happy Agent signs the assistants in itself: each card's
  * button carries its state, and a connected one says so in words.
  */
-function connectOnboarding(view: LocalOnboardingView) {
+function connectOnboarding(view: LocalOnboardingView, dialog?: LocalOnboardingAssistantId) {
     return (
         <LocalOnboardingScreen
             happyMobilePairingOptions={setupPairingOptions()}
@@ -120,6 +121,7 @@ function connectOnboarding(view: LocalOnboardingView) {
             onHappyMobileConnect={noop}
             onHappyMobileSkip={noop}
             onStageSelect={noop}
+            {...(dialog ? { providerDialogOpen: dialog } : {})}
             showSteps
             view={view}
         />
@@ -162,97 +164,165 @@ const connectSubscriptions: LocalOnboardingView = {
     installShell: "posix",
 };
 
-/**
- * Antigravity beside the other three, none of which works yet: Claude to
- * connect, Codex not installed, Grok to sign in, and Antigravity in the state
- * each screen is about.
- */
-function antigravitySubscriptions(antigravity: LocalOnboardingAssistant): LocalOnboardingView {
+/** Each assistant as the rows draw it before anything is connected. */
+const claudeSignedOut: LocalOnboardingAssistant = {
+    authentication: "invalid",
+    connect: { installable: true, installed: true },
+    id: "claude",
+    status: "found",
+};
+const codexMissing: LocalOnboardingAssistant = {
+    authentication: "unavailable",
+    connect: { installable: true, installed: false },
+    id: "codex",
+    status: "missing",
+};
+const grokSignedOut: LocalOnboardingAssistant = {
+    authentication: "invalid",
+    connect: { installable: true, installed: true },
+    id: "grok",
+    status: "found",
+};
+const antigravitySignedOut: LocalOnboardingAssistant = {
+    authentication: "invalid",
+    connect: { installable: true, installed: true },
+    id: "antigravity",
+    status: "found",
+};
+
+/** One assistant connected, whether by a sign-in here or one already on this computer. */
+function connected(assistant: LocalOnboardingAssistant): LocalOnboardingAssistant {
     return {
-        assistants: [
-            {
-                authentication: "invalid",
-                connect: { installable: true, installed: true },
-                id: "claude",
-                status: "found",
-            },
-            {
-                authentication: "unavailable",
-                connect: { installable: true, installed: false },
-                id: "codex",
-                status: "missing",
-            },
-            {
-                authentication: "invalid",
-                connect: { installable: true, installed: true },
-                id: "grok",
-                status: "found",
-            },
-            antigravity,
-        ],
+        ...assistant,
+        authentication: "valid",
+        connect: { installable: true, installed: true },
+        status: "found",
+    };
+}
+
+/** Antigravity's sign-in at one point of its way, everything else as before. */
+function antigravityOperation(
+    operation: NonNullable<LocalOnboardingAssistant["connect"]["operation"]>,
+): LocalOnboardingAssistant {
+    return {
+        ...antigravitySignedOut,
+        connect: { installable: true, installed: true, operation },
+    };
+}
+
+/** A fixed moment, so the dialog says the same time on every capture. */
+const antigravityExpiresAt = Date.UTC(2026, 10, 27, 11, 52, 30);
+
+const antigravityWaiting = antigravityOperation({
+    acceptsCode: true,
+    expiresAt: antigravityExpiresAt,
+    kind: "sign-in",
+    status: "waiting",
+    url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=antigravity",
+});
+
+/** The four rows, with Subscriptions' usual empty custom column. */
+function rowsView(assistants: readonly LocalOnboardingAssistant[]): LocalOnboardingView {
+    return {
+        assistants,
         custom: { authentication: "invalid", providers: [] },
         kind: "provider-authentication",
         installShell: "posix",
     };
 }
 
-/** A fixed moment, so the screen says the same time on every capture. */
-const antigravityExpiresAt = Date.UTC(2026, 10, 27, 11, 52, 30);
-
-const antigravityScreens: readonly {
+const connectAiScreens: readonly {
     id: string;
     label: string;
-    antigravity: LocalOnboardingAssistant;
+    view: LocalOnboardingView;
+    dialog?: LocalOnboardingAssistantId;
 }[] = [
     {
-        antigravity: {
-            authentication: "unavailable",
-            connect: { installable: true, installed: false },
-            id: "antigravity",
-            status: "missing",
-        },
-        id: "antigravity-install",
-        label: "Subscriptions · Antigravity not installed",
+        id: "ai-rows",
+        label: "Connect your AI · four rows, none connected",
+        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
     },
     {
-        antigravity: {
-            authentication: "invalid",
-            connect: { installable: true, installed: true },
-            id: "antigravity",
-            status: "found",
-        },
-        id: "antigravity-sign-in",
-        label: "Subscriptions · Antigravity signed out",
+        dialog: "antigravity",
+        id: "ai-antigravity",
+        label: "Antigravity dialog · sign in at Google, then paste its code",
+        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
     },
     {
-        antigravity: {
-            authentication: "invalid",
-            connect: {
-                installable: true,
-                installed: true,
-                operation: {
-                    acceptsCode: true,
-                    expiresAt: antigravityExpiresAt,
-                    kind: "sign-in",
-                    status: "waiting",
-                    url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=antigravity",
+        dialog: "antigravity",
+        id: "ai-antigravity-waiting",
+        label: "Antigravity dialog · Google open, waiting for the code",
+        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravityWaiting]),
+    },
+    {
+        dialog: "antigravity",
+        id: "ai-antigravity-failed",
+        label: "Antigravity dialog · the sign-in gave up",
+        view: rowsView([
+            claudeSignedOut,
+            codexMissing,
+            grokSignedOut,
+            antigravityOperation({
+                kind: "sign-in",
+                message: "Antigravity stopped waiting for the code. Open Google to try again.",
+                status: "failed",
+            }),
+        ]),
+    },
+    {
+        id: "ai-antigravity-connected",
+        label: "Connect your AI · Antigravity connected",
+        view: rowsView([
+            claudeSignedOut,
+            codexMissing,
+            grokSignedOut,
+            connected(antigravitySignedOut),
+        ]),
+    },
+    {
+        id: "ai-detected",
+        label: "Connect your AI · Claude Code and Codex already signed in on this computer",
+        view: rowsView([
+            connected(claudeSignedOut),
+            connected(codexMissing),
+            grokSignedOut,
+            antigravitySignedOut,
+        ]),
+    },
+    {
+        dialog: "claude",
+        id: "ai-claude",
+        label: "Claude Code dialog · setup token",
+        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
+    },
+    {
+        dialog: "codex",
+        id: "ai-codex",
+        label: "Codex dialog · install, then sign in",
+        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
+    },
+    {
+        dialog: "grok",
+        id: "ai-grok-waiting",
+        label: "Grok dialog · waiting at xAI with a device code",
+        view: rowsView([
+            claudeSignedOut,
+            codexMissing,
+            {
+                ...grokSignedOut,
+                connect: {
+                    installable: true,
+                    installed: true,
+                    operation: {
+                        kind: "sign-in",
+                        status: "waiting",
+                        url: "https://accounts.x.ai/device",
+                        userCode: "WDJB-MJHT",
+                    },
                 },
             },
-            id: "antigravity",
-            status: "found",
-        },
-        id: "antigravity-waiting",
-        label: "Subscriptions · Antigravity waiting on Google, a code to paste back",
-    },
-    {
-        antigravity: {
-            authentication: "valid",
-            connect: { installable: true, installed: true },
-            id: "antigravity",
-            status: "found",
-        },
-        id: "antigravity-ready",
-        label: "Subscriptions · Antigravity signed in",
+            antigravityWaiting,
+        ]),
     },
 ];
 
@@ -627,10 +697,25 @@ const screens: readonly {
         label: "Subscriptions · checking, installing, sign-in failed",
         render: () => connectOnboarding(connectBusySubscriptions),
     },
-    ...antigravityScreens.map((screen) => ({
+    ...connectAiScreens.map((screen) => ({
         id: `subscriptions-${screen.id}`,
         label: screen.label,
-        render: () => connectOnboarding(antigravitySubscriptions(screen.antigravity)),
+        // The transform keeps each dialog's overlay inside its own window.
+        render: () => (
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                    width: "100%",
+                    overflow: "hidden",
+                    position: "relative",
+                    transform: "translateZ(0)",
+                }}
+            >
+                {connectOnboarding(screen.view, screen.dialog)}
+            </div>
+        ),
     })),
     {
         id: "subscriptions-mixed",

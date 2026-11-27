@@ -118,6 +118,8 @@
 @import "./styles/segmented-progress.css";
 @import "./styles/onboarding-steps.css";
 @import "./styles/setup-assistants.css";
+@import "./styles/setup-provider-rows.css";
+@import "./styles/setup-provider-dialog.css";
 @import "./styles/claude-setup-token.css";
 @import "./styles/setup-command.css";
 @import "./styles/setup-prompt.css";

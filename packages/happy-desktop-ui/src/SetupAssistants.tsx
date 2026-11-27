@@ -5,7 +5,6 @@ import { CopyButton } from "./CopyButton";
 import { SetupCommand } from "./SetupCommand";
 import { Spinner } from "./Spinner";
 import { Icon, type IconName } from "./Icon";
-import { TextField } from "./TextField";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /** One instruction somebody hands to the coding agent they already use. */
@@ -72,13 +71,6 @@ export type SetupAssistantAction =
           /** What the disabled button says while the page is open, e.g. "In your browser". */
           readonly label: string;
           readonly userCode?: string;
-          /** When the sign-in stops waiting, in epoch milliseconds. */
-          readonly expiresAt?: number;
-          /**
-           * Takes the code the vendor's page shows instead of finishing by
-           * itself. Present only when that page may show one.
-           */
-          readonly onCodeSubmit?: (code: string) => void;
           readonly onOpen: () => void;
           readonly onCancel: () => void;
       }
@@ -209,194 +201,175 @@ export function SetupAssistants(props: SetupAssistantsProps) {
             data-happy-desktop-ui="setup-assistants"
             data-testid={props["data-testid"]}
         >
-            <div className="happy-setup-assistants__row">
-                {props.assistants.map((assistant) => (
-                    <article
-                        className="happy-setup-assistants__item"
-                        data-happy-desktop-ui="setup-assistants-item"
-                        data-status={assistant.status}
-                        key={assistant.id}
-                    >
-                        <span
-                            className="happy-setup-assistants__mark"
-                            data-happy-desktop-ui="setup-assistants-mark"
+            {props.assistants.length === 0 ? null : (
+                <div className="happy-setup-assistants__row">
+                    {props.assistants.map((assistant) => (
+                        <article
+                            className="happy-setup-assistants__item"
+                            data-happy-desktop-ui="setup-assistants-item"
+                            data-status={assistant.status}
+                            key={assistant.id}
                         >
-                            {assistant.mark === "custom" ? (
-                                <Ionicon name="key" size={56} />
-                            ) : (
-                                <AssistantMark name={assistant.mark} size={56} tone="brand" />
-                            )}
-                        </span>
-                        <span
-                            className="happy-setup-assistants__name"
-                            data-happy-desktop-ui="setup-assistants-name"
-                        >
-                            {assistant.name}
-                        </span>
-                        {assistant.detail === undefined ? null : (
                             <span
-                                className="happy-setup-assistants__detail"
-                                data-happy-desktop-ui="setup-assistants-detail"
-                                data-kind={assistant.detailKind ?? "sentence"}
+                                className="happy-setup-assistants__mark"
+                                data-happy-desktop-ui="setup-assistants-mark"
                             >
-                                {assistant.detailKind === "path"
-                                    ? pathBreakable(assistant.detail)
-                                    : assistant.detail}
+                                {assistant.mark === "custom" ? (
+                                    <Ionicon name="key" size={56} />
+                                ) : (
+                                    <AssistantMark name={assistant.mark} size={56} tone="brand" />
+                                )}
                             </span>
-                        )}
-                        {assistant.action
-                            ? ((action) => (
-                                  <span
-                                      className="happy-setup-assistants__action"
-                                      data-happy-desktop-ui="setup-assistants-action"
-                                      // Checking and its answer are two mounts, so
-                                      // the answer fades in where "Checking" was.
-                                      key={action.kind === "pending" ? "pending" : "settled"}
-                                  >
-                                      {action.kind === "pending" ? (
-                                          <span
-                                              className="happy-setup-assistants__checking"
-                                              data-happy-desktop-ui="setup-assistants-checking"
-                                              role="status"
-                                              style={{ width: ASSISTANT_BUTTON_WIDTH }}
-                                          >
-                                              <Spinner size={14} tone="muted" />
-                                              Checking
-                                          </span>
-                                      ) : action.kind === "command" ? (
-                                          <>
-                                              <SetupCommand
-                                                  command={action.command}
-                                                  label={action.label}
-                                                  {...(action.onCopy
-                                                      ? { onCopy: action.onCopy }
-                                                      : {})}
-                                              />
-                                              {action.note === undefined ? null : (
-                                                  <span className="happy-setup-assistants__note">
-                                                      {action.note}
-                                                  </span>
-                                              )}
-                                          </>
-                                      ) : action.kind === "prompts" ? (
-                                          <SetupAssistantPrompts action={action} />
-                                      ) : action.kind === "button" ? (
-                                          <Button
-                                              disabled={!action.onSelect}
-                                              {...(action.icon ? { icon: action.icon } : {})}
-                                              loading={action.busy === true}
-                                              onClick={action.onSelect}
-                                              width={ASSISTANT_BUTTON_WIDTH}
-                                          >
-                                              {action.label}
-                                          </Button>
-                                      ) : action.kind === "done" ? (
-                                          <span
-                                              className="happy-setup-assistants__done"
-                                              data-happy-desktop-ui="setup-assistants-done"
-                                              role="status"
-                                              style={{ width: ASSISTANT_BUTTON_WIDTH }}
-                                          >
-                                              <span className="happy-setup-assistants__done-word">
-                                                  <Ionicon name="checkmark-sharp" size={16} />
-                                                  {action.label}
+                            <span
+                                className="happy-setup-assistants__name"
+                                data-happy-desktop-ui="setup-assistants-name"
+                            >
+                                {assistant.name}
+                            </span>
+                            {assistant.detail === undefined ? null : (
+                                <span
+                                    className="happy-setup-assistants__detail"
+                                    data-happy-desktop-ui="setup-assistants-detail"
+                                    data-kind={assistant.detailKind ?? "sentence"}
+                                >
+                                    {assistant.detailKind === "path"
+                                        ? pathBreakable(assistant.detail)
+                                        : assistant.detail}
+                                </span>
+                            )}
+                            {assistant.action
+                                ? ((action) => (
+                                      <span
+                                          className="happy-setup-assistants__action"
+                                          data-happy-desktop-ui="setup-assistants-action"
+                                          // Checking and its answer are two mounts, so
+                                          // the answer fades in where "Checking" was.
+                                          key={action.kind === "pending" ? "pending" : "settled"}
+                                      >
+                                          {action.kind === "pending" ? (
+                                              <span
+                                                  className="happy-setup-assistants__checking"
+                                                  data-happy-desktop-ui="setup-assistants-checking"
+                                                  role="status"
+                                                  style={{ width: ASSISTANT_BUTTON_WIDTH }}
+                                              >
+                                                  <Spinner size={14} tone="muted" />
+                                                  Checking
                                               </span>
-                                          </span>
-                                      ) : action.kind === "waiting" ? (
-                                          <>
-                                              <Button loading width={ASSISTANT_BUTTON_WIDTH}>
-                                                  {action.label}
-                                              </Button>
-                                              {action.userCode === undefined ? null : (
-                                                  <span
-                                                      className="happy-setup-assistants__code"
-                                                      data-happy-desktop-ui="setup-assistants-code"
-                                                  >
-                                                      {action.userCode}
-                                                  </span>
-                                              )}
-                                              {action.onCodeSubmit === undefined ? null : (
-                                                  <SetupAssistantCode
-                                                      name={assistant.name}
-                                                      onSubmit={action.onCodeSubmit}
+                                          ) : action.kind === "command" ? (
+                                              <>
+                                                  <SetupCommand
+                                                      command={action.command}
+                                                      label={action.label}
+                                                      {...(action.onCopy
+                                                          ? { onCopy: action.onCopy }
+                                                          : {})}
                                                   />
-                                              )}
-                                              {action.expiresAt === undefined ? null : (
-                                                  <span
-                                                      className="happy-setup-assistants__expires"
-                                                      data-happy-desktop-ui="setup-assistants-expires"
-                                                  >
-                                                      Waits until{" "}
-                                                      {new Date(
-                                                          action.expiresAt,
-                                                      ).toLocaleTimeString([], {
-                                                          hour: "numeric",
-                                                          minute: "2-digit",
-                                                          second: "2-digit",
-                                                      })}
-                                                  </span>
-                                              )}
-                                              <span className="happy-setup-assistants__links">
-                                                  <button
-                                                      className="happy-setup-assistants__link"
-                                                      data-happy-desktop-ui="setup-assistants-link"
-                                                      onClick={action.onOpen}
-                                                      type="button"
-                                                  >
-                                                      Open again
-                                                  </button>
-                                                  <button
-                                                      className="happy-setup-assistants__link"
-                                                      data-happy-desktop-ui="setup-assistants-link"
-                                                      onClick={action.onCancel}
-                                                      type="button"
-                                                  >
-                                                      Cancel
-                                                  </button>
-                                              </span>
-                                          </>
-                                      ) : (
-                                          <>
-                                              <a
-                                                  className="happy-setup-assistants__link"
-                                                  data-happy-desktop-ui="setup-assistants-link"
-                                                  href={action.href}
-                                                  onClick={(event) => {
-                                                      if (!props.onExternalOpen) return;
-                                                      event.preventDefault();
-                                                      props.onExternalOpen(action.href);
-                                                  }}
-                                                  rel="noopener noreferrer"
-                                                  target="_blank"
+                                                  {action.note === undefined ? null : (
+                                                      <span className="happy-setup-assistants__note">
+                                                          {action.note}
+                                                      </span>
+                                                  )}
+                                              </>
+                                          ) : action.kind === "prompts" ? (
+                                              <SetupAssistantPrompts action={action} />
+                                          ) : action.kind === "button" ? (
+                                              <Button
+                                                  disabled={!action.onSelect}
+                                                  {...(action.icon ? { icon: action.icon } : {})}
+                                                  loading={action.busy === true}
+                                                  onClick={action.onSelect}
+                                                  width={ASSISTANT_BUTTON_WIDTH}
                                               >
                                                   {action.label}
-                                              </a>
-                                          </>
-                                      )}
-                                      {/* Checking, its button and why its check failed
+                                              </Button>
+                                          ) : action.kind === "done" ? (
+                                              <span
+                                                  className="happy-setup-assistants__done"
+                                                  data-happy-desktop-ui="setup-assistants-done"
+                                                  role="status"
+                                                  style={{ width: ASSISTANT_BUTTON_WIDTH }}
+                                              >
+                                                  <span className="happy-setup-assistants__done-word">
+                                                      <Ionicon name="checkmark-sharp" size={16} />
+                                                      {action.label}
+                                                  </span>
+                                              </span>
+                                          ) : action.kind === "waiting" ? (
+                                              <>
+                                                  <Button loading width={ASSISTANT_BUTTON_WIDTH}>
+                                                      {action.label}
+                                                  </Button>
+                                                  {action.userCode === undefined ? null : (
+                                                      <span
+                                                          className="happy-setup-assistants__code"
+                                                          data-happy-desktop-ui="setup-assistants-code"
+                                                      >
+                                                          {action.userCode}
+                                                      </span>
+                                                  )}
+                                                  <span className="happy-setup-assistants__links">
+                                                      <button
+                                                          className="happy-setup-assistants__link"
+                                                          data-happy-desktop-ui="setup-assistants-link"
+                                                          onClick={action.onOpen}
+                                                          type="button"
+                                                      >
+                                                          Open again
+                                                      </button>
+                                                      <button
+                                                          className="happy-setup-assistants__link"
+                                                          data-happy-desktop-ui="setup-assistants-link"
+                                                          onClick={action.onCancel}
+                                                          type="button"
+                                                      >
+                                                          Cancel
+                                                      </button>
+                                                  </span>
+                                              </>
+                                          ) : (
+                                              <>
+                                                  <a
+                                                      className="happy-setup-assistants__link"
+                                                      data-happy-desktop-ui="setup-assistants-link"
+                                                      href={action.href}
+                                                      onClick={(event) => {
+                                                          if (!props.onExternalOpen) return;
+                                                          event.preventDefault();
+                                                          props.onExternalOpen(action.href);
+                                                      }}
+                                                      rel="noopener noreferrer"
+                                                      target="_blank"
+                                                  >
+                                                      {action.label}
+                                                  </a>
+                                              </>
+                                          )}
+                                          {/* Checking, its button and why its check failed
                                           share one box whatever the answer, so a reason
                                           arriving moves nothing: the slot is held empty. */}
-                                      {action.kind === "pending" ||
-                                      action.kind === "button" ||
-                                      action.kind === "done" ? (
-                                          <span
-                                              className="happy-setup-assistants__reason"
-                                              data-happy-desktop-ui="setup-assistants-reason"
-                                              {...(action.kind === "button" && action.note
-                                                  ? { title: action.note.replaceAll("`", "") }
-                                                  : { "aria-hidden": true })}
-                                          >
-                                              {action.kind === "button" && action.note ? (
-                                                  <SetupAssistantsReason text={action.note} />
-                                              ) : null}
-                                          </span>
-                                      ) : null}
-                                  </span>
-                              ))(assistant.action)
-                            : null}
-                    </article>
-                ))}
-            </div>
+                                          {action.kind === "pending" ||
+                                          action.kind === "button" ||
+                                          action.kind === "done" ? (
+                                              <span
+                                                  className="happy-setup-assistants__reason"
+                                                  data-happy-desktop-ui="setup-assistants-reason"
+                                                  {...(action.kind === "button" && action.note
+                                                      ? { title: action.note.replaceAll("`", "") }
+                                                      : { "aria-hidden": true })}
+                                              >
+                                                  {action.kind === "button" && action.note ? (
+                                                      <SetupAssistantsReason text={action.note} />
+                                                  ) : null}
+                                              </span>
+                                          ) : null}
+                                      </span>
+                                  ))(assistant.action)
+                                : null}
+                        </article>
+                    ))}
+                </div>
+            )}
             {props.providers && props.providers.length > 0 ? (
                 <ul
                     aria-label="Other providers"
@@ -457,50 +430,6 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                 </p>
             ) : null}
         </div>
-    );
-}
-
-/**
- * Where a code the vendor's page shows goes, when its sign-in cannot finish by
- * itself: the page may be in a browser on another computer, or show the code
- * rather than coming back here. Enter or the arrow hands it over.
- */
-function SetupAssistantCode(props: {
-    readonly name: string;
-    readonly onSubmit: (code: string) => void;
-}) {
-    const [code, codeSet] = useState("");
-    const submit = () => {
-        if (code.trim() === "") return;
-        props.onSubmit(code);
-    };
-    return (
-        <span
-            className="happy-setup-assistants__code-entry"
-            data-happy-desktop-ui="setup-assistants-code-entry"
-            style={{ width: ASSISTANT_BUTTON_WIDTH }}
-        >
-            <TextField
-                aria-label={`Code from the ${props.name} sign-in page`}
-                autoComplete="off"
-                fullWidth
-                onSubmit={submit}
-                onValueChange={codeSet}
-                placeholder="Paste code"
-                size="small"
-                value={code}
-            />
-            <Button
-                aria-label="Use this code"
-                disabled={code.trim() === ""}
-                icon="arrow-right"
-                iconOnly
-                onClick={submit}
-                size="small"
-                title="Use this code"
-                variant="secondary"
-            />
-        </span>
     );
 }
 

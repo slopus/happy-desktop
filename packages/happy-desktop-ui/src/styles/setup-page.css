@@ -530,6 +530,18 @@
     max-width: 960px;
 }
 
+/* Subscriptions: the provider rows, then anything configured some other way
+   and the way to set that up, in one 480px column. */
+.happy-local-onboarding__providers {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    align-self: center;
+    width: 100%;
+    max-width: 480px;
+}
+
 .happy-local-onboarding__machine-assistants {
     display: flex;
     flex: none;

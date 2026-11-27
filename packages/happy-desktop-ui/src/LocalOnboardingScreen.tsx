@@ -7,17 +7,17 @@ import {
     type DesktopMobilePairingOptions,
     type DesktopMobileSetupStep,
 } from "./DesktopMobileSetup";
-import { ClaudeSetupTokenDialog } from "./ClaudeSetupTokenDialog";
+import { LocalOnboardingProviderDialog } from "./LocalOnboardingProviderDialog";
 import { OnboardingHelp } from "./OnboardingHelp";
 import { OnboardingNode, type OnboardingNodeIdentity } from "./OnboardingNode";
 import { OnboardingSteps, type OnboardingStage } from "./OnboardingSteps";
 import {
     SetupAssistants,
     type SetupAssistantAction,
-    type SetupAssistantEntry,
     type SetupAssistantsAside,
     type SetupAssistantsProvider,
 } from "./SetupAssistants";
+import { SetupProviderRows, type SetupProviderRow } from "./SetupProviderRows";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
 import { windowsSandboxSetupPage, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
@@ -206,8 +206,8 @@ export interface LocalOnboardingScreenProps {
     readonly showSteps?: boolean;
     /** Opens the custom column's prompts with the page, for the Blueprint. */
     readonly agentPromptsOpen?: boolean;
-    /** Opens the Claude setup token dialog with the page, for the Blueprint. */
-    readonly claudeDialogOpen?: boolean;
+    /** Opens one assistant's dialog with the page, for the Blueprint. */
+    readonly providerDialogOpen?: LocalOnboardingAssistantId;
     readonly appearance: ThemeMode;
     readonly view: LocalOnboardingView;
     /** The Happy Agent being set up, once it has said who it is. */
@@ -317,6 +317,12 @@ const ASSISTANTS: Record<
         install: Record<LocalOnboardingInstallShell, string>;
         /** What signs you in, taken from each vendor's own documentation. */
         signIn: string;
+        /** Whose page the sign-in opens, for example "Google". */
+        vendor: string;
+        /** The row's line while nothing is connected: what it signs in with. */
+        offer: string;
+        /** The vendor's sign-in page shows a code to paste back into Happy. */
+        pastesCode: boolean;
     }
 > = {
     claude: {
@@ -329,6 +335,9 @@ const ASSISTANTS: Record<
         mark: "claude",
         name: "Claude Code",
         signIn: "claude auth login",
+        vendor: "Claude",
+        offer: "Your Claude plan",
+        pastesCode: false,
     },
     codex: {
         command: "codex",
@@ -342,6 +351,9 @@ const ASSISTANTS: Record<
         mark: "openai",
         name: "Codex",
         signIn: "codex login",
+        vendor: "OpenAI",
+        offer: "Your ChatGPT plan",
+        pastesCode: false,
     },
     grok: {
         command: "grok",
@@ -353,6 +365,9 @@ const ASSISTANTS: Record<
         mark: "grok",
         name: "Grok",
         signIn: "grok login",
+        vendor: "xAI",
+        offer: "Your Grok plan",
+        pastesCode: false,
     },
     antigravity: {
         command: "agy",
@@ -365,6 +380,9 @@ const ASSISTANTS: Record<
         name: "Antigravity",
         // agy has no sign-in command: its first prompt while signed out signs in.
         signIn: "agy",
+        vendor: "Google",
+        offer: "Your Google AI plan",
+        pastesCode: true,
     },
 };
 
@@ -388,7 +406,7 @@ export function localOnboardingInstallCommand(
     return ASSISTANTS[assistant].install[shell];
 }
 
-/** What a Subscriptions card can ask the host to do. */
+/** What a Subscriptions row and its dialog can ask the host to do. */
 interface AssistantCardHandlers {
     readonly onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void;
     readonly onSignIn?: (assistant: LocalOnboardingAssistantId) => void;
@@ -396,111 +414,51 @@ interface AssistantCardHandlers {
     readonly onInstall?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onCancel?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onExternalOpen?: (url: string) => void;
-    /** Opens the Claude setup token dialog. */
-    readonly onClaudeConnect?: () => void;
+    /** Opens the assistant's dialog. */
+    readonly onOpen?: (assistant: LocalOnboardingAssistantId) => void;
 }
 
 /**
- * Connected, or still being checked: the card asks for nothing. A card being
- * checked holds its button's place empty, and the answer fades in there.
+ * One assistant as its row says it. Each row opens its dialog, where the
+ * assistant is installed and signed in. A sign-in already on this computer
+ * is one connected account without any dialog; "Add another" stays
+ * unpressable until Happy Agent can hold a second account of one assistant.
  */
-function assistantSettledAction(
-    assistant: LocalOnboardingAssistant,
-): SetupAssistantAction | undefined {
-    if (assistant.authentication === "valid") return { kind: "done", label: "Connected" };
-    if (assistant.authentication === "checking") return { kind: "pending" };
-    return undefined;
-}
-
-/**
- * Every card is one button: Claude opens the dialog that explains its setup
- * token, and Codex, Grok and Antigravity install and sign in through Happy
- * Agent with the vendor's own page. The button is the card's status as well as its action:
- * what it says is where the assistant stands, and a connected one keeps its
- * place, so the row never loses a member. A card never sends anyone to a
- * terminal: there are no commands to copy.
- */
-function assistantConnectProject(
+function assistantRowProject(
     assistant: LocalOnboardingAssistant,
     handlers: AssistantCardHandlers,
-): SetupAssistantAction {
-    const { onSignIn, onInstall, onCancel, onClaudeConnect } = handlers;
-    const retry = assistant.authentication === "error";
-    const settled = assistantSettledAction(assistant);
-    if (settled) return settled;
-    if (assistant.id === "claude")
-        return {
-            kind: "button",
-            label: retry ? "Connect again" : "Connect",
-            ...(onClaudeConnect ? { onSelect: onClaudeConnect } : {}),
-        };
-    const id = assistant.id;
-    const connect = assistant.connect;
-    const operation = connect.operation;
-    if (operation?.status === "running")
-        return {
-            busy: true,
-            kind: "button",
-            label: operation.kind === "install" ? "Installing" : "Opening",
-        };
-    if (operation?.status === "waiting")
-        return {
-            kind: "waiting",
-            label: "In your browser",
-            onCancel: () => onCancel?.(id),
-            onOpen: () => handlers.onExternalOpen?.(operation.url),
-            ...(operation.userCode === undefined ? {} : { userCode: operation.userCode }),
-            ...(operation.expiresAt === undefined ? {} : { expiresAt: operation.expiresAt }),
-            ...(operation.acceptsCode && handlers.onSignInCode
-                ? {
-                      onCodeSubmit: (code: string) => handlers.onSignInCode?.(id, code),
-                  }
-                : {}),
-        };
-    if (!connect.installed)
-        return {
-            kind: "button",
-            label: operation?.status === "failed" ? "Try again" : "Install",
-            // One Happy Agent cannot install keeps its button, not offered.
-            ...(onInstall && connect.installable ? { onSelect: () => onInstall(id) } : {}),
-        };
-    return {
-        kind: "button",
-        label: operation?.status === "failed" ? "Try again" : retry ? "Sign in again" : "Sign in",
-        ...(onSignIn ? { onSelect: () => onSignIn(id) } : {}),
-    };
-}
-
-/** The card's button, with why its check failed under it when the check said. */
-function assistantActionProject(
-    assistant: LocalOnboardingAssistant,
-    handlers: AssistantCardHandlers,
-): SetupAssistantAction {
-    const action = assistantConnectProject(assistant, handlers);
-    return action.kind === "button" && assistant.authentication === "error" && assistant.message
-        ? { ...action, note: assistant.message }
-        : action;
-}
-
-function assistantAuthenticationEntry(
-    assistant: LocalOnboardingAssistant,
-    handlers: AssistantCardHandlers,
-): SetupAssistantEntry {
+): SetupProviderRow {
     const vendor = ASSISTANTS[assistant.id];
-    return {
-        action: assistantActionProject(assistant, handlers),
+    const operation = assistant.connect.operation;
+    const row = {
         id: assistant.id,
         mark: vendor.mark,
         name: vendor.name,
-        status:
-            assistant.authentication === "valid"
-                ? "found"
-                : assistant.authentication === "invalid" || assistant.authentication === "error"
-                  ? "signed-out"
-                  : assistant.authentication === "unavailable"
-                    ? "missing"
-                    : "checking",
+        ...(handlers.onOpen ? { onOpen: () => handlers.onOpen?.(assistant.id) } : {}),
     };
+    // Its dialog would sign the one account in again, so a connected row opens
+    // nothing until Happy Agent can add a second one.
+    if (assistant.authentication === "valid") {
+        const { onOpen: _onOpen, ...connected } = row;
+        return { ...connected, accounts: 1, detail: vendor.offer, status: "connected" };
+    }
+    if (assistant.authentication === "checking")
+        return { ...row, detail: vendor.offer, status: "checking" };
+    switch (operation?.status) {
+        case "running":
+            return {
+                ...row,
+                detail: operation.kind === "install" ? "Installing…" : "Signing in…",
+                status: "working",
+            };
+        case "waiting":
+            return { ...row, detail: `Waiting for you at ${vendor.vendor}`, status: "waiting" };
+        case "failed":
+            return { ...row, detail: operation.message, status: "failed" };
+    }
+    if (assistant.authentication === "error")
+        return { ...row, detail: assistant.message ?? "Couldn't verify", status: "failed" };
+    return { ...row, detail: vendor.offer, status: "idle" };
 }
 
 const HAPPY_DOCS = "~/.happy/docs";
@@ -587,10 +545,10 @@ function customProvidersProject(custom: LocalOnboardingCustom): readonly SetupAs
     });
 }
 
-/** The row shown before authentication resolves: the cards, their buttons held. */
-const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSISTANTS).map(
-    ([id, assistant]): SetupAssistantEntry => ({
-        action: { kind: "pending" },
+/** The rows shown before authentication resolves, each still being checked. */
+const CHECKING_ROWS: readonly SetupProviderRow[] = Object.entries(ASSISTANTS).map(
+    ([id, assistant]): SetupProviderRow => ({
+        detail: assistant.offer,
         id,
         mark: assistant.mark,
         name: assistant.name,
@@ -599,7 +557,7 @@ const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSIS
 );
 
 interface MachineSetupProjection {
-    readonly assistants?: readonly SetupAssistantEntry[];
+    readonly rows?: readonly SetupProviderRow[];
     readonly aside?: SetupAssistantsAside;
     readonly providers?: readonly SetupAssistantsProvider[];
     readonly copy?: string;
@@ -640,7 +598,7 @@ function machineSetupProject(
     // is no status line to appear and go again under the subtitle.
     if (view.kind === "examining")
         return {
-            assistants: CHECKING_ASSISTANTS,
+            rows: CHECKING_ROWS,
             aside: {},
             copy: SUBSCRIPTIONS_COPY,
             hasValidAuthentication: false,
@@ -648,9 +606,7 @@ function machineSetupProject(
         };
     if (view.kind === "provider-authentication")
         return {
-            assistants: view.assistants.map((assistant) =>
-                assistantAuthenticationEntry(assistant, handlers),
-            ),
+            rows: view.assistants.map((assistant) => assistantRowProject(assistant, handlers)),
             aside: customAside(view.custom, promptsOpen, handlers.onCommandCopy),
             copy: SUBSCRIPTIONS_COPY,
             providers: customProvidersProject(view.custom),
@@ -680,9 +636,11 @@ function machineSetupProject(
  */
 export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     const { view } = props;
-    // Whether the Claude dialog is open is this screen's own passing state;
-    // what saving the token does belongs to setup.
-    const [claudeOpen, claudeOpenSet] = useState(props.claudeDialogOpen === true);
+    // Which assistant's dialog is open is this screen's own passing state;
+    // what installing, signing in and saving a token do belongs to setup.
+    const [dialogOpen, dialogOpenSet] = useState<LocalOnboardingAssistantId | undefined>(
+        props.providerDialogOpen,
+    );
     const identity = props.node ? <OnboardingNode node={props.node} /> : undefined;
     // Every step is drawn by this one `SetupPage`, never by a component of its
     // own: a different component here would remount the sky and the step bar,
@@ -752,40 +710,39 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         ...(props.onAssistantInstall ? { onInstall: props.onAssistantInstall } : {}),
         ...(props.onAssistantConnectCancel ? { onCancel: props.onAssistantConnectCancel } : {}),
         ...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {}),
-        ...(props.onClaudeTokenSubmit
-            ? {
-                  onClaudeConnect: () => {
-                      props.onClaudeTokenReset?.();
-                      claudeOpenSet(true);
-                  },
-              }
-            : {}),
+        onOpen: (id) => {
+            if (id === "claude") props.onClaudeTokenReset?.();
+            dialogOpenSet(id);
+        },
     });
-    const claude =
+    const opened =
         view.kind === "provider-authentication"
-            ? view.assistants.find((assistant) => assistant.id === "claude")
+            ? view.assistants.find((assistant) => assistant.id === dialogOpen)
             : undefined;
-    // Saved, or Claude already works: the dialog has nothing left to ask.
-    const claudeDialog =
-        claudeOpen &&
-        claude !== undefined &&
-        claude.authentication !== "valid" &&
-        claudeToken?.phase !== "saved" &&
-        props.onClaudeTokenSubmit !== undefined &&
+    // Connected, or Claude's token saved: the dialog has nothing left to ask.
+    const providerDialog =
+        opened !== undefined &&
+        opened.authentication !== "valid" &&
+        !(opened.id === "claude" && claudeToken?.phase === "saved") &&
         view.kind === "provider-authentication" ? (
-            <ClaudeSetupTokenDialog
-                shell={view.installShell}
-                {...((claude.connect?.installed ?? claude.status === "found")
-                    ? {}
-                    : { installCommand: ASSISTANTS.claude.install[view.installShell] })}
-                phase={
-                    claudeToken?.phase === "saving" || claudeToken?.phase === "failed"
-                        ? claudeToken.phase
-                        : "idle"
-                }
-                {...(claudeToken?.error ? { error: claudeToken.error } : {})}
-                onClose={() => claudeOpenSet(false)}
-                onTokenSubmit={props.onClaudeTokenSubmit}
+            <LocalOnboardingProviderDialog
+                assistant={opened}
+                {...(claudeToken ? { claudeToken } : {})}
+                installShell={view.installShell}
+                onClose={() => dialogOpenSet(undefined)}
+                {...(props.onAssistantConnectCancel
+                    ? { onCancel: props.onAssistantConnectCancel }
+                    : {})}
+                {...(props.onClaudeTokenSubmit
+                    ? { onClaudeTokenSubmit: props.onClaudeTokenSubmit }
+                    : {})}
+                {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
+                {...(props.onAssistantInstall ? { onInstall: props.onAssistantInstall } : {})}
+                {...(props.onAssistantSignIn ? { onSignIn: props.onAssistantSignIn } : {})}
+                {...(props.onAssistantSignInCode
+                    ? { onSignInCode: props.onAssistantSignInCode }
+                    : {})}
+                vendor={ASSISTANTS[opened.id]}
             />
         ) : null;
 
@@ -794,7 +751,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             <>
                 <SetupPage
                     {...frame}
-                    {...(machineSetup.assistants
+                    {...(machineSetup.rows
                         ? {
                               action: {
                                   disabled: !machineSetup.hasValidAuthentication,
@@ -808,27 +765,32 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                     data-testid="local-onboarding-screen"
                     // Subscriptions is a choice, not a report: no picture, and the
                     // choices centred in the window. Setup keeps its owl on the line.
-                    {...(machineSetup.assistants
+                    {...(machineSetup.rows
                         ? { placement: "centered" as const }
                         : { scene: "owl" as const })}
                     {...(machineSetup.status ? { status: machineSetup.status } : {})}
                     title={machineSetup.title}
                 >
-                    {machineSetup.assistants ? (
-                        <SetupAssistants
-                            assistants={machineSetup.assistants}
-                            {...(machineSetup.aside ? { aside: machineSetup.aside } : {})}
-                            data-testid="local-onboarding-assistants"
-                            {...(machineSetup.providers
-                                ? { providers: machineSetup.providers }
-                                : {})}
-                            onExternalOpen={props.onExternalOpen}
-                        />
+                    {machineSetup.rows ? (
+                        <div className="happy-local-onboarding__providers">
+                            <SetupProviderRows
+                                data-testid="local-onboarding-assistants"
+                                rows={machineSetup.rows}
+                            />
+                            <SetupAssistants
+                                assistants={[]}
+                                {...(machineSetup.aside ? { aside: machineSetup.aside } : {})}
+                                {...(machineSetup.providers
+                                    ? { providers: machineSetup.providers }
+                                    : {})}
+                                onExternalOpen={props.onExternalOpen}
+                            />
+                        </div>
                     ) : undefined}
                 </SetupPage>
                 {/* Beside the page, not inside its scroll area: in there the dim would
                 paint under the page's pinned corners, the node and Ask a question. */}
-                {claudeDialog}
+                {providerDialog}
             </>
         );
 

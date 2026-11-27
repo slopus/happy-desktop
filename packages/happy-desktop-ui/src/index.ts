@@ -793,6 +793,20 @@ export {
     type SetupAssistantsProps,
     type SetupAssistantsProvider,
 } from "./SetupAssistants";
+export {
+    SetupProviderRows,
+    type SetupProviderRow,
+    type SetupProviderRowsProps,
+} from "./SetupProviderRows";
+export {
+    SetupProviderCode,
+    SetupProviderDialog,
+    SetupProviderHint,
+    SetupProviderStep,
+    SetupProviderSteps,
+    type SetupProviderDialogAction,
+    type SetupProviderDialogProps,
+} from "./SetupProviderDialog";
 export { SetupCommand, type SetupCommandProps } from "./SetupCommand";
 export { SetupPrompt, type SetupPromptProps } from "./SetupPrompt";
 export { AssistantMark, type AssistantMarkName, type AssistantMarkProps } from "./AssistantMark";

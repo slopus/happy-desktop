@@ -324,9 +324,11 @@ it("asks for the install, not a sign-in, when an assistant that is not here fail
         ],
     });
     const claude = cardFind(screenRender(view as LocalOnboardingView), "Claude Code");
-    // Claude's one button opens the dialog that installs it first; the card
-    // itself never shows a command.
-    expect(claude?.querySelector("button")?.textContent).toBe("Connect");
+    // Claude's row opens the dialog that installs it first; the row itself
+    // offers the plan and never shows a command.
+    expect(claude?.getAttribute("data-status")).toBe("idle");
+    expect(rowLine(claude)).toBe("Your Claude plan");
+    expect(claude?.querySelector("button")?.hasAttribute("disabled")).toBe(false);
     expect(claude?.textContent).not.toContain("curl");
     expect(claude?.textContent).not.toContain("claude auth login");
 });
@@ -357,14 +359,17 @@ it("counts a sign-in that works as Ready even without the command", async () => 
 });
 
 /** The settled screen as it is drawn, with the custom column's prompts open. */
-function screenRender(view: LocalOnboardingView, claudeDialogOpen = false): HTMLElement {
+function screenRender(
+    view: LocalOnboardingView,
+    providerDialogOpen?: "claude" | "antigravity",
+): HTMLElement {
     const noop = () => undefined;
     const root = document.createElement("div");
     root.innerHTML = renderToStaticMarkup(
         createElement(LocalOnboardingScreen, {
             agentPromptsOpen: true,
             appearance: "dark",
-            claudeDialogOpen,
+            ...(providerDialogOpen ? { providerDialogOpen } : {}),
             happyMobilePairingOptions: { completed: false, verifying: false, view: null },
             onAssistantSignInCode: noop,
             onAssistantsContinue: noop,
@@ -395,9 +400,9 @@ it.each(["powershell", "posix"] as const)(
                 custom: { authentication: "invalid", providers: [] },
                 installShell,
             },
-            true,
+            "claude",
         );
-        const dialog = root.querySelector('[data-testid="claude-setup-token-dialog"]');
+        const dialog = root.querySelector('[data-testid="local-onboarding-provider-dialog"]');
         const terminal = installShell === "powershell" ? "PowerShell" : "Terminal";
         const command =
             installShell === "powershell"
@@ -410,12 +415,16 @@ it.each(["powershell", "posix"] as const)(
     },
 );
 
+/** One assistant's row on Subscriptions, by the name it shows. */
 function cardFind(root: HTMLElement, name: string): Element | undefined {
-    return [...root.querySelectorAll('[data-happy-desktop-ui="setup-assistants-item"]')].find(
-        (item) =>
-            item.querySelector('[data-happy-desktop-ui="setup-assistants-name"]')?.textContent ===
-            name,
+    return [...root.querySelectorAll('[data-happy-desktop-ui="setup-provider-row"]')].find(
+        (item) => item.querySelector(".happy-setup-provider-rows__name")?.textContent === name,
     );
+}
+
+/** What a row says under its name. */
+function rowLine(row: Element | undefined): string | null | undefined {
+    return row?.querySelector(".happy-setup-provider-rows__words")?.textContent;
 }
 
 it.each(["error", "invalid"] as const)(
@@ -466,13 +475,11 @@ it.each(["error", "invalid"] as const)(
         expect(root.textContent).toContain(
             "Sign in to one you already use to get started. You can add more later.",
         );
-        // Connecting is the main way in, so a failed CLI still offers it, as
-        // its one button and never as a command to run.
+        // Connecting is the main way in, so a failed CLI still opens its
+        // dialog from its row, and never shows a command to run.
         const claude = cardFind(root, "Claude Code");
-        expect(claude?.querySelector("button")?.textContent).toBe("Connect again");
-        expect(
-            claude?.querySelector('[data-happy-desktop-ui="setup-assistants-detail"]'),
-        ).toBeNull();
+        expect(claude?.getAttribute("data-status")).toBe("failed");
+        expect(rowLine(claude)).toBe("Couldn't verify");
         expect(root.querySelector('[data-happy-desktop-ui="setup-command"]')).toBeNull();
         expect(root.textContent).not.toContain("claude auth login");
         expect(root.textContent).not.toContain("curl");
@@ -687,10 +694,8 @@ it("says why a sign-in could not be verified under its button", async () => {
         screenRender(localOnboardingView(store.get()) as LocalOnboardingView),
         "Claude Code",
     );
-    expect(claude?.querySelector("button")?.textContent).toBe("Connect again");
-    expect(
-        claude?.querySelector('[data-happy-desktop-ui="setup-assistants-reason"]')?.textContent,
-    ).toBe("Claude rejected the saved sign-in: OAuth token has expired.");
+    expect(claude?.getAttribute("data-status")).toBe("failed");
+    expect(rowLine(claude)).toBe("Claude rejected the saved sign-in: OAuth token has expired.");
 });
 
 it("says the configuration could not be read when Happy Agent does not give it", async () => {
@@ -944,11 +949,16 @@ it("offers the Google page and takes the code it shows for a waiting Antigravity
             ],
         }),
     );
-    const card = cardFind(
-        screenRender(localOnboardingView(store.get()) as LocalOnboardingView),
-        "Antigravity",
+    const root = screenRender(
+        localOnboardingView(store.get()) as LocalOnboardingView,
+        "antigravity",
     );
-    expect(card?.querySelector("input")).not.toBeNull();
+    expect(rowLine(cardFind(root, "Antigravity"))).toBe("Waiting for you at Google");
+    // Its dialog: Google's page, then the code it shows, and Connect.
+    const dialog = root.querySelector('[data-testid="local-onboarding-provider-dialog"]');
+    expect(dialog?.textContent).toContain("Sign in at Google");
+    expect(dialog?.textContent).toContain("Paste the code Google shows");
+    expect(dialog?.querySelector('input[aria-label="Code from Google"]')).not.toBeNull();
 
     store.assistantSignInCode("antigravity", " 4/0AbCdEf \n");
     await vi.waitFor(() =>
