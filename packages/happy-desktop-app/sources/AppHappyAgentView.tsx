@@ -286,7 +286,6 @@ import {
     MarkdownDiff,
     markdownDiffCompute,
     MarkdownDocument,
-    ConfirmPopover,
     Modal,
     ModalOverlay,
     ModalOverlayPresence,
@@ -4451,6 +4450,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                   }
                 : {})}
             onSettingsOpen={props.onSettingsOpen}
+            settingsShortcut={APP_SHORTCUTS.settingsOpen}
         />
     );
     const surfaceCreateSelect = (id: string): void => {
@@ -5803,6 +5803,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                 ]}
                             />
                         ) : null}
+                        {/* Command-comma opens settings from anywhere in the window, as the
+                footer's cog does. Settings answers Escape to come back. */}
+                        <WindowShortcuts
+                            actions={[
+                                {
+                                    run: props.onSettingsOpen,
+                                    shortcut: APP_SHORTCUTS.settingsOpen,
+                                },
+                            ]}
+                        />
                         {/* Cmd-N belongs to the window too: a task is made from wherever
                 the reader is, as the New task row under Search makes one. Bound only
                 while the machine on screen can make one, so an older Happy
@@ -8504,19 +8514,24 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
      * about first, lightly, since an archived chat can be found and revived.
      */
     const tabCloseRequest = (tabId: string) => {
-        // Only the open conversation's transcript is read, so a background
-        // tab is never known to be empty and is asked about.
+        // The open conversation is judged by its transcript and composer; a
+        // background one by its summary, which knows when nobody has written
+        // in it, nothing is running there, and no draft waits.
         const content = happyAgentConversationContent(
             props.workspace.get().conversation,
             tabId as HappyAgentSessionId,
         );
+        const summary = openGroup?.conversations.find((candidate) => candidate.id === tabId);
+        const empty =
+            content === "empty" ||
+            (content === undefined && summary?.untouched === true && summary.activity === "idle");
         const archive = conversationArchiveTargetFind(tabId);
         if (!archive) {
             groupTabClose(tabId);
             return;
         }
         if (!happyAgentOnline()) return;
-        if (content !== "empty") {
+        if (!empty) {
             props.workspace.conversationArchiveConfirmOpen(archive);
             return;
         }
@@ -8570,6 +8585,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 void props.workspace.subtaskArchive(target.conversationId).catch(() => undefined);
                 return;
         }
+    };
+    /**
+     * The question the archive card asks, naming what goes. Cmd-W and a tab's
+     * close button both land here, often on a tab that is not the one being
+     * read, so a bare "Archive?" left the reader guessing which chat it meant
+     * and whether it was gone for good.
+     */
+    const conversationArchiveQuestion = (
+        target: HappyAgentConversationArchiveConfirmSnapshot,
+    ): { readonly title: string; readonly message: string } => {
+        const name = groupTabs.find((tab) => tab.id === target.conversationId)?.label;
+        const noun = target.kind === "task" ? "task" : "chat";
+        return {
+            title: `Archive this ${noun}?`,
+            message: `${name ? `“${name}” leaves` : "It leaves"} the tabs. Search finds it again.`,
+        };
     };
     const conversationArchiveConfirmAnswer = () => {
         const target = props.workspace.get().conversationArchiveConfirm;
@@ -9291,25 +9322,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     : []),
                             ]}
                         />
-                        {workspace.conversationArchiveConfirm ? (
-                            // Light on purpose: nothing behind it dims, a press
-                            // anywhere else puts it away, and Enter says yes.
-                            <ModalOverlay
-                                backdrop="clear"
-                                onDismiss={() => props.workspace.conversationArchiveConfirmClose()}
-                            >
-                                <ConfirmPopover
-                                    confirmLabel="Archive"
-                                    initialFocus="confirm"
-                                    onCancel={() =>
-                                        props.workspace.conversationArchiveConfirmClose()
-                                    }
-                                    onConfirm={conversationArchiveConfirmAnswer}
-                                    title="Archive?"
-                                    tone="warning"
-                                />
-                            </ModalOverlay>
-                        ) : null}
                         {/* Chats say workspace errors above their input. Keep the
                         lane mounted but empty there, preserving the tab strip
                         and transcript identities. Views without a composer use
@@ -9398,6 +9410,27 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 size="medium"
                                 closeLabel="Close tab"
                                 closeShortcut={APP_SHORTCUTS.tabClose}
+                                // Asked below the tab it is about, whether its
+                                // close button or Cmd-W raised it. Light on
+                                // purpose: nothing dims, a press anywhere else
+                                // puts it away, and Enter says yes.
+                                {...(workspace.conversationArchiveConfirm
+                                    ? {
+                                          closeQuestion: {
+                                              confirmLabel: "Archive",
+                                              initialFocus: "confirm",
+                                              onCancel: () =>
+                                                  props.workspace.conversationArchiveConfirmClose(),
+                                              onConfirm: conversationArchiveConfirmAnswer,
+                                              tabId: workspace.conversationArchiveConfirm
+                                                  .conversationId,
+                                              tone: "warning",
+                                              ...conversationArchiveQuestion(
+                                                  workspace.conversationArchiveConfirm,
+                                              ),
+                                          },
+                                      }
+                                    : {})}
                                 onClose={tabCloseRequest}
                                 onDoubleClick={(tabId) => {
                                     const file = groupFileTabs.find((tab) => tab.id === tabId);

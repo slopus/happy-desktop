@@ -5538,6 +5538,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     version: sessionId,
                     createdAt,
                     updatedAt: createdAt,
+                    // Nobody has written here yet, which the host says the
+                    // same way: its last activity is its creation.
+                    lastActivityAt: createdAt,
                     archivedAt: null,
                 };
                 replaceAgent(optimistic);

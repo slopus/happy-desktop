@@ -19,7 +19,8 @@
    scrolls horizontally, and its overflow fade is a mask, which cuts off even a
    fixed descendant at the strip's edge. The menu is portalled to the window's
    overlay lane, so only this stacking order is its own. */
-.happy-tabs__menu {
+.happy-tabs__menu,
+.happy-tabs__question {
     position: fixed;
     z-index: var(--happy-z-overlay);
 }

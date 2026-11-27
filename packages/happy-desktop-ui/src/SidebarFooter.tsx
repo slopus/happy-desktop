@@ -3,7 +3,9 @@ import { Avatar } from "./Avatar";
 import { Box } from "./Box";
 import { Button } from "./Button";
 import { SidebarKeepAwakeMenu, type SidebarKeepAwakeMode } from "./SidebarKeepAwakeMenu";
+import type { KeyboardShortcut } from "./keyboardShortcut";
 import { MenuButton } from "./MenuButton";
+import { Tooltip } from "./Tooltip";
 
 export type SidebarFooterProps = {
     /**
@@ -35,6 +37,8 @@ export type SidebarFooterProps = {
     onSettingsOpen?: () => void;
     /** Overrides the settings control's label. */
     settingsLabel?: string;
+    /** The chord that opens settings, named on the control's tooltip. */
+    settingsShortcut?: KeyboardShortcut;
     /** Development-only branch and Blueprint control, pinned beside the footer actions. */
     devMenu?: ReactNode;
     /** The bug report control, just before the theme menu. */
@@ -207,14 +211,24 @@ export function SidebarFooter(props: SidebarFooterProps) {
                 />
             ) : null}
             {props.onSettingsOpen ? (
-                <Button
-                    aria-label={props.settingsLabel ?? "Settings"}
-                    icon="settings"
-                    iconOnly
-                    onClick={props.onSettingsOpen}
-                    size="small"
-                    variant="ghost"
-                />
+                <Tooltip
+                    align="end"
+                    {...(props.settingsShortcut
+                        ? { label: props.settingsLabel ?? "Settings" }
+                        : {})}
+                    placement="top"
+                    {...(props.settingsShortcut ? { shortcut: props.settingsShortcut } : {})}
+                >
+                    <Button
+                        aria-keyshortcuts={props.settingsShortcut?.aria}
+                        aria-label={props.settingsLabel ?? "Settings"}
+                        icon="settings"
+                        iconOnly
+                        onClick={props.onSettingsOpen}
+                        size="small"
+                        variant="ghost"
+                    />
+                </Tooltip>
             ) : null}
         </Box>
     );

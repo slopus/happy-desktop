@@ -1,7 +1,37 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { type MenuItem } from "../../src/Menu";
 import { type TabItem, Tabs, type TabsSize } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** Closing a tab asks first, below the tab; the answer only closes the card here. */
+function QuestionBar() {
+    const [asked, setAsked] = useState<string>();
+    const tab = laneTabs({}).find((candidate) => candidate.id === asked);
+    return (
+        <div style={{ width: "560px" }}>
+            <Tabs
+                activeId="one"
+                closeQuestion={
+                    tab
+                        ? {
+                              confirmLabel: "Archive",
+                              initialFocus: "confirm",
+                              message: `“${tab.label}” leaves the tabs. Search finds it again.`,
+                              onCancel: () => setAsked(undefined),
+                              onConfirm: () => setAsked(undefined),
+                              tabId: tab.id,
+                              title: "Archive this chat?",
+                              tone: "warning",
+                          }
+                        : undefined
+                }
+                onClose={setAsked}
+                onSelect={() => {}}
+                tabs={laneTabs({})}
+            />
+        </div>
+    );
+}
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-025";
@@ -152,6 +182,16 @@ export function TabsPage() {
                             tabMenuItems={sweepMenu}
                             tabs={inboxTabs}
                         />
+                    </Stack>
+                </Specimen>
+                <Specimen
+                    detail="close a tab to ask about it — the card hangs below that tab, Enter archives, Escape or a press elsewhere cancels"
+                    label="Close question"
+                    number="T-13"
+                    stage="app"
+                >
+                    <Stack rule="ConfirmPopover 280 · 4 below the tab · clamped 8 inside the window">
+                        <QuestionBar />
                     </Stack>
                 </Specimen>
             </div>
