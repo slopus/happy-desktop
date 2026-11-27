@@ -42,7 +42,10 @@ export const INLINE_PAGE_TITLE_HEIGHT = 28;
 export const INLINE_PAGE_STATUS_HEIGHT = 24;
 /** Between the title line and the page under it. */
 export const INLINE_PAGE_CONTENT_GAP = 8;
-/** What any page may report, so a runaway page cannot make the transcript unusable. */
+/**
+ * What any page may report, so a runaway page cannot make the transcript
+ * unusable. A page that reaches it is shown cut, and says so at its foot.
+ */
 export const INLINE_PAGE_MAX_HEIGHT = 24_000;
 
 /** The height an inline page adds beneath its call's line, excluding the gap above it. */

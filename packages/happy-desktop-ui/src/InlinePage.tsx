@@ -92,6 +92,10 @@ export function InlinePage(props: InlinePageProps) {
     });
     const failed = failure !== undefined && failure.key === shown?.key ? failure : undefined;
     const height = geometry.height ?? 0;
+    /* A page reports at most the cap, so one that reaches it may go on below
+       what the reply shows. The reader is told so, at its foot, and can open
+       the rest beside the chat. */
+    const cut = height >= INLINE_PAGE_MAX_HEIGHT && failed === undefined;
     const onCollapsedChange = props.onCollapsedChange;
     const toggle =
         geometry.placement === "inline" && onCollapsedChange
@@ -226,6 +230,31 @@ export function InlinePage(props: InlinePageProps) {
                     {failed ? (
                         <div className="happy-inline-page__failure" role="status">
                             {failed.message}
+                        </div>
+                    ) : null}
+                    {cut ? (
+                        <div
+                            className="happy-inline-page__cut"
+                            data-happy-desktop-ui="inline-page-cut"
+                        >
+                            <span className="happy-inline-page__cut-text">
+                                This page is too tall to show here in full.
+                            </span>
+                            {props.onOpenSide ? (
+                                <Button
+                                    aria-label={
+                                        props.openAriaLabel ?? `Open ${props.title} beside the chat`
+                                    }
+                                    className="happy-inline-page__cut-open"
+                                    disabled={props.openDisabled}
+                                    icon="open-external"
+                                    onClick={() => props.onOpenSide?.()}
+                                    size="small"
+                                    variant="secondary"
+                                >
+                                    Read the rest
+                                </Button>
+                            ) : null}
                         </div>
                     ) : null}
                 </div>
