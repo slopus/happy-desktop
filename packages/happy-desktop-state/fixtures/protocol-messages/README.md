@@ -8,7 +8,7 @@ The schema is the one `@slopus/happy-agent-client` 0.0.184 defines: its
 published TypeBox schemas for blocks, presentations, failures and metadata, and
 its `Message` TypeScript types for the envelope and the text, image, reasoning
 and tool-call blocks. Desktop's composition of them is
-`packages/happy-desktop-state/src/happyAgentConnection/messageValidate.ts`.
+`packages/happy-desktop-state/src/happyAgentConnection/messageSchema.ts`.
 
 Five departures from that schema. Two keep an older client reading a newer
 server: a tool-call presentation of a type the client does not know is dropped
@@ -77,5 +77,7 @@ Each file is one JSON object:
 - `valid/agent-tool-result-string.json` is old Happy Cloud history with
   string results; `valid/agent-tool-data-not-object.json` covers string,
   array, number and null `arguments` and `result`.
+- `invalid/recovery-actions-duplicated.json` is a service error offering the
+  same recovery action twice; `recovery.actions` must be unique.
 - A question's `header` may be empty: clients do not enforce the published
   schema's `minLength: 1` on it.

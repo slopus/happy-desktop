@@ -1,0 +1,25 @@
+{
+    "description": "A service error whose recovery offers the same action twice; recovery actions must be unique.",
+    "invalidAt": ["/error/recovery/actions"],
+    "message": {
+        "id": "msgrecoverydup0000000001",
+        "role": "service",
+        "createdAt": 1764100000030,
+        "content": [
+            {
+                "type": "text",
+                "text": "Claude is out of usage."
+            }
+        ],
+        "metadata": {},
+        "error": {
+            "code": "usage_limit",
+            "mode": null,
+            "credentialSource": null,
+            "recovery": {
+                "steps": ["Wait for the limit to reset."],
+                "actions": ["ask_chief", "ask_chief"]
+            }
+        }
+    }
+}
