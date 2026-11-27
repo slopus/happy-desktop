@@ -24,7 +24,11 @@
  * by slopus/happy's scripts/liquid-metal/cloud.py (Paper's Poisson solve,
  * blurEdge3x3 and pow 1.6) into cloud-liquid-metal.png, red the edge and
  * green the alpha, so a frame reads it once rather than nine times; the
- * banding dither scaled by the mark's opacity, so the square stays clear.
+ * banding dither scaled by the mark's opacity, so the square stays clear;
+ * and the H cut out of the cloud filled with solid black, so it reads the
+ * same on every surface. The H is cloud.svg's own geometry, drawn as a
+ * distance field under the metal and grown by two field texels so the metal's
+ * soft inner edge always lies over black, never over whatever is behind.
  */
 export const liquidMetalVertexShader = `#version 300 es
 in vec2 a_position;
@@ -52,6 +56,25 @@ const float ANGLE = 70.;
 // colorTint white at full strength: color burn by white changes nothing.
 const vec3 TINT = vec3(1.);
 const float TINT_ALPHA = 1.;
+
+// The H cut-out in the mark's unit square, y down: cloud.svg's 378.18-621.83
+// square with 15.23 outer corners, less its 81.22-wide notches top and bottom.
+const vec2 H_CENTER = vec2(.5);
+const vec2 H_HALF = vec2(.121825);
+const float H_RADIUS = .01523;
+// Each notch runs from .04061 off the centre outward, past the square's edge.
+const vec2 H_NOTCH_HALF = vec2(.04061, .08);
+const float H_NOTCH_CENTER = .12061;
+// Two texels of the 512px field.
+const float H_GROW = 2. / 512.;
+
+float hDistance(vec2 p) {
+  vec2 q = abs(p - H_CENTER) - H_HALF + H_RADIUS;
+  float square = length(max(q, 0.)) + min(max(q.x, q.y), 0.) - H_RADIUS;
+  vec2 n = abs(vec2(p.x - H_CENTER.x, abs(p.y - H_CENTER.y) - H_NOTCH_CENTER)) - H_NOTCH_HALF;
+  float notch = length(max(n, 0.)) + min(max(n.x, n.y), 0.);
+  return max(square, -notch);
+}
 
 vec2 rotate(vec2 uv, float th) {
   return mat2(cos(th), sin(th), -sin(th), cos(th)) * uv;
@@ -220,6 +243,11 @@ void main() {
 
   color += opacity / 256. * (fract(sin(dot(.014 * gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453123) - .5);
 
-  fragColor = vec4(color, opacity);
+  // The black H under the metal: it adds coverage and no colour.
+  // Its coverage from the distance in pixels: a unit-square distance times
+  // the square's side.
+  float h = hDistance(uv) - H_GROW;
+  float hole = clamp(.5 - h * side, 0., 1.);
+  fragColor = vec4(color, opacity + hole * (1. - opacity));
 }
 `;
