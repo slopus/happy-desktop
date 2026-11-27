@@ -178,6 +178,39 @@ it("opens a row action menu on right click and reports the row with the selected
     expect(view.container.querySelector('[data-happy-desktop-ui="sidebar-item-menu"]')).toBeNull();
 });
 
+it("marks every row that stands for the place in front, and nothing else", async () => {
+    const view = createRenderer().render(
+        () => (
+            <Sidebar
+                activeItemAliasIds={["inbox", "claude"]}
+                activeItemId="launch-week"
+                data-testid="aliases"
+                onItemSelect={() => {}}
+                sections={sections}
+            />
+        ),
+        { width: 400, height: 744 },
+    );
+    await view.ready();
+
+    const marked = [
+        ...view.container.querySelectorAll('[data-happy-desktop-ui="sidebar-item"][data-active]'),
+    ].map((row) => row.getAttribute("data-item-id"));
+    expect(marked).toEqual(["inbox", "launch-week", "claude"]);
+    // The rows wear the one selected fill, whichever of them was clicked.
+    const fill = (id: string) =>
+        view
+            .$(
+                '[data-testid="aliases"] [data-happy-desktop-ui="sidebar-item"][data-item-id="' +
+                    id +
+                    '"]',
+            )
+            .computedStyle("background-color");
+    expect(fill("inbox")).toBe(fill("launch-week"));
+    expect(fill("claude")).toBe(fill("launch-week"));
+    expect(fill("my-issues")).not.toBe(fill("launch-week"));
+});
+
 it("renders the Happy Engineering wordmark without a product title", async () => {
     const view = createRenderer().render(
         () => (
