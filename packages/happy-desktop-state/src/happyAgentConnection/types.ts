@@ -1126,6 +1126,8 @@ export interface ConnectHappyAgentOptions {
     onDebugEntry?: (entry: HappyAgentDebugLogInput) => void;
     /** Live completion only. `stillCurrent` expires on the next run or reconciliation. */
     onTopLevelSessionFinished?: (sessionId: string, stillCurrent: () => boolean) => void;
+    /** Live delegated completion, separate so existing root-only consumers keep their contract. */
+    onSubtaskSessionFinished?: (sessionId: string, stillCurrent: () => boolean) => void;
     /**
      * Whether bootstrap and the event stream wait for the member's profile.
      * A team Happy Agent refuses both to a member who has none yet; the

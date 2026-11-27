@@ -1,6 +1,7 @@
 import {
     happyAgentAttentionConnection,
     type HappyAgentAttentionSnapshot,
+    type HappyAgentSessionId,
     type ProjectsVisibilitySnapshot,
 } from "happy-desktop-state";
 import { LOCAL_HAPPY_AGENT_ID, type HappyAgentDirectorySnapshot } from "./happyAgentDirectoryStore";
@@ -95,7 +96,7 @@ function completionChimeRender(context: AudioContext): AudioBuffer {
 }
 
 /**
- * Whether one finished top-level conversation should chime, by the person's
+ * Whether one finished conversation should chime, by the person's
  * choices for its connection and for the bot it belongs to, if any.
  *
  * `focused` means the reader is looking at that connection right now: it is
@@ -108,10 +109,21 @@ export function completionChimeWanted(input: {
     readonly directory: HappyAgentDirectorySnapshot;
     readonly happyAgentId: string;
     readonly sessionId: string;
+    readonly kind: "root" | "subtask";
     readonly windowFocused: boolean;
 }): boolean {
     const connection = happyAgentAttentionConnection(input.attention, input.happyAgentId);
     if (!connection.completionSoundReady) return false;
+    if (input.kind === "subtask") {
+        const override = connection.subtaskCompletionSounds.get(
+            input.sessionId as HappyAgentSessionId,
+        );
+        if (
+            override === "muted" ||
+            (override !== "enabled" && !input.attention.subtaskCompletionSound)
+        )
+            return false;
+    }
     const sound = connection.completionSound;
     if (sound === "never") return false;
     if (sound === "focused") {

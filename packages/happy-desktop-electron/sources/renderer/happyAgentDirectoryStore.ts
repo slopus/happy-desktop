@@ -243,11 +243,12 @@ export interface HappyAgentDirectoryDeps {
     readonly activity?: (happyAgentId: string, activity: HappyAgentActivity) => void;
     /** Observes one Happy Agent's phone pairings while a pairing page shows them. */
     readonly mobilePairingObserve?: (happyAgentId: string) => HappyAgentMobilePairingObserve;
-    /** A top-level session on one Happy Agent finished a turn. */
+    /** A live session on one Happy Agent finished a turn. */
     readonly sessionFinished?: (
         happyAgentId: string,
         sessionId: string,
         stillCurrent: () => boolean,
+        kind: "root" | "subtask",
     ) => void;
     /** Desktop-wide model memory for this window's Happy Agent connection. */
     readonly modelPreferencePersistence: (id: string) => HappyAgentModelPreferencePersistence;
@@ -831,8 +832,8 @@ export function happyAgentDirectoryStoreCreate(
                 ...(deps.mobilePairingObserve
                     ? { mobilePairingObserve: deps.mobilePairingObserve(happyAgent.entry.id) }
                     : {}),
-                sessionFinished: (sessionId, stillCurrent) =>
-                    deps.sessionFinished?.(happyAgent.entry.id, sessionId, stillCurrent),
+                sessionFinished: (sessionId, stillCurrent, kind) =>
+                    deps.sessionFinished?.(happyAgent.entry.id, sessionId, stillCurrent, kind),
                 compatibility: (mismatch) => {
                     if (happyAgent.protocolMismatch?.message === mismatch?.message) return;
                     happyAgent.protocolMismatch = mismatch;
