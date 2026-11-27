@@ -2,6 +2,7 @@ import { fireEvent, render } from "@testing-library/react";
 import { expect, it, onTestFinished } from "vitest";
 import type {
     ConversationEntry,
+    HappyAgentChildRequestStore,
     HappyAgentClockStore,
     HappyAgentConnectionStore,
     HappyAgentModelStore,
@@ -75,6 +76,7 @@ const PROJECTS = [
 
 function workspace() {
     const calls: string[] = [];
+    const childRequests = { cards: [] };
     const taskComposer = composerStoreCreate("task-create");
     const conversationComposer = composerStoreCreate(SESSION);
     const snapshot = {
@@ -139,6 +141,11 @@ function workspace() {
             subscribe: () => () => undefined,
             [Symbol.dispose]: () => undefined,
         } as unknown as HappyAgentPanelStore,
+        childRequest: {
+            get: () => childRequests,
+            subscribe: () => () => undefined,
+            [Symbol.dispose]: () => undefined,
+        } as unknown as HappyAgentChildRequestStore,
         subscribe: () => () => undefined,
         bugReportCreateOpen: () => calls.push("bugReportCreateOpen"),
         taskCreateMessageUpdate: (text: string) => taskComposer.getState().textUpdate(text),

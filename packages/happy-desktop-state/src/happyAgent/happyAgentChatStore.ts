@@ -1257,8 +1257,19 @@ export function happyAgentChatStoreCreate(
            the rest of the snapshot worth comparing — and then the comparison
            settles the transcript on one reference rather than walking it.
            Message choices are immutable sets, whose changed identity must
-           publish too: the record comparison below does not inspect sets. */
-        if (entries !== previous.entries || expandedMessageIds !== previous.expandedMessageIds) {
+           publish too. Request selections are a map of immutable answer
+           records: option-only edits must publish even when the transcript
+           stood still, since the record comparison cannot inspect maps. */
+        const requestSelectionsChanged =
+            previous.requestSelections.size !== requestSelections.size ||
+            [...requestSelections].some(
+                ([requestId, answers]) => previous.requestSelections.get(requestId) !== answers,
+            );
+        if (
+            entries !== previous.entries ||
+            expandedMessageIds !== previous.expandedMessageIds ||
+            requestSelectionsChanged
+        ) {
             store.setState(next, true);
             return;
         }

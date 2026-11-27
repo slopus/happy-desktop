@@ -3221,9 +3221,23 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 if (entry !== undefined) publishSession(entry);
                 return;
             }
-            case "question.created":
-                updateQuestion(event.payload.question.agentId, event.payload.question);
+            case "question.created": {
+                const question = event.payload.question;
+                updateQuestion(question.agentId, question);
+                // The daemon records an asked question on its agent without an
+                // `agent.updated`; only clearing it arrives as one. The question names
+                // its agent, so the held record takes its id here, and the sidebar and
+                // a parent's subtask cards see it without rereading the agent. The
+                // version is kept: the next agent event still chains onto it.
+                const agent = agentOf(question.agentId);
+                if (
+                    agent !== undefined &&
+                    question.status === "pending" &&
+                    agent.pendingQuestionId !== question.id
+                )
+                    replaceAgent({ ...agent, pendingQuestionId: question.id });
                 return;
+            }
             case "question.updated":
                 for (const entry of sessions.values()) {
                     if (

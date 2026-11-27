@@ -1,4 +1,8 @@
 import type { SidebarReadAheadRows } from "../happyAgentConnection/types.js";
+import {
+    happyAgentChildRequestStoreCreate,
+    type HappyAgentChildRequestStore,
+} from "./happyAgentChildRequestStore.js";
 import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happyAgentPanelChat.js";
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
@@ -1566,6 +1570,8 @@ export interface HappyAgentWorkspaceStore {
      * do it. The workspace keeps it pointed at the addressed group.
      */
     readonly panel: HappyAgentPanelStore;
+    /** One human review of an exact visible child's existing request. */
+    readonly childRequest: HappyAgentChildRequestStore;
     /**
      * The sections Changes splits secondary files into, one list for every
      * listing. A store of its own because editing a tier's patterns is typed a
@@ -7802,10 +7808,41 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
+    const childRequest = happyAgentChildRequestStoreCreate({
+        chatAcquire: (childId) => client.chat(childId),
+        scopeSubscribe: (listener) => snapshotStore.subscribe(listener),
+        targetsRead: () => {
+            const parentId = address.conversationId;
+            if (disposed || parentId === undefined) return [];
+            const catalog = snapshotStore.getState().list;
+            const roots = [...catalog.bots, ...catalog.tasks, ...catalog.taskDirectory];
+            const parent =
+                roots.find((root) => root.conversation.id === parentId) ??
+                happyAgentBotSubtasks(roots).find((child) => child.conversation.id === parentId);
+            if (!parent) return [];
+            return happyAgentBotSubtasks([parent]).flatMap((child) => {
+                const requestId = child.pendingQuestionId;
+                if (requestId === undefined) return [];
+                const childId = child.conversation.id as HappyAgentSessionId;
+                const refusal = groupConversationRefusalFind(child.workspaceId, childId);
+                return [
+                    {
+                        parentId,
+                        childId,
+                        requestId,
+                        title: child.conversation.title,
+                        workspaceId: child.workspaceId,
+                        ...(refusal === undefined ? {} : { refusal }),
+                    },
+                ];
+            });
+        },
+    });
     return {
         get: () => snapshotStore.getState(),
         previews: () => client.previews(),
         panel,
+        childRequest,
         changeTiers,
         toolMediaDocument: () => client.toolMediaDocument(),
         deviceBridges: (groupId) => client.deviceBridges(groupId),
@@ -9843,6 +9880,7 @@ export function happyAgentWorkspaceStoreCreate(
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            childRequest[Symbol.dispose]();
             chiefOfStaffWait?.();
             chiefOfStaffWait = undefined;
             stop();

@@ -1127,6 +1127,9 @@ function agentSubtasksProject(
             return {
                 workspaceId: child.workspaceId,
                 ...(scope ? { scope } : {}),
+                ...(child.pendingQuestionId === null
+                    ? {}
+                    : { pendingQuestionId: child.pendingQuestionId }),
                 path:
                     child.workspaceId === owner.workspaceId
                         ? computePath(owner.compute)

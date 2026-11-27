@@ -11197,6 +11197,18 @@ function HappyAgentConversationSurface(props: {
 }) {
     const genUiMachine = use(GenUiMachineContext);
     const { conversation, workspace } = props;
+    // One coarse subscription for this surface's subtask request cards. The
+    // store follows the workspace's open conversation, so a retained view of
+    // another conversation draws none of them.
+    const childRequestStore = workspace.childRequest;
+    const childRequestSnapshot = useSyncExternalStore(
+        childRequestStore.subscribe,
+        childRequestStore.get,
+        childRequestStore.get,
+    );
+    const childRequestCards = childRequestSnapshot.cards.filter(
+        (card) => card.target.parentId === conversation.conversationId,
+    );
     const previewBindings = useConversationPreviews({
         workspace,
         entries: conversation.entries,
@@ -11648,6 +11660,30 @@ function HappyAgentConversationSurface(props: {
                               : undefined,
                   }
                 : {})}
+            {...(childRequestCards.length === 0
+                ? {}
+                : {
+                      childRequests: {
+                          cards: childRequestCards,
+                          // The card's own identity travels with every action;
+                          // the parent's composer and requests are never involved.
+                          onOpenSubtask: (identity) => {
+                              const card = childRequestCards.find(
+                                  (candidate) =>
+                                      candidate.target.childId === identity.childId &&
+                                      candidate.target.requestId === identity.requestId,
+                              );
+                              if (card)
+                                  props.onChatSelect(card.target.workspaceId, card.target.childId);
+                          },
+                          onAnswer: (identity, answers) => {
+                              if (props.unavailable === undefined && props.happyAgentOnline())
+                                  childRequestStore.requestAnswerSubmit(identity, answers);
+                          },
+                          onSelectionChange: (identity, answers) =>
+                              childRequestStore.requestSelectionUpdate(identity, answers),
+                      },
+                  })}
             expandedTurnIds={conversation.expandedTurnIds}
             expandedMessageIds={conversation.expandedMessageIds}
             onMessageExpandedChange={(messageId, expanded) =>

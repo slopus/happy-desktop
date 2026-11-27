@@ -199,6 +199,8 @@ export interface HappyAgentBotSubtask {
     readonly path: string;
     /** The repository checkout it is scoped to on Happy Cloud; absent for one free to work in any. */
     readonly scope?: HappyAgentAgentScope;
+    /** Exact current request owned by this visible child, as reported by the server. */
+    readonly pendingQuestionId?: string;
     readonly conversation: ConversationSummary;
     readonly subtasks: readonly HappyAgentBotSubtask[];
 }
