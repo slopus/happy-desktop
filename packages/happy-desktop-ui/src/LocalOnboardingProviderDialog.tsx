@@ -351,7 +351,7 @@ function bedrockView(props: LocalOnboardingProviderDialogProps, fields: KeyField
     };
 }
 
-/** The custom endpoint: one prompt for the person's coding agent, which does the rest. */
+/** The custom endpoint: one prompt for the person's coding agent, which sets it up with them. */
 function customSteps(prompt: string, name: string, onCopy?: () => void) {
     return (
         <SetupProviderSteps>
@@ -362,7 +362,7 @@ function customSteps(prompt: string, name: string, onCopy?: () => void) {
                     text={prompt}
                 />
                 <SetupProviderHint>
-                    {`It finds your endpoint, key and models, adds them to Happy Agent and reloads it. ${name} shows as connected here once it works.`}
+                    {`Your agent asks what you're adding, finds or asks for what it needs, and sets Happy Agent up itself. ${name} shows as connected here once it works.`}
                 </SetupProviderHint>
             </SetupProviderStep>
         </SetupProviderSteps>

@@ -488,11 +488,11 @@ const OTHERS = {
 >;
 
 /**
- * Everything the person's coding agent needs to set a custom endpoint up on
- * its own: where to look, where it goes, and how to apply it. Nothing in it
- * asks the person for anything.
+ * What the person's coding agent needs to set a custom endpoint up with them:
+ * it asks, looks, and writes the configuration itself, so the person only
+ * answers in chat and never opens a file.
  */
-const CUSTOM_ENDPOINT_PROMPT = `Set up Happy Agent on this computer to use my custom model endpoint, and do all of it yourself without asking me to paste a key or anything else. Find the endpoint's base URL, its API key and the models it serves: look in my environment variables, the env block of ~/.claude/settings.json, ~/.codex/config.toml, and any gateway or proxy configuration on this machine. Add it to Happy Agent's user happy.toml as the matching provider (an OpenAI-compatible endpoint, or a base URL for Claude Code or Codex), using api_key_env when the key is already in an environment variable. Then reload Happy Agent as the guide's "Applying configuration changes" says, and check that the provider works. If something can't be found, tell me exactly what is missing. Guide: ${HAPPY_DOCS}/configuration.md (OpenAI-compatible endpoints, Providers).`;
+const CUSTOM_ENDPOINT_PROMPT = `Help me connect a custom model endpoint to Happy Agent on this computer. First ask me what I'm adding (which endpoint, service or gateway) and what it's for. Then find what it needs: check my environment variables, the env block of ~/.claude/settings.json, ~/.codex/config.toml and any gateway config first. For anything still missing, tell me exactly where to get it (for example, which dashboard page has the key) and ask me for it here. Write Happy Agent's config yourself, reload Happy Agent and check that it works; don't ask me to open or edit any file. Then tell me in plain words what you set up, or what's still missing. Guide: ${HAPPY_DOCS}/configuration.md (OpenAI-compatible endpoints, Providers).`;
 
 /**
  * One card on the report that follows an install: what is on the machine, and
