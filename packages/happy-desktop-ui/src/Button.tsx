@@ -32,6 +32,13 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style">
     shortcut?: KeyboardShortcut;
     size?: ButtonSize;
     style?: CSSProperties;
+    /**
+     * A glyph after the label, in the same 6px gap: `open-external` on a
+     * button that leaves the app. A spinner from `loading` or `working` takes
+     * this glyph's place and box when the button has no leading `icon`, so
+     * the label and the button's width hold still while it works.
+     */
+    trailingIcon?: IconName;
     variant?: ButtonVariant;
     width?: Dimension;
 };
@@ -51,6 +58,7 @@ export function Button(props: ButtonProps) {
         "shortcut",
         "size",
         "style",
+        "trailingIcon",
         "type",
         "variant",
         "width",
@@ -58,6 +66,28 @@ export function Button(props: ButtonProps) {
     ]);
     const size = () => local.size ?? "medium";
     const variant = () => local.variant ?? "primary";
+    const busy = local.loading === true || local.working === true;
+    const spinnerTrails =
+        busy && local.trailingIcon !== undefined && !local.icon && !local.iconOnly;
+    /* A spinner that takes an icon's place takes its box too, so the button
+       keeps its width when the work starts (the braille glyph is narrower). */
+    const spinnerHoldsIcon = local.icon !== undefined || spinnerTrails;
+    const spinner = busy ? (
+        <span
+            className="happy-button__icon"
+            data-happy-desktop-ui="button-icon"
+            style={
+                spinnerHoldsIcon
+                    ? { justifyContent: "center", width: iconSizes[size()] }
+                    : undefined
+            }
+        >
+            <Spinner
+                size={iconSizes[size()]}
+                tone={variant() === "secondary" || variant() === "ghost" ? "default" : "inverse"}
+            />
+        </span>
+    ) : null;
     return (
         <button
             {...rest}
@@ -82,17 +112,8 @@ export function Button(props: ButtonProps) {
             type={local.type ?? "button"}
         >
             <span className="happy-button__content" data-happy-desktop-ui="button-content">
-                {local.loading || local.working ? (
-                    <span className="happy-button__icon" data-happy-desktop-ui="button-icon">
-                        <Spinner
-                            size={iconSizes[size()]}
-                            tone={
-                                variant() === "secondary" || variant() === "ghost"
-                                    ? "default"
-                                    : "inverse"
-                            }
-                        />
-                    </span>
+                {busy && !spinnerTrails ? (
+                    spinner
                 ) : local.icon ? (
                     ((name) => (
                         <span className="happy-button__icon" data-happy-desktop-ui="button-icon">
@@ -109,6 +130,18 @@ export function Button(props: ButtonProps) {
                         {local.children}
                     </span>
                 ) : null}
+                {spinnerTrails
+                    ? spinner
+                    : local.trailingIcon && !local.iconOnly
+                      ? ((name) => (
+                            <span
+                                className="happy-button__icon"
+                                data-happy-desktop-ui="button-icon"
+                            >
+                                <Icon name={name} size={iconSizes[size()]} />
+                            </span>
+                        ))(local.trailingIcon)
+                      : null}
             </span>
             {local.shortcut ? (
                 <KeyCap

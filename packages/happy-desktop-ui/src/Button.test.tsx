@@ -3,6 +3,7 @@ import { server } from "vitest/browser";
 import "./theme.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/spinner.css";
 import { Button, type ButtonSize, type ButtonVariant } from "./Button";
 import { createRenderer } from "./testing";
 
@@ -472,4 +473,68 @@ it("holds Button icon forms and disabled state with correctly boxed glyphs", asy
     ).toBeLessThanOrEqual(0.4);
 
     await view.screenshot("Button.variants.test");
+}, 120_000);
+
+it("draws a trailing icon after the label, and holds width and label while loading", async () => {
+    const view = createRenderer();
+    for (const size of sizes) {
+        view.render(
+            () => (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                    <Button data-testid={`trail-${size}`} size={size} trailingIcon="open-external">
+                        Open
+                    </Button>
+                    <Button
+                        data-testid={`trail-loading-${size}`}
+                        loading
+                        size={size}
+                        trailingIcon="open-external"
+                    >
+                        Open
+                    </Button>
+                    <Button data-testid={`lead-${size}`} icon="plus" size={size}>
+                        Open
+                    </Button>
+                    <Button data-testid={`lead-loading-${size}`} icon="plus" loading size={size}>
+                        Open
+                    </Button>
+                </div>
+            ),
+            { width: 520, height: 68, padding: 12 },
+        );
+    }
+    await view.ready();
+
+    const iconSizes = { small: 14, medium: 16, large: 18 } as const;
+    for (const size of sizes) {
+        const part = (id: string, part: string) =>
+            view.$(`[data-testid="${id}"] [data-happy-desktop-ui="${part}"]`).bounds();
+        const box = (id: string) => view.$(`[data-testid="${id}"]`).bounds();
+
+        // The trailing glyph sits after the label, in the same 6px gap.
+        const label = part(`trail-${size}`, "button-label");
+        const icon = part(`trail-${size}`, "button-icon");
+        expect(icon.x - (label.x + label.width), `trail-${size} gap`).toBeCloseTo(6, 2);
+        expect(icon.width, `trail-${size} icon box`).toBe(iconSizes[size]);
+
+        // Only a trailing icon: the spinner takes its slot and its box, so the
+        // button keeps its width and the label does not move.
+        const idle = box(`trail-${size}`);
+        const busy = box(`trail-loading-${size}`);
+        expect(busy.width, `trail-loading-${size} width`).toBeCloseTo(idle.width, 2);
+        expect(
+            part(`trail-loading-${size}`, "button-label").x - busy.x,
+            `trail-loading-${size} label x`,
+        ).toBeCloseTo(label.x - idle.x, 2);
+        const spinner = part(`trail-loading-${size}`, "button-icon");
+        expect(spinner.x, `trail-loading-${size} spinner after the label`).toBeGreaterThan(
+            part(`trail-loading-${size}`, "button-label").x,
+        );
+
+        // A leading icon: the spinner keeps the icon's box, so the width holds.
+        expect(box(`lead-loading-${size}`).width, `lead-loading-${size} width`).toBeCloseTo(
+            box(`lead-${size}`).width,
+            2,
+        );
+    }
 }, 120_000);
