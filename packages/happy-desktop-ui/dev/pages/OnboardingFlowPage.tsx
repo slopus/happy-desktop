@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import {
     LocalOnboardingScreen,
     type LocalOnboardingAssistant,
-    type LocalOnboardingAssistantId,
+    type LocalOnboardingCustomProvider,
+    type LocalOnboardingProviderRowId,
     type LocalOnboardingView,
 } from "../../src/LocalOnboardingScreen";
+import type { LocalOnboardingProviderWay } from "../../src/LocalOnboardingProviderDialog";
 import type { OnboardingNodeIdentity } from "../../src/OnboardingNode";
 import type { OnboardingStage } from "../../src/OnboardingSteps";
 import { ThemeScope } from "../../src/ThemeScope";
@@ -71,7 +73,6 @@ const node: OnboardingNodeIdentity = { name: "Studio Mac", placeholderSeed: "Stu
 function onboarding(
     view: LocalOnboardingView,
     selectableStages?: readonly OnboardingStage[],
-    agentPromptsOpen = false,
     appearance: "dark" | "light" = "dark",
     pairingOptions: DesktopMobilePairingOptions = appPairingOptions(),
 ) {
@@ -84,7 +85,6 @@ function onboarding(
     return (
         <LocalOnboardingScreen
             happyMobilePairingOptions={pairingOptions}
-            agentPromptsOpen={agentPromptsOpen}
             appearance={appearance}
             {...(named ? { node } : {})}
             onAssistantsContinue={noop}
@@ -104,7 +104,11 @@ function onboarding(
  * Subscriptions where Happy Agent signs the assistants in itself: each card's
  * button carries its state, and a connected one says so in words.
  */
-function connectOnboarding(view: LocalOnboardingView, dialog?: LocalOnboardingAssistantId) {
+function connectOnboarding(
+    view: LocalOnboardingView,
+    dialog?: LocalOnboardingProviderRowId,
+    way?: LocalOnboardingProviderWay,
+) {
     return (
         <LocalOnboardingScreen
             happyMobilePairingOptions={setupPairingOptions()}
@@ -122,6 +126,7 @@ function connectOnboarding(view: LocalOnboardingView, dialog?: LocalOnboardingAs
             onHappyMobileSkip={noop}
             onStageSelect={noop}
             {...(dialog ? { providerDialogOpen: dialog } : {})}
+            {...(way ? { providerDialogWay: way } : {})}
             showSteps
             view={view}
         />
@@ -221,32 +226,84 @@ const antigravityWaiting = antigravityOperation({
     url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=antigravity",
 });
 
-/** The four rows, with Subscriptions' usual empty custom column. */
-function rowsView(assistants: readonly LocalOnboardingAssistant[]): LocalOnboardingView {
+/** The rows, with nothing configured in `happy.toml` unless given. */
+function rowsView(
+    assistants: readonly LocalOnboardingAssistant[],
+    providers: readonly LocalOnboardingCustomProvider[] = [],
+): LocalOnboardingView {
     return {
         assistants,
-        custom: { authentication: "invalid", providers: [] },
+        custom: {
+            authentication: providers.some((provider) => provider.authentication === "valid")
+                ? "valid"
+                : providers.length > 0
+                  ? "error"
+                  : "invalid",
+            providers,
+        },
         kind: "provider-authentication",
         installShell: "posix",
     };
 }
 
+const signedOut = [claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut];
+
+/** Accounts in `happy.toml`: an OpenAI key beside Codex's sign-in, and a Bedrock profile. */
+const configuredAccounts: readonly LocalOnboardingCustomProvider[] = [
+    { authentication: "valid", id: "openai-key", kind: "OpenAI", name: "OpenAI key", row: "codex" },
+    {
+        authentication: "valid",
+        id: "corp-bedrock",
+        kind: "Bedrock",
+        name: "Bedrock · corp-bedrock",
+        row: "bedrock",
+    },
+];
+
 const connectAiScreens: readonly {
     id: string;
     label: string;
     view: LocalOnboardingView;
-    dialog?: LocalOnboardingAssistantId;
+    dialog?: LocalOnboardingProviderRowId;
+    way?: LocalOnboardingProviderWay;
 }[] = [
     {
         id: "ai-rows",
-        label: "Connect your AI · four rows, none connected",
-        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
+        label: "Connect your AI · six rows, none connected",
+        view: rowsView(signedOut),
+    },
+    {
+        id: "ai-connected",
+        label: "Connect your AI · Claude Code, Codex (sign-in and a key) and Bedrock connected",
+        view: rowsView(
+            [
+                connected(claudeSignedOut),
+                connected(codexMissing),
+                grokSignedOut,
+                antigravitySignedOut,
+            ],
+            configuredAccounts,
+        ),
+    },
+    {
+        dialog: "codex",
+        id: "ai-codex-connected",
+        label: "Codex dialog · opened from its connected row",
+        view: rowsView(
+            [
+                connected(claudeSignedOut),
+                connected(codexMissing),
+                grokSignedOut,
+                antigravitySignedOut,
+            ],
+            configuredAccounts,
+        ),
     },
     {
         dialog: "antigravity",
         id: "ai-antigravity",
         label: "Antigravity dialog · sign in at Google, then paste its code",
-        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
+        view: rowsView(signedOut),
     },
     {
         dialog: "antigravity",
@@ -270,36 +327,23 @@ const connectAiScreens: readonly {
         ]),
     },
     {
-        id: "ai-antigravity-connected",
-        label: "Connect your AI · Antigravity connected",
-        view: rowsView([
-            claudeSignedOut,
-            codexMissing,
-            grokSignedOut,
-            connected(antigravitySignedOut),
-        ]),
-    },
-    {
-        id: "ai-detected",
-        label: "Connect your AI · Claude Code and Codex already signed in on this computer",
-        view: rowsView([
-            connected(claudeSignedOut),
-            connected(codexMissing),
-            grokSignedOut,
-            antigravitySignedOut,
-        ]),
+        dialog: "claude",
+        id: "ai-claude",
+        label: "Claude Code dialog · Claude plan, through a setup token",
+        view: rowsView(signedOut),
     },
     {
         dialog: "claude",
-        id: "ai-claude",
-        label: "Claude Code dialog · setup token",
-        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
+        id: "ai-claude-key",
+        label: "Claude Code dialog · Anthropic API key, set up by your agent",
+        view: rowsView(signedOut),
+        way: "key",
     },
     {
         dialog: "codex",
         id: "ai-codex",
         label: "Codex dialog · install, then sign in",
-        view: rowsView([claudeSignedOut, codexMissing, grokSignedOut, antigravitySignedOut]),
+        view: rowsView(signedOut),
     },
     {
         dialog: "grok",
@@ -322,6 +366,32 @@ const connectAiScreens: readonly {
                 },
             },
             antigravityWaiting,
+        ]),
+    },
+    {
+        dialog: "bedrock",
+        id: "ai-bedrock",
+        label: "Amazon Bedrock dialog · set up by your agent",
+        view: rowsView(signedOut),
+    },
+    {
+        dialog: "custom",
+        id: "ai-custom",
+        label: "Custom endpoint dialog · set up by your agent",
+        view: rowsView(signedOut),
+    },
+    {
+        id: "ai-failed",
+        label: "Connect your AI · a gateway in happy.toml that failed its check",
+        view: rowsView(signedOut, [
+            {
+                authentication: "error",
+                id: "gateway",
+                kind: "OpenAI-compatible",
+                message: "The gateway refused the model.",
+                name: "Internal gateway",
+                row: "custom",
+            },
         ]),
     },
 ];
@@ -425,6 +495,7 @@ const unverifiedSubscriptions: LocalOnboardingView = {
                 authentication: "error",
                 id: "work-proxy",
                 kind: "Claude",
+                row: "claude",
                 message: "Couldn't reach https://llm-proxy.internal: connection refused",
                 name: "Work proxy",
             },
@@ -551,48 +622,9 @@ const screens: readonly {
             }),
     },
     {
-        id: "subscriptions-agent-prompts",
-        label: "Subscriptions · set up with your agent",
-        render: () =>
-            onboarding(
-                {
-                    assistants: [
-                        {
-                            connect: { installable: true, installed: false },
-                            authentication: "unavailable",
-                            id: "claude",
-                            status: "missing",
-                        },
-                        {
-                            connect: { installable: true, installed: false },
-                            authentication: "unavailable",
-                            id: "codex",
-                            status: "missing",
-                        },
-                        {
-                            connect: { installable: true, installed: false },
-                            authentication: "unavailable",
-                            id: "grok",
-                            status: "missing",
-                        },
-                    ],
-                    custom: { authentication: "invalid", providers: [] },
-                    kind: "provider-authentication",
-                    installShell: "posix",
-                },
-                undefined,
-                true,
-            ),
-    },
-    {
         id: "subscriptions-unverified",
         label: "Subscriptions · couldn't verify",
         render: () => onboarding(unverifiedSubscriptions),
-    },
-    {
-        id: "subscriptions-unverified-prompts",
-        label: "Subscriptions · couldn't verify, custom endpoint with your agent",
-        render: () => onboarding(unverifiedSubscriptions, undefined, true),
     },
     {
         id: "subscriptions-custom-ready",
@@ -626,6 +658,7 @@ const screens: readonly {
                             authentication: "valid",
                             id: "corp-bedrock",
                             kind: "Bedrock",
+                            row: "bedrock",
                             name: "Bedrock · corp-bedrock",
                         },
                     ],
@@ -713,7 +746,7 @@ const screens: readonly {
                     transform: "translateZ(0)",
                 }}
             >
-                {connectOnboarding(screen.view, screen.dialog)}
+                {connectOnboarding(screen.view, screen.dialog, screen.way)}
             </div>
         ),
     })),
@@ -726,7 +759,7 @@ const screens: readonly {
         appearance: "light",
         id: "subscriptions-mixed-light",
         label: "Subscriptions · every card state, light appearance",
-        render: () => onboarding(mixedSubscriptions, undefined, false, "light"),
+        render: () => onboarding(mixedSubscriptions, undefined, "light"),
     },
     ...(["before", "waiting", "unfinished"] as const).map((state) => ({
         id: `windows-sandbox-${state}`,
@@ -754,7 +787,6 @@ const screens: readonly {
                     step: { kind: "link", phase: { kind: "checking" } },
                 },
                 undefined,
-                false,
                 "dark",
                 appPairingOptions(true),
             ),
@@ -800,7 +832,6 @@ const screens: readonly {
                     },
                 },
                 undefined,
-                false,
                 appearance,
                 setupPairingOptions({
                     direct: direct.waiting,

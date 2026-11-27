@@ -4,6 +4,7 @@ import type {
     LocalOnboardingAssistantOperation,
     LocalOnboardingClaudeToken,
     LocalOnboardingCustom,
+    LocalOnboardingProviderRowId,
     LocalOnboardingView,
     OnboardingStage,
 } from "happy-desktop-ui";
@@ -69,6 +70,8 @@ interface CustomProviderCheck {
     readonly id: string;
     /** Its kind as a person names it, for example "Bedrock". */
     readonly kind: string;
+    /** The Connect your AI row that counts it, by its configured type. */
+    readonly row: LocalOnboardingProviderRowId;
     /** The configured display name, or its kind and ID. */
     readonly name: string;
     readonly result: Exclude<ProviderAuthenticationResult, "invalid">;
@@ -810,8 +813,8 @@ export function localOnboardingStoreCreate(
             );
             const due: { readonly id: string; readonly config: string }[] = [];
             const rows = configured.map(
-                ({ id, kind, modelsEnabled, name }): CustomProviderCheck => {
-                    const row = { id, kind, name };
+                ({ id, kind, modelsEnabled, name, row: providerRow }): CustomProviderCheck => {
+                    const row = { id, kind, name, row: providerRow };
                     if (!modelsEnabled)
                         return { ...row, reason: "No models are enabled", result: "error" };
                     const before = held.get(id);
@@ -848,11 +851,12 @@ export function localOnboardingStoreCreate(
                     if (!current()) return;
                     const row = rows.find((provider) => provider.id === id);
                     if (!row) return;
-                    const { id: _id, kind, name } = row;
+                    const { id: _id, kind, name, row: providerRow } = row;
+                    const named = { id, kind, name, row: providerRow };
                     customProviderPublish(
                         outcome.passed
-                            ? { id, kind, name, result: "valid" }
-                            : { id, kind, name, reason: outcome.reason, result: "error" },
+                            ? { ...named, result: "valid" }
+                            : { ...named, reason: outcome.reason, result: "error" },
                     );
                 }),
             );
@@ -1768,17 +1772,46 @@ function customProvidersFind(config: Awaited<ReturnType<HappyAgentClient["getCon
     /** Whether it has a model to check with; one without cannot work at all. */
     readonly modelsEnabled: boolean;
     readonly name: string;
+    readonly row: LocalOnboardingProviderRowId;
 }[] {
     return Object.entries(config.config.providers).flatMap(([id, provider]) => {
         if (LOCAL_PROVIDER_IDS.has(id) || provider.type === "smart" || !provider.enabled) return [];
         const kind = providerKindLabel(provider.type);
         // Named by its display name, falling back to the kind and ID.
         const name = provider.name?.trim() || `${kind} · ${id}`;
-        return [{ id, kind, modelsEnabled: provider.models.some((model) => model.enabled), name }];
+        return [
+            {
+                id,
+                kind,
+                modelsEnabled: provider.models.some((model) => model.enabled),
+                name,
+                row: providerRow(provider.type),
+            },
+        ];
     });
 }
 
 const LOCAL_PROVIDER_IDS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "antigravity"]);
+
+/**
+ * The Connect your AI row a configured provider counts toward. An account of
+ * an assistant's type is one more account of that assistant, an OpenAI key
+ * included; Bedrock has its own row, and every other type is a custom endpoint.
+ */
+function providerRow(type: string): LocalOnboardingProviderRowId {
+    switch (type) {
+        case "antigravity":
+        case "claude":
+        case "codex":
+        case "grok":
+        case "bedrock":
+            return type;
+        case "openai":
+            return "codex";
+        default:
+            return "custom";
+    }
+}
 
 /** A provider kind as a person would name it on the card. */
 function providerKindLabel(type: string): string {
@@ -1818,6 +1851,7 @@ function customProject(snapshot: LocalOnboardingViewSnapshot): LocalOnboardingCu
             kind: provider.kind,
             ...(provider.result === "error" && provider.reason ? { message: provider.reason } : {}),
             name: provider.name,
+            row: provider.row,
         })),
     };
 }
@@ -1831,10 +1865,11 @@ function customInitial(
 ): NonNullable<ProviderAuthenticationSnapshot["custom"]> {
     if (!previous?.read) return { providers: [], read: false, result: "checking" };
     const providers = previous.providers.map(
-        ({ id, kind, name, result }): CustomProviderCheck => ({
+        ({ id, kind, name, result, row }): CustomProviderCheck => ({
             id,
             kind,
             name,
+            row,
             result: result === "valid" ? "valid" : "checking",
         }),
     );

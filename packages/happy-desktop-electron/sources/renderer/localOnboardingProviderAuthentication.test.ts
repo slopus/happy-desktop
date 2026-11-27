@@ -327,7 +327,7 @@ it("asks for the install, not a sign-in, when an assistant that is not here fail
     // Claude's row opens the dialog that installs it first; the row itself
     // offers the plan and never shows a command.
     expect(claude?.getAttribute("data-status")).toBe("idle");
-    expect(rowLine(claude)).toBe("Your Claude plan");
+    expect(rowLine(claude)).toBe("Your Claude plan, or an Anthropic API key");
     expect(claude?.querySelector("button")?.hasAttribute("disabled")).toBe(false);
     expect(claude?.textContent).not.toContain("curl");
     expect(claude?.textContent).not.toContain("claude auth login");
@@ -358,16 +358,15 @@ it("counts a sign-in that works as Ready even without the command", async () => 
     );
 });
 
-/** The settled screen as it is drawn, with the custom column's prompts open. */
+/** The settled screen as it is drawn, with one row's dialog open if given. */
 function screenRender(
     view: LocalOnboardingView,
-    providerDialogOpen?: "claude" | "antigravity",
+    providerDialogOpen?: "claude" | "antigravity" | "custom",
 ): HTMLElement {
     const noop = () => undefined;
     const root = document.createElement("div");
     root.innerHTML = renderToStaticMarkup(
         createElement(LocalOnboardingScreen, {
-            agentPromptsOpen: true,
             appearance: "dark",
             ...(providerDialogOpen ? { providerDialogOpen } : {}),
             happyMobilePairingOptions: { completed: false, verifying: false, view: null },
@@ -428,7 +427,7 @@ function rowLine(row: Element | undefined): string | null | undefined {
 }
 
 it.each(["error", "invalid"] as const)(
-    "keeps sign-in on a failed CLI and the custom endpoint on the custom line (%s)",
+    "keeps sign-in on a failed CLI and the custom endpoint on its own row (%s)",
     (custom) => {
         const root = screenRender({
             assistants: [
@@ -461,6 +460,7 @@ it.each(["error", "invalid"] as const)(
                                   authentication: "error",
                                   id: "work-proxy",
                                   kind: "Claude",
+                                  row: "claude",
                                   name: "Claude · work-proxy",
                               },
                           ]
@@ -483,20 +483,25 @@ it.each(["error", "invalid"] as const)(
         expect(root.querySelector('[data-happy-desktop-ui="setup-command"]')).toBeNull();
         expect(root.textContent).not.toContain("claude auth login");
         expect(root.textContent).not.toContain("curl");
-        expect(claude?.querySelector(".happy-setup-assistants__prompts")).toBeNull();
-        // A custom endpoint or proxy belongs to the custom line under the
-        // cards, custom setup first.
-        const aside = root.querySelector('[data-happy-desktop-ui="setup-assistants-aside"]');
-        expect(
-            aside?.querySelector('[data-happy-desktop-ui="setup-assistants-link"]')?.textContent,
-        ).toBe(custom === "error" ? "Fix with your agent" : "Use an API key or another provider");
-        const prompts = [...(aside?.querySelectorAll(".happy-setup-assistants__prompt") ?? [])].map(
-            (prompt) => prompt.textContent,
+        // An API key, Bedrock and a custom endpoint are rows of their own,
+        // each with its dialog, never a popover of prompts under the rows.
+        expect(root.querySelector('[data-happy-desktop-ui="setup-assistants-aside"]')).toBeNull();
+        expect(rowLine(cardFind(root, "Amazon Bedrock"))).toBe(
+            "AWS keys, billed to your AWS account",
         );
-        expect(prompts).toHaveLength(2);
-        expect(prompts[0]).toContain("My setup is custom");
-        expect(prompts[0]).toContain("~/.claude/settings.json");
-        expect(prompts[1]).toContain("Sign me in");
+        expect(rowLine(cardFind(root, "Custom endpoint"))).toBe(
+            "Any server that speaks OpenAI’s API",
+        );
+        const prompt = screenRender(
+            {
+                assistants: [],
+                custom: { authentication: custom, providers: [] },
+                kind: "provider-authentication",
+                installShell: "posix",
+            },
+            "custom",
+        ).querySelector('[data-happy-desktop-ui="setup-provider-dialog-prompt"]');
+        expect(prompt?.textContent).toContain("~/.claude/settings.json");
         // Nothing on the settled screen says it is still busy.
         expect(root.textContent).not.toContain("retrying");
         expect(root.textContent).not.toContain("Checking");
@@ -589,13 +594,15 @@ it("checks each custom provider on its own and says why each one failed", async 
             ],
         },
     });
+    // Each counts toward the row of its type, which waits on it.
     const checking = screenRender(localOnboardingView(store.get()) as LocalOnboardingView);
-    expect(providerRows(checking)).toEqual([
-        "Bedrock · corp-sso|Checking Bedrock…",
-        "Internal gateway|Checking OpenAI-compatible…",
-        "Claude API key|Checking Claude…",
-        "OpenAI · legacy|Checking OpenAI…",
-        "OpenAI · empty|No models are enabled",
+    expect(rowStatuses(checking)).toEqual([
+        "Claude Code|checking",
+        "Codex|checking",
+        "Grok|idle",
+        "Antigravity|checking",
+        "Amazon Bedrock|checking",
+        "Custom endpoint|checking",
     ]);
 
     const credentials =
@@ -637,27 +644,26 @@ it("checks each custom provider on its own and says why each one failed", async 
             },
         }),
     );
+    // The key that works is one Claude Code account; a failed one says which and why.
     const settled = screenRender(localOnboardingView(store.get()) as LocalOnboardingView);
-    expect(providerRows(settled)).toEqual([
-        `Bedrock · corp-sso|${credentials.replaceAll("`", "")}`,
-        "Internal gateway|The gateway refused the model.",
-        "Claude API key|Ready",
-        "OpenAI · legacy|The test request failed",
-        "OpenAI · empty|No models are enabled",
+    expect(rowStatuses(settled)).toEqual([
+        "Claude Code|connected",
+        "Codex|failed",
+        "Grok|idle",
+        "Antigravity|checking",
+        "Amazon Bedrock|failed",
+        "Custom endpoint|failed",
     ]);
-    // The commands and the profile it names are set as code.
-    expect(
-        [...settled.querySelectorAll(".happy-setup-assistants__code-span")].map(
-            (code) => code.textContent,
-        ),
-    ).toEqual(["corp-sso", "aws sso login --profile corp-sso"]);
-    // One provider that works is enough to go on; the failed ones keep their fix.
+    expect(rowLine(cardFind(settled, "Claude Code"))).toBe("1 account");
+    expect(rowLine(cardFind(settled, "Codex"))).toBe("OpenAI · legacy: The test request failed");
+    expect(rowLine(cardFind(settled, "Amazon Bedrock"))).toBe(
+        `Bedrock · corp-sso: ${credentials.replaceAll("`", "")}`,
+    );
+    expect(rowLine(cardFind(settled, "Custom endpoint"))).toBe(
+        "Internal gateway: The gateway refused the model.",
+    );
+    // One provider that works is enough to go on.
     expect(continueButton(settled)?.hasAttribute("disabled")).toBe(false);
-    expect(
-        settled.querySelector(
-            '[data-happy-desktop-ui="setup-assistants-aside"] [data-happy-desktop-ui="setup-assistants-link"]',
-        )?.textContent,
-    ).toBe("Fix with your agent");
 });
 
 it("says why a sign-in could not be verified under its button", async () => {
@@ -712,19 +718,21 @@ it("says the configuration could not be read when Happy Agent does not give it",
             },
         }),
     );
-    const aside = screenRender(
-        localOnboardingView(store.get()) as LocalOnboardingView,
-    ).querySelector('[data-happy-desktop-ui="setup-assistants-aside"]');
-    expect(aside?.textContent).toContain(
+    const custom = cardFind(
+        screenRender(localOnboardingView(store.get()) as LocalOnboardingView),
+        "Custom endpoint",
+    );
+    expect(custom?.getAttribute("data-status")).toBe("failed");
+    expect(rowLine(custom)).toBe(
         "Couldn't read your provider configuration: Couldn't reach Happy Agent",
     );
 });
 
-/** Each custom provider row as `name|detail`, in order. */
-function providerRows(root: HTMLElement): readonly string[] {
-    return [...root.querySelectorAll('[data-happy-desktop-ui="setup-assistants-provider"]')].map(
+/** Each Connect your AI row as `name|status`, in order. */
+function rowStatuses(root: HTMLElement): readonly string[] {
+    return [...root.querySelectorAll('[data-happy-desktop-ui="setup-provider-row"]')].map(
         (row) =>
-            `${row.querySelector('[data-happy-desktop-ui="setup-assistants-provider-name"]')?.textContent}|${row.querySelector('[data-happy-desktop-ui="setup-assistants-provider-detail"]')?.textContent}`,
+            `${row.querySelector(".happy-setup-provider-rows__name")?.textContent}|${row.getAttribute("data-status")}`,
     );
 }
 

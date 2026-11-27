@@ -639,6 +639,7 @@ export function SetupPagePage() {
                                             authentication: "error",
                                             id: "work-proxy",
                                             kind: "Claude",
+                                            row: "claude",
                                             message:
                                                 "Couldn't reach https://llm-proxy.internal: connection refused",
                                             name: "Work proxy",

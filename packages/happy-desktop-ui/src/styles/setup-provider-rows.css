@@ -31,10 +31,6 @@
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
 }
 
-.happy-setup-provider-rows__row[data-status="connected"] {
-    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--success) 70%, transparent);
-}
-
 /* A window under 700px tall has 280px between its fades for the rows. */
 @container (max-height: 699px) {
     .happy-setup-provider-rows {

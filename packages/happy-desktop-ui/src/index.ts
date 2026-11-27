@@ -735,6 +735,7 @@ export {
     type LocalOnboardingAssistantOperation,
     type LocalOnboardingClaudeToken,
     type LocalOnboardingAssistantId,
+    type LocalOnboardingProviderRowId,
     type LocalOnboardingCommandCopy,
     type LocalOnboardingInstallShell,
     type LocalOnboardingCustom,
@@ -794,7 +795,9 @@ export {
     type SetupAssistantsProvider,
 } from "./SetupAssistants";
 export {
+    SetupProviderMarkGlyph,
     SetupProviderRows,
+    type SetupProviderMark,
     type SetupProviderRow,
     type SetupProviderRowsProps,
 } from "./SetupProviderRows";
@@ -802,10 +805,13 @@ export {
     SetupProviderCode,
     SetupProviderDialog,
     SetupProviderHint,
+    SetupProviderPrompt,
     SetupProviderStep,
     SetupProviderSteps,
+    SetupProviderWays,
     type SetupProviderDialogAction,
     type SetupProviderDialogProps,
+    type SetupProviderWay,
 } from "./SetupProviderDialog";
 export { SetupCommand, type SetupCommandProps } from "./SetupCommand";
 export { SetupPrompt, type SetupPromptProps } from "./SetupPrompt";

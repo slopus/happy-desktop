@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { AssistantMarkName } from "./AssistantMark";
 import { Button } from "./Button";
 import { claudeSetupTokenNormalize } from "./ClaudeSetupTokenDialog";
@@ -13,11 +13,30 @@ import {
     SetupProviderCode,
     SetupProviderDialog,
     SetupProviderHint,
+    SetupProviderPrompt,
     SetupProviderStep,
     SetupProviderSteps,
+    SetupProviderWays,
     type SetupProviderDialogAction,
 } from "./SetupProviderDialog";
+import type { SetupProviderMark } from "./SetupProviderRows";
 import { TextField } from "./TextField";
+
+/**
+ * A way in that Happy Agent cannot take from this window: an API key, AWS
+ * keys or an endpoint, which only its own `happy.toml` holds. The steps hand a
+ * prompt to the coding agent the person already uses, which writes it there.
+ */
+export interface LocalOnboardingHandOff {
+    /** The way's name where it is one of several, for example "Anthropic API key". */
+    readonly label: string;
+    /** What it uses and who bills it, said under the choice. */
+    readonly note: string;
+    /** What the person's agent will ask them for, for example "your Anthropic API key". */
+    readonly asks: string;
+    /** Exactly what is copied for that agent. */
+    readonly prompt: string;
+}
 
 /** What the dialog needs to know about the assistant it is for. */
 export interface LocalOnboardingProviderVendor {
@@ -28,11 +47,35 @@ export interface LocalOnboardingProviderVendor {
     /** That page shows a code to paste back here, rather than finishing by itself. */
     readonly pastesCode: boolean;
     readonly install: Record<LocalOnboardingInstallShell, string>;
+    /** Signing in with the person's plan, as the choice names it, for example "Claude plan". */
+    readonly plan: string;
+    readonly planNote: string;
+    /** An API key instead, where the assistant takes one. */
+    readonly key?: LocalOnboardingHandOff;
 }
 
+/** The dialog's subject: an assistant Happy Agent signs in, or access set up another way. */
+export type LocalOnboardingProviderDialogTarget =
+    | {
+          readonly kind: "assistant";
+          readonly assistant: LocalOnboardingAssistant;
+          readonly vendor: LocalOnboardingProviderVendor;
+      }
+    | {
+          readonly kind: "hand-off";
+          readonly id: "bedrock" | "custom";
+          readonly name: string;
+          readonly mark: SetupProviderMark;
+          readonly handOff: LocalOnboardingHandOff;
+      };
+
+/** Which way an assistant's dialog shows: its own sign-in, or an API key. */
+export type LocalOnboardingProviderWay = "plan" | "key";
+
 export interface LocalOnboardingProviderDialogProps {
-    readonly assistant: LocalOnboardingAssistant;
-    readonly vendor: LocalOnboardingProviderVendor;
+    readonly target: LocalOnboardingProviderDialogTarget;
+    /** The way it opens on. Absent, the plan. */
+    readonly way?: LocalOnboardingProviderWay;
     readonly installShell: LocalOnboardingInstallShell;
     readonly claudeToken?: LocalOnboardingClaudeToken;
     readonly onClose: () => void;
@@ -42,19 +85,100 @@ export interface LocalOnboardingProviderDialogProps {
     readonly onCancel?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onExternalOpen?: (url: string) => void;
     readonly onClaudeTokenSubmit?: (token: string) => void;
+    /** A hand-off prompt was copied. */
+    readonly onPromptCopy?: () => void;
+}
+
+/** One way's steps and the action under them. */
+interface WayView {
+    readonly steps: ReactNode;
+    readonly action?: SetupProviderDialogAction;
 }
 
 /**
- * One assistant's dialog on Subscriptions, opened from its row. Claude takes a
- * setup token made in Terminal; the others install and sign in through Happy
- * Agent with the vendor's own page, and a page that shows a code takes it
- * back here.
+ * One provider's dialog on Connect your AI, opened from its row whether or
+ * not it is connected. Claude takes a setup token made in Terminal; the other
+ * assistants install and sign in through Happy Agent with the vendor's own
+ * page, and a page that shows a code takes it back here. An API key, Amazon
+ * Bedrock or a custom endpoint is handed to the person's own coding agent.
+ * An assistant that also takes a key offers both, plan first.
  */
 export function LocalOnboardingProviderDialog(props: LocalOnboardingProviderDialogProps) {
-    return props.assistant.id === "claude" ? (
-        <ClaudeDialog {...props} />
-    ) : (
-        <SignInDialog {...props} />
+    const target = props.target;
+    const [way, waySet] = useState<LocalOnboardingProviderWay>(props.way ?? "plan");
+    // What the person typed is kept across ways, so a look at the key way
+    // does not lose a half-pasted token.
+    const [token, tokenSet] = useState("");
+    const [code, codeSet] = useState("");
+    // A sign-in runs twice: starting, and checking a pasted code. Which one
+    // this is, is the one thing only this dialog knows.
+    const [codeSent, codeSentSet] = useState(false);
+    const close = { label: "Done", onSelect: props.onClose } as const;
+    if (target.kind === "hand-off")
+        return (
+            <SetupProviderDialog
+                action={close}
+                data-testid="local-onboarding-provider-dialog"
+                mark={target.mark}
+                name={target.name}
+                onClose={props.onClose}
+            >
+                {handOffSteps(target.handOff, target.name, props.onPromptCopy)}
+            </SetupProviderDialog>
+        );
+    const { assistant, vendor } = target;
+    const key = vendor.key;
+    const shown = key && way === "key" ? key : undefined;
+    const view: WayView = shown
+        ? { action: close, steps: handOffSteps(shown, vendor.name, props.onPromptCopy) }
+        : assistant.id === "claude"
+          ? claudeView(props, assistant, vendor, token, tokenSet)
+          : signInView(props, assistant, vendor, {
+                code,
+                codeSent,
+                codeSentSet,
+                codeSet,
+            });
+    return (
+        <SetupProviderDialog
+            {...(view.action ? { action: view.action } : {})}
+            data-testid="local-onboarding-provider-dialog"
+            mark={{ kind: "assistant", name: vendor.mark }}
+            name={vendor.name}
+            onClose={props.onClose}
+        >
+            {key ? (
+                <SetupProviderWays
+                    onChange={(value) => waySet(value === "key" ? "key" : "plan")}
+                    value={shown ? "key" : "plan"}
+                    ways={[
+                        { label: vendor.plan, note: vendor.planNote, value: "plan" },
+                        { label: key.label, note: key.note, value: "key" },
+                    ]}
+                />
+            ) : null}
+            {view.steps}
+        </SetupProviderDialog>
+    );
+}
+
+/** A prompt for the person's own coding agent, and what it will do with it. */
+function handOffSteps(handOff: LocalOnboardingHandOff, name: string, onCopy?: () => void) {
+    return (
+        <SetupProviderSteps>
+            <SetupProviderStep n={1} title="Copy this prompt">
+                <SetupProviderPrompt
+                    label={`${name} setup prompt`}
+                    {...(onCopy ? { onCopy } : {})}
+                    text={handOff.prompt}
+                />
+            </SetupProviderStep>
+            <SetupProviderStep n={2} title="Paste it into the coding agent you already use">
+                <SetupProviderHint>
+                    {`It asks you for ${handOff.asks}, saves it in Happy Agent's settings and reloads Happy Agent. ${name} shows as connected here once it works.`}
+                </SetupProviderHint>
+            </SetupProviderStep>
+        </SetupProviderSteps>
     );
 }
 
@@ -63,8 +187,13 @@ const TERMINAL: Record<LocalOnboardingInstallShell, string> = {
     powershell: "PowerShell",
 };
 
-function ClaudeDialog(props: LocalOnboardingProviderDialogProps) {
-    const [token, tokenSet] = useState("");
+function claudeView(
+    props: LocalOnboardingProviderDialogProps,
+    assistant: LocalOnboardingAssistant,
+    vendor: LocalOnboardingProviderVendor,
+    token: string,
+    tokenSet: (token: string) => void,
+): WayView {
     const phase = props.claudeToken?.phase ?? "idle";
     const saving = phase === "saving";
     const normalized = claudeSetupTokenNormalize(token);
@@ -72,26 +201,21 @@ function ClaudeDialog(props: LocalOnboardingProviderDialogProps) {
         if (normalized && !saving) props.onClaudeTokenSubmit?.(normalized);
     };
     const terminal = TERMINAL[props.installShell];
-    const installed = props.assistant.connect.installed;
+    const installed = assistant.connect.installed;
     const first = installed ? 1 : 2;
-    return (
-        <SetupProviderDialog
-            action={{
-                disabled: !normalized || saving,
-                label: "Connect",
-                loading: saving,
-                onSelect: submit,
-            }}
-            data-testid="local-onboarding-provider-dialog"
-            mark={props.vendor.mark}
-            name={props.vendor.name}
-            onClose={props.onClose}
-        >
+    return {
+        action: {
+            disabled: !normalized || saving,
+            label: "Connect",
+            loading: saving,
+            onSelect: submit,
+        },
+        steps: (
             <SetupProviderSteps>
                 {installed ? null : (
                     <SetupProviderStep n={1} title={`Install Claude Code. In ${terminal}, run:`}>
                         <SetupCommand
-                            command={props.vendor.install[props.installShell]}
+                            command={vendor.install[props.installShell]}
                             label="Claude Code install command"
                         />
                     </SetupProviderStep>
@@ -123,19 +247,27 @@ function ClaudeDialog(props: LocalOnboardingProviderDialogProps) {
                     )}
                 </SetupProviderStep>
             </SetupProviderSteps>
-        </SetupProviderDialog>
-    );
+        ),
+    };
 }
 
-function SignInDialog(props: LocalOnboardingProviderDialogProps) {
-    const { assistant, vendor } = props;
+/** The pasted code and whether it was sent, which the dialog keeps. */
+interface SignInCode {
+    readonly code: string;
+    readonly codeSet: (code: string) => void;
+    readonly codeSent: boolean;
+    readonly codeSentSet: (sent: boolean) => void;
+}
+
+function signInView(
+    props: LocalOnboardingProviderDialogProps,
+    assistant: LocalOnboardingAssistant,
+    vendor: LocalOnboardingProviderVendor,
+    { code, codeSet, codeSent, codeSentSet }: SignInCode,
+): WayView {
     const id = assistant.id;
     const connect = assistant.connect;
     const operation = connect.operation;
-    const [code, codeSet] = useState("");
-    // A sign-in runs twice: starting, and checking a pasted code. Which one
-    // this is, is the one thing only this dialog knows.
-    const [codeSent, codeSentSet] = useState(false);
     const installing = operation?.kind === "install" && operation.status === "running";
     const installFailed = operation?.kind === "install" && operation.status === "failed";
     const signingIn = operation?.kind === "sign-in" && operation.status === "running";
@@ -178,14 +310,9 @@ function SignInDialog(props: LocalOnboardingProviderDialogProps) {
         : waiting || signingIn
           ? { label: "Cancel", onSelect: () => props.onCancel?.(id), variant: "secondary" }
           : undefined;
-    return (
-        <SetupProviderDialog
-            {...(action ? { action } : {})}
-            data-testid="local-onboarding-provider-dialog"
-            mark={vendor.mark}
-            name={vendor.name}
-            onClose={props.onClose}
-        >
+    return {
+        ...(action ? { action } : {}),
+        steps: (
             <SetupProviderSteps>
                 {connect.installed ? null : (
                     <SetupProviderStep n={1} title={`Install ${vendor.name}`}>
@@ -263,6 +390,6 @@ function SignInDialog(props: LocalOnboardingProviderDialogProps) {
                     </SetupProviderStep>
                 ) : null}
             </SetupProviderSteps>
-        </SetupProviderDialog>
-    );
+        ),
+    };
 }

@@ -1,30 +1,8 @@
 /*
- * C-356 SetupProviderDialog — a provider's numbered steps in a 480px card.
- *
- * The card hangs from the top of a 560px frame centred in the window, and is
- * as tall as its steps, so its header and close button hold still while the
- * steps change; only the bottom edge moves. This stands in for Modal's
- * anchored frame until that lands, and goes when it does.
+ * C-356 SetupProviderDialog's parts: the header chip, the choice of how to
+ * connect, the numbered steps, and what a step holds. The card itself is a
+ * plain medium Modal, centred like every other.
  */
-
-.happy-modal-overlay > .happy-modal.happy-setup-provider-dialog {
-    display: flex;
-    flex: none;
-    align-items: flex-start;
-    height: 560px;
-    max-height: 100%;
-    /* The room below a short card is still the dim, which dismisses. */
-    pointer-events: none;
-}
-
-.happy-modal-overlay > .happy-modal.happy-setup-provider-dialog > .happy-modal__dialog {
-    max-height: 100%;
-    pointer-events: auto;
-}
-
-.happy-setup-provider-dialog .happy-modal__body {
-    min-height: 0;
-}
 
 /* The header chip: a 28px neutral box with the vendor's 16px mark. */
 .happy-setup-provider-dialog__chip {
@@ -105,4 +83,35 @@
     line-height: 20px;
     letter-spacing: 0.08em;
     user-select: all;
+}
+
+.happy-setup-provider-dialog__ways {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+/* A prompt to paste elsewhere: the whole text, framed, with its copy beside it. */
+.happy-setup-provider-dialog__prompt {
+    display: flex;
+    align-self: stretch;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 8px 8px 12px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px var(--modal-border);
+}
+
+.happy-setup-provider-dialog__prompt-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-top: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-wrap: pretty;
+    -webkit-user-select: text;
+    user-select: text;
 }

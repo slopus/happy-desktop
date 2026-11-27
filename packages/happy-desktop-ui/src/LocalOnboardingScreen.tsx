@@ -7,17 +7,19 @@ import {
     type DesktopMobilePairingOptions,
     type DesktopMobileSetupStep,
 } from "./DesktopMobileSetup";
-import { LocalOnboardingProviderDialog } from "./LocalOnboardingProviderDialog";
+import {
+    LocalOnboardingProviderDialog,
+    type LocalOnboardingHandOff,
+    type LocalOnboardingProviderWay,
+} from "./LocalOnboardingProviderDialog";
 import { OnboardingHelp } from "./OnboardingHelp";
 import { OnboardingNode, type OnboardingNodeIdentity } from "./OnboardingNode";
 import { OnboardingSteps, type OnboardingStage } from "./OnboardingSteps";
 import {
-    SetupAssistants,
-    type SetupAssistantAction,
-    type SetupAssistantsAside,
-    type SetupAssistantsProvider,
-} from "./SetupAssistants";
-import { SetupProviderRows, type SetupProviderRow } from "./SetupProviderRows";
+    SetupProviderRows,
+    type SetupProviderMark,
+    type SetupProviderRow,
+} from "./SetupProviderRows";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
 import { windowsSandboxSetupPage, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
@@ -26,15 +28,21 @@ import { windowsSandboxSetupPage, type WindowsSandboxSetupState } from "./Window
 export type LocalOnboardingAssistantId = "claude" | "codex" | "grok" | "antigravity";
 
 /**
- * One Subscriptions card's command the person copied: whose card, and whether
- * it installs, signs in, or is a prompt for their own coding agent. Never the
- * text itself.
+ * One row on Connect your AI: an assistant Happy Agent signs in, Amazon
+ * Bedrock, or a custom endpoint. API keys belong to the assistant they are for.
  */
+export type LocalOnboardingProviderRowId = LocalOnboardingAssistantId | "bedrock" | "custom";
+
 /** The shell the official install commands are written for on this machine. */
 export type LocalOnboardingInstallShell = "powershell" | "posix";
 
+/**
+ * One Connect your AI command the person copied: whose row, and whether it
+ * installs, signs in, or is a prompt for their own coding agent. Never the
+ * text itself.
+ */
 export interface LocalOnboardingCommandCopy {
-    readonly assistant: LocalOnboardingAssistantId | "custom";
+    readonly assistant: LocalOnboardingProviderRowId;
     readonly kind: "install" | "sign-in" | "agent-prompt";
 }
 
@@ -108,6 +116,8 @@ export interface LocalOnboardingCustomProvider {
     readonly name: string;
     /** What kind it is, as a person names it, for example "Bedrock". */
     readonly kind: string;
+    /** The row that counts it as one of its accounts, by its type in `happy.toml`. */
+    readonly row: LocalOnboardingProviderRowId;
     readonly authentication: "checking" | "valid" | "error";
     /** Why it failed, when it did. */
     readonly message?: string;
@@ -204,10 +214,10 @@ export type LocalOnboardingView =
 
 export interface LocalOnboardingScreenProps {
     readonly showSteps?: boolean;
-    /** Opens the custom column's prompts with the page, for the Blueprint. */
-    readonly agentPromptsOpen?: boolean;
-    /** Opens one assistant's dialog with the page, for the Blueprint. */
-    readonly providerDialogOpen?: LocalOnboardingAssistantId;
+    /** Opens one row's dialog with the page, for the Blueprint. */
+    readonly providerDialogOpen?: LocalOnboardingProviderRowId;
+    /** The way that dialog opens on, for the Blueprint. Absent, the plan. */
+    readonly providerDialogWay?: LocalOnboardingProviderWay;
     readonly appearance: ThemeMode;
     readonly view: LocalOnboardingView;
     /** The Happy Agent being set up, once it has said who it is. */
@@ -229,7 +239,7 @@ export interface LocalOnboardingScreenProps {
     onStageSelect?(stage: OnboardingStage): void;
     /** Opens an external page: the host owns how a link leaves the app. */
     onExternalOpen?(url: string): void;
-    /** A Subscriptions card's command or prompt was copied. */
+    /** A Connect your AI command or prompt was copied. */
     onCommandCopy?(copy: LocalOnboardingCommandCopy): void;
     onHappyMobileConnect(): void;
     onHappyMobileSkip(): void;
@@ -307,6 +317,21 @@ function byteSize(bytes: number): string {
  * its mark is called here. Putting the wrong name on somebody else's trademark
  * is not a shortcut worth taking.
  */
+const HAPPY_DOCS = "~/.happy/docs";
+
+/**
+ * An API key handed to the person's own coding agent: Happy Agent keeps keys
+ * only in its `happy.toml`, which nothing in this window can write.
+ */
+function keyHandOff(key: string, assistant: string, vendor: string): LocalOnboardingHandOff {
+    return {
+        asks: `your ${key}`,
+        label: key,
+        note: `Billed to your ${vendor} account for what agents use.`,
+        prompt: `Set up Happy Agent on this computer to use my ${key} with ${assistant}. Ask me for the key, add it to Happy's happy.toml as a ${assistant} provider, then reload Happy Agent. Guide: ${HAPPY_DOCS}/configuration.md (Providers).`,
+    };
+}
+
 const ASSISTANTS: Record<
     LocalOnboardingAssistantId,
     {
@@ -323,6 +348,11 @@ const ASSISTANTS: Record<
         offer: string;
         /** The vendor's sign-in page shows a code to paste back into Happy. */
         pastesCode: boolean;
+        /** Signing in with that plan, as the dialog's choice names it. */
+        plan: string;
+        planNote: string;
+        /** An API key instead, where the assistant takes one. */
+        key?: LocalOnboardingHandOff;
     }
 > = {
     claude: {
@@ -336,8 +366,11 @@ const ASSISTANTS: Record<
         name: "Claude Code",
         signIn: "claude auth login",
         vendor: "Claude",
-        offer: "Your Claude plan",
+        offer: "Your Claude plan, or an Anthropic API key",
         pastesCode: false,
+        plan: "Claude plan",
+        planNote: "Uses the Claude plan you already pay for, through a token from Claude Code.",
+        key: keyHandOff("Anthropic API key", "Claude Code", "Anthropic"),
     },
     codex: {
         command: "codex",
@@ -352,8 +385,11 @@ const ASSISTANTS: Record<
         name: "Codex",
         signIn: "codex login",
         vendor: "OpenAI",
-        offer: "Your ChatGPT plan",
+        offer: "Your ChatGPT plan, or an OpenAI API key",
         pastesCode: false,
+        plan: "ChatGPT plan",
+        planNote: "Uses the ChatGPT plan you already pay for. No key needed.",
+        key: keyHandOff("OpenAI API key", "Codex", "OpenAI"),
     },
     grok: {
         command: "grok",
@@ -366,8 +402,11 @@ const ASSISTANTS: Record<
         name: "Grok",
         signIn: "grok login",
         vendor: "xAI",
-        offer: "Your Grok plan",
+        offer: "Your Grok plan, or an xAI API key",
         pastesCode: false,
+        plan: "Grok plan",
+        planNote: "Uses the Grok plan you already pay for. No key needed.",
+        key: keyHandOff("xAI API key", "Grok", "xAI"),
     },
     antigravity: {
         command: "agy",
@@ -383,6 +422,45 @@ const ASSISTANTS: Record<
         vendor: "Google",
         offer: "Your Google AI plan",
         pastesCode: true,
+        plan: "Google AI plan",
+        planNote: "Uses the Google AI plan you already pay for. No key needed.",
+    },
+};
+
+/**
+ * The rows after the assistants: model access no assistant signs in to, each
+ * set up by the person's own coding agent.
+ */
+const OTHERS: Record<
+    "bedrock" | "custom",
+    {
+        readonly name: string;
+        readonly mark: SetupProviderMark;
+        readonly offer: string;
+        readonly handOff: LocalOnboardingHandOff;
+    }
+> = {
+    bedrock: {
+        handOff: {
+            asks: "an AWS profile or a Bedrock API key",
+            label: "AWS keys",
+            note: "Billed to your AWS account.",
+            prompt: `Set up Amazon Bedrock for Happy Agent on this computer. Ask me whether to use an AWS profile or a Bedrock API key, add the Bedrock provider to Happy's happy.toml, then reload Happy Agent. Guide: ${HAPPY_DOCS}/configuration.md (Amazon Bedrock).`,
+        },
+        mark: { kind: "ionicon", name: "cloud-outline" },
+        name: "Amazon Bedrock",
+        offer: "AWS keys, billed to your AWS account",
+    },
+    custom: {
+        handOff: {
+            asks: "the server's address, its key and its models",
+            label: "Endpoint",
+            note: "",
+            prompt: `Set up Happy Agent on this computer with my custom model access: an OpenAI-compatible endpoint, a gateway, or a custom base URL or proxy for Claude Code or Codex. Read the env block in ~/.claude/settings.json and ~/.codex/config.toml, ask me for anything missing, add the matching provider to Happy's happy.toml, then reload Happy Agent. Guide: ${HAPPY_DOCS}/configuration.md (OpenAI-compatible endpoints).`,
+        },
+        mark: { kind: "ionicon", name: "code-slash-outline" },
+        name: "Custom endpoint",
+        offer: "Any server that speaks OpenAI’s API",
     },
 };
 
@@ -406,43 +484,59 @@ export function localOnboardingInstallCommand(
     return ASSISTANTS[assistant].install[shell];
 }
 
-/** What a Subscriptions row and its dialog can ask the host to do. */
-interface AssistantCardHandlers {
-    readonly onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void;
-    readonly onSignIn?: (assistant: LocalOnboardingAssistantId) => void;
-    readonly onSignInCode?: (assistant: LocalOnboardingAssistantId, code: string) => void;
-    readonly onInstall?: (assistant: LocalOnboardingAssistantId) => void;
-    readonly onCancel?: (assistant: LocalOnboardingAssistantId) => void;
-    readonly onExternalOpen?: (url: string) => void;
-    /** Opens the assistant's dialog. */
-    readonly onOpen?: (assistant: LocalOnboardingAssistantId) => void;
+/** What a Connect your AI row can ask the screen to do. */
+interface ProviderRowHandlers {
+    /** Opens the row's dialog, on the way given or the plan. */
+    readonly onOpen: (row: LocalOnboardingProviderRowId, way?: LocalOnboardingProviderWay) => void;
+}
+
+/** The accounts configured in `happy.toml` that one row counts, and how their checks went. */
+function rowAccounts(custom: LocalOnboardingCustom, row: LocalOnboardingProviderRowId) {
+    const providers = custom.providers.filter((provider) => provider.row === row);
+    const failed = providers.find((provider) => provider.authentication === "error");
+    return {
+        checking: providers.some((provider) => provider.authentication === "checking"),
+        // One line has no room for code, so a command it quotes reads as words.
+        ...(failed
+            ? {
+                  failed: `${failed.name}: ${(failed.message ?? "Couldn't verify").replaceAll("`", "")}`,
+              }
+            : {}),
+        valid: providers.filter((provider) => provider.authentication === "valid").length,
+    };
 }
 
 /**
- * One assistant as its row says it. Each row opens its dialog, where the
- * assistant is installed and signed in. A sign-in already on this computer
- * is one connected account without any dialog; "Add another" stays
- * unpressable until Happy Agent can hold a second account of one assistant.
+ * One assistant as its row says it. Every row opens its dialog, connected or
+ * not. A sign-in already on this computer is one account, and each provider
+ * of its type in `happy.toml` that works is another. "Add another" opens the
+ * dialog on the API key, the one way this window offers to a second account;
+ * an assistant without a key way keeps it unpressable.
  */
 function assistantRowProject(
     assistant: LocalOnboardingAssistant,
-    handlers: AssistantCardHandlers,
+    custom: LocalOnboardingCustom,
+    handlers: ProviderRowHandlers,
 ): SetupProviderRow {
     const vendor = ASSISTANTS[assistant.id];
     const operation = assistant.connect.operation;
+    const accounts = rowAccounts(custom, assistant.id);
     const row = {
         id: assistant.id,
-        mark: vendor.mark,
+        mark: { kind: "assistant", name: vendor.mark } as const,
         name: vendor.name,
-        ...(handlers.onOpen ? { onOpen: () => handlers.onOpen?.(assistant.id) } : {}),
+        onOpen: () => handlers.onOpen(assistant.id),
     };
-    // Its dialog would sign the one account in again, so a connected row opens
-    // nothing until Happy Agent can add a second one.
-    if (assistant.authentication === "valid") {
-        const { onOpen: _onOpen, ...connected } = row;
-        return { ...connected, accounts: 1, detail: vendor.offer, status: "connected" };
-    }
-    if (assistant.authentication === "checking")
+    const count = accounts.valid + (assistant.authentication === "valid" ? 1 : 0);
+    if (count > 0)
+        return {
+            ...row,
+            accounts: count,
+            detail: vendor.offer,
+            ...(vendor.key ? { onAddAnother: () => handlers.onOpen(assistant.id, "key") } : {}),
+            status: "connected",
+        };
+    if (assistant.authentication === "checking" || accounts.checking)
         return { ...row, detail: vendor.offer, status: "checking" };
     switch (operation?.status) {
         case "running":
@@ -458,108 +552,75 @@ function assistantRowProject(
     }
     if (assistant.authentication === "error")
         return { ...row, detail: assistant.message ?? "Couldn't verify", status: "failed" };
+    if (accounts.failed) return { ...row, detail: accounts.failed, status: "failed" };
     return { ...row, detail: vendor.offer, status: "idle" };
 }
 
-const HAPPY_DOCS = "~/.happy/docs";
-
 /**
- * What the custom column hands to the coding agent somebody already uses. The
- * custom setup comes first: this column is the only place that route lives.
+ * Bedrock or a custom endpoint as its row says it: how many of its kind in
+ * `happy.toml` work, or why the one that does not failed. A configuration
+ * that could not be read at all is said on the custom endpoint's row.
  */
-const AGENT_PROMPTS = [
-    {
-        id: "custom",
-        label: "My setup is custom",
-        text: `Set up Happy Agent on this computer with my custom model access: an API key, Bedrock, a gateway, or a custom base URL or proxy for Claude Code or Codex. Read the env block in ~/.claude/settings.json and ~/.codex/config.toml, then add the matching provider to Happy's happy.toml. Guide: ${HAPPY_DOCS}/configuration.md (Providers).`,
-    },
-    {
-        id: "sign-in",
-        label: "Sign me in",
-        text: `Sign me in to Claude Code, Codex, Grok, or Antigravity on this computer so Happy can use it. Guide: ${HAPPY_DOCS}/configuration.md (Providers).`,
-    },
-] as const;
-
-/**
- * Model access set up some other way, as one quiet line under the three
- * cards rather than a card of its own: the prompts for the coding agent
- * already on the machine. Each configured provider says how its own check
- * went in its row above this line, so the line says nothing of them. Access
- * that is configured but failed its check gets the same prompts: a base URL
- * or proxy the daemon could not reach is fixed the same way it is set up.
- * While it is still being checked the line is held empty.
- */
-function customAside(
+function otherRowProject(
+    id: "bedrock" | "custom",
     custom: LocalOnboardingCustom,
-    promptsOpen = false,
-    onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
-): SetupAssistantsAside {
-    const prompts = (label: string): Extract<SetupAssistantAction, { kind: "prompts" }> => ({
-        ...(promptsOpen ? { defaultOpen: true } : {}),
-        kind: "prompts",
-        label,
-        ...(onCommandCopy
-            ? { onCopy: () => onCommandCopy({ assistant: "custom", kind: "agent-prompt" }) }
-            : {}),
-        prompts: AGENT_PROMPTS,
-        title: "Paste one into the coding agent you already use",
-    });
-    // The line is held, empty, while anything is checked, so nothing above it moves.
-    if (custom.authentication === "invalid")
-        return { action: prompts("Use an API key or another provider") };
-    if (custom.providers.length === 0)
-        return custom.authentication === "error"
-            ? {
-                  action: prompts("Fix with your agent"),
-                  detail: custom.message ?? "Couldn't verify your custom setup.",
-              }
-            : {};
-    // One that works is enough to go on; one that does not still has its fix.
-    return custom.authentication === "error" ||
-        custom.providers.some((provider) => provider.authentication === "error")
-        ? { action: prompts("Fix with your agent") }
-        : {};
-}
-
-/** Each configured provider as its own row: its name, then what its check found. */
-function customProvidersProject(custom: LocalOnboardingCustom): readonly SetupAssistantsProvider[] {
-    return custom.providers.map((provider) => {
-        switch (provider.authentication) {
-            case "checking":
-                return {
-                    detail: `Checking ${provider.kind}…`,
-                    id: provider.id,
-                    name: provider.name,
-                    status: "checking",
-                };
-            case "valid":
-                return { detail: "Ready", id: provider.id, name: provider.name, status: "found" };
-            case "error":
-                return {
-                    detail: provider.message ?? "Couldn't verify",
-                    id: provider.id,
-                    name: provider.name,
-                    status: "failed",
-                };
-        }
-    });
+    handlers: ProviderRowHandlers,
+): SetupProviderRow {
+    const other = OTHERS[id];
+    const accounts = rowAccounts(custom, id);
+    const row = {
+        id,
+        mark: other.mark,
+        name: other.name,
+        onOpen: () => handlers.onOpen(id),
+    };
+    if (accounts.valid > 0)
+        return {
+            ...row,
+            accounts: accounts.valid,
+            detail: other.offer,
+            onAddAnother: () => handlers.onOpen(id),
+            status: "connected",
+        };
+    if (
+        accounts.checking ||
+        (custom.authentication === "checking" && custom.providers.length === 0)
+    )
+        return { ...row, detail: other.offer, status: "checking" };
+    if (accounts.failed) return { ...row, detail: accounts.failed, status: "failed" };
+    if (id === "custom" && custom.authentication === "error" && custom.providers.length === 0)
+        return {
+            ...row,
+            detail: custom.message ?? "Couldn't verify your custom setup.",
+            status: "failed",
+        };
+    return { ...row, detail: other.offer, status: "idle" };
 }
 
 /** The rows shown before authentication resolves, each still being checked. */
-const CHECKING_ROWS: readonly SetupProviderRow[] = Object.entries(ASSISTANTS).map(
-    ([id, assistant]): SetupProviderRow => ({
-        detail: assistant.offer,
-        id,
-        mark: assistant.mark,
-        name: assistant.name,
-        status: "checking",
-    }),
-);
+const CHECKING_ROWS: readonly SetupProviderRow[] = [
+    ...Object.entries(ASSISTANTS).map(
+        ([id, assistant]): SetupProviderRow => ({
+            detail: assistant.offer,
+            id,
+            mark: { kind: "assistant", name: assistant.mark },
+            name: assistant.name,
+            status: "checking",
+        }),
+    ),
+    ...Object.entries(OTHERS).map(
+        ([id, other]): SetupProviderRow => ({
+            detail: other.offer,
+            id,
+            mark: other.mark,
+            name: other.name,
+            status: "checking",
+        }),
+    ),
+];
 
 interface MachineSetupProjection {
     readonly rows?: readonly SetupProviderRow[];
-    readonly aside?: SetupAssistantsAside;
-    readonly providers?: readonly SetupAssistantsProvider[];
     readonly copy?: string;
     /** Whether anything found on this machine can actually be used to work. */
     readonly hasValidAuthentication: boolean;
@@ -569,7 +630,7 @@ interface MachineSetupProjection {
 
 const SETUP_COPY = "One-time download for this machine.";
 /**
- * Subscriptions says one thing from the moment it opens: the cards are where
+ * Connect your AI says one thing from the moment it opens: the rows are where
  * it stands, so the words above them never change while checks come back.
  */
 const SUBSCRIPTIONS_TITLE = "Connect your AI";
@@ -577,8 +638,7 @@ const SUBSCRIPTIONS_COPY = "Sign in to one you already use to get started. You c
 
 function machineSetupProject(
     view: LocalOnboardingView,
-    promptsOpen: boolean,
-    handlers: AssistantCardHandlers,
+    handlers: ProviderRowHandlers,
 ): MachineSetupProjection | undefined {
     if (view.kind === "agent-setup")
         return {
@@ -594,28 +654,39 @@ function machineSetupProject(
             status: { label: "Starting…", progress: { kind: "waiting" } },
             title: "Setting up",
         };
-    // While anything is checked its card holds its button's place empty; there
-    // is no status line to appear and go again under the subtitle.
+    // While anything is checked its row holds a spinner; there is no status
+    // line to appear and go again under the subtitle.
     if (view.kind === "examining")
         return {
             rows: CHECKING_ROWS,
-            aside: {},
             copy: SUBSCRIPTIONS_COPY,
             hasValidAuthentication: false,
             title: SUBSCRIPTIONS_TITLE,
         };
     if (view.kind === "provider-authentication")
         return {
-            rows: view.assistants.map((assistant) => assistantRowProject(assistant, handlers)),
-            aside: customAside(view.custom, promptsOpen, handlers.onCommandCopy),
+            rows: [
+                ...view.assistants.map((assistant) =>
+                    assistantRowProject(assistant, view.custom, handlers),
+                ),
+                otherRowProject("bedrock", view.custom, handlers),
+                otherRowProject("custom", view.custom, handlers),
+            ],
             copy: SUBSCRIPTIONS_COPY,
-            providers: customProvidersProject(view.custom),
             hasValidAuthentication:
                 view.custom.authentication === "valid" ||
                 view.assistants.some((assistant) => assistant.authentication === "valid"),
             title: SUBSCRIPTIONS_TITLE,
         };
     return undefined;
+}
+
+/** Which row's dialog is open, on which way, and whether that row was connected then. */
+interface ProviderDialogOpen {
+    readonly row: LocalOnboardingProviderRowId;
+    readonly way?: LocalOnboardingProviderWay;
+    /** A sign-in finishing closes the dialog it was started from, not one opened on it. */
+    readonly connected: boolean;
 }
 
 /**
@@ -636,10 +707,21 @@ function machineSetupProject(
  */
 export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     const { view } = props;
-    // Which assistant's dialog is open is this screen's own passing state;
-    // what installing, signing in and saving a token do belongs to setup.
-    const [dialogOpen, dialogOpenSet] = useState<LocalOnboardingAssistantId | undefined>(
-        props.providerDialogOpen,
+    // Which row's dialog is open is this screen's own passing state; what
+    // installing, signing in and saving a token do belongs to setup.
+    const connectedNow = (row: LocalOnboardingProviderRowId) =>
+        view.kind === "provider-authentication" &&
+        view.assistants.some(
+            (assistant) => assistant.id === row && assistant.authentication === "valid",
+        );
+    const [dialogOpen, dialogOpenSet] = useState<ProviderDialogOpen | undefined>(() =>
+        props.providerDialogOpen
+            ? {
+                  connected: connectedNow(props.providerDialogOpen),
+                  row: props.providerDialogOpen,
+                  ...(props.providerDialogWay ? { way: props.providerDialogWay } : {}),
+              }
+            : undefined,
     );
     const identity = props.node ? <OnboardingNode node={props.node} /> : undefined;
     // Every step is drawn by this one `SetupPage`, never by a component of its
@@ -703,33 +785,57 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         ) : undefined,
     } as const;
     const claudeToken = view.kind === "provider-authentication" ? view.claudeToken : undefined;
-    const machineSetup = machineSetupProject(view, props.agentPromptsOpen === true, {
-        ...(props.onCommandCopy ? { onCommandCopy: props.onCommandCopy } : {}),
-        ...(props.onAssistantSignIn ? { onSignIn: props.onAssistantSignIn } : {}),
-        ...(props.onAssistantSignInCode ? { onSignInCode: props.onAssistantSignInCode } : {}),
-        ...(props.onAssistantInstall ? { onInstall: props.onAssistantInstall } : {}),
-        ...(props.onAssistantConnectCancel ? { onCancel: props.onAssistantConnectCancel } : {}),
-        ...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {}),
-        onOpen: (id) => {
-            if (id === "claude") props.onClaudeTokenReset?.();
-            dialogOpenSet(id);
+    const machineSetup = machineSetupProject(view, {
+        onOpen: (row, way) => {
+            if (row === "claude") props.onClaudeTokenReset?.();
+            dialogOpenSet({ connected: connectedNow(row), row, ...(way ? { way } : {}) });
         },
     });
-    const opened =
-        view.kind === "provider-authentication"
-            ? view.assistants.find((assistant) => assistant.id === dialogOpen)
-            : undefined;
-    // Connected, or Claude's token saved: the dialog has nothing left to ask.
-    const providerDialog =
-        opened !== undefined &&
-        opened.authentication !== "valid" &&
-        !(opened.id === "claude" && claudeToken?.phase === "saved") &&
-        view.kind === "provider-authentication" ? (
+    const providerDialog = (() => {
+        if (!dialogOpen || view.kind !== "provider-authentication") return null;
+        const common = {
+            installShell: view.installShell,
+            onClose: () => dialogOpenSet(undefined),
+            ...(dialogOpen.way ? { way: dialogOpen.way } : {}),
+            ...(props.onCommandCopy
+                ? {
+                      onPromptCopy: () =>
+                          props.onCommandCopy?.({
+                              assistant: dialogOpen.row,
+                              kind: "agent-prompt",
+                          }),
+                  }
+                : {}),
+        };
+        if (dialogOpen.row === "bedrock" || dialogOpen.row === "custom") {
+            const other = OTHERS[dialogOpen.row];
+            return (
+                <LocalOnboardingProviderDialog
+                    {...common}
+                    target={{
+                        handOff: other.handOff,
+                        id: dialogOpen.row,
+                        kind: "hand-off",
+                        mark: other.mark,
+                        name: other.name,
+                    }}
+                />
+            );
+        }
+        const opened = view.assistants.find((assistant) => assistant.id === dialogOpen.row);
+        // A sign-in or a saved token finishing is the end of what the dialog
+        // asked; one opened on a connected row stays until it is closed.
+        if (
+            !opened ||
+            (!dialogOpen.connected &&
+                (opened.authentication === "valid" ||
+                    (opened.id === "claude" && claudeToken?.phase === "saved")))
+        )
+            return null;
+        return (
             <LocalOnboardingProviderDialog
-                assistant={opened}
+                {...common}
                 {...(claudeToken ? { claudeToken } : {})}
-                installShell={view.installShell}
-                onClose={() => dialogOpenSet(undefined)}
                 {...(props.onAssistantConnectCancel
                     ? { onCancel: props.onAssistantConnectCancel }
                     : {})}
@@ -742,9 +848,10 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 {...(props.onAssistantSignInCode
                     ? { onSignInCode: props.onAssistantSignInCode }
                     : {})}
-                vendor={ASSISTANTS[opened.id]}
+                target={{ assistant: opened, kind: "assistant", vendor: ASSISTANTS[opened.id] }}
             />
-        ) : null;
+        );
+    })();
 
     if (machineSetup)
         return (
@@ -776,14 +883,6 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                             <SetupProviderRows
                                 data-testid="local-onboarding-assistants"
                                 rows={machineSetup.rows}
-                            />
-                            <SetupAssistants
-                                assistants={[]}
-                                {...(machineSetup.aside ? { aside: machineSetup.aside } : {})}
-                                {...(machineSetup.providers
-                                    ? { providers: machineSetup.providers }
-                                    : {})}
-                                onExternalOpen={props.onExternalOpen}
                             />
                         </div>
                     ) : undefined}
