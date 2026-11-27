@@ -10,14 +10,16 @@
     },
     "scripts": {
         "benchmark": "node --import tsx benchmarks/object-update.bench.ts",
+        "benchmark:message-check": "node --import tsx benchmarks/message-check.bench.ts",
         "build": "tsc --project tsconfig.json",
         "test": "vitest run",
         "test:watch": "vitest",
         "typecheck": "tsc --project tsconfig.json",
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",
-        "lint": "oxlint .",
+        "lint": "oxlint . && node --import tsx scripts/messageCheckGenerate.mts --check",
         "architecture:check": "node --import tsx scripts/architecture-check.mts",
+        "message-check:generate": "node --import tsx scripts/messageCheckGenerate.mts",
         "clean": "rm -rf coverage"
     },
     "dependencies": {

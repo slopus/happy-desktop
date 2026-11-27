@@ -1,5 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, it } from "vitest";
+import { messageCheck } from "./messageCheck.generated.js";
+import { messageSchema } from "./messageSchema.js";
 import { messageAdmission, messageProblem } from "./messageValidate.js";
 
 /** One shared protocol message fixture; see `fixtures/protocol-messages/README.md`. */
@@ -32,6 +35,18 @@ describe("a valid message passes", () => {
     it.each(protocolMessageFixtures("valid").map((fixture) => [fixture.name, fixture] as const))(
         "%s",
         (_, fixture) => expect(messageProblem(fixture.message)).toBeUndefined(),
+    );
+});
+
+describe("the compiled check agrees with the schema", () => {
+    it.each(
+        (["valid", "invalid"] as const).flatMap((kind) =>
+            protocolMessageFixtures(kind).map(
+                (fixture) => [`${kind}/${fixture.name}`, fixture] as const,
+            ),
+        ),
+    )("%s", (_, fixture) =>
+        expect(messageCheck(fixture.message)).toBe(Value.Check(messageSchema, fixture.message)),
     );
 });
 
