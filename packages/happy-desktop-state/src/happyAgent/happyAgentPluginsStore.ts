@@ -549,13 +549,6 @@ export function happyAgentPluginsStoreCreate(deps: {
                 greeted = true;
                 // The first read was sent after this subscription was installed.
                 if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
-                if (
-                    watchedPlugins.size === 0 &&
-                    input.kind === "update" &&
-                    input.update.kind === "event" &&
-                    input.update.event.type !== "plugins.changed"
-                )
-                    continue;
                 load();
             }
         })().catch(() => undefined);
