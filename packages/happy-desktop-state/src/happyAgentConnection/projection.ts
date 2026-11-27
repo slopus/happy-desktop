@@ -50,6 +50,7 @@ import type {
     WorkspaceGroup,
 } from "./types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
+import { clusterBotFields } from "./clusterBot.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { sortedPatch } from "../utils/sortedPatch.js";
 
@@ -1073,6 +1074,7 @@ export function projectBots(
                 ...(bot.shortName === undefined ? {} : { shortName: bot.shortName }),
                 username: bot.username,
                 ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
+                ...clusterBotFields(bot),
                 orderKey: bot.orderKey,
                 path: computePath(bot.compute),
                 ...(bot.avatar === null

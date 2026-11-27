@@ -495,6 +495,10 @@ export {
     type HappyAgentProjectSetupSection,
 } from "./HappyAgentProjectSettingsDialog";
 export {
+    HappyAgentBotSettingsDialog,
+    type HappyAgentBotSettingsDialogProps,
+} from "./HappyAgentBotSettingsDialog";
+export {
     HappyAgentCreateBotPage,
     type HappyAgentCreateBotPageProps,
 } from "./HappyAgentCreateBotPage";

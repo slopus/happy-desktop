@@ -126,6 +126,7 @@ import type {
     HappyAgentConversationSource,
 } from "./happyAgentActivity.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
+import { happyAgentProfilePhotoRead } from "./happyAgentProfilePhoto.js";
 import { orderKeySequence } from "../utils/orderKeySequence.js";
 import type {
     HappyAgentProjectArchiveResult,
@@ -803,6 +804,8 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly openInRecent?: HappyAgentOpenInTarget;
     /** The rename in progress, if any: what is being renamed and the draft name. */
     readonly rename?: HappyAgentRenameSnapshot;
+    /** A Happy Cloud personal bot's settings, while the reader has them open. */
+    readonly botSettings?: HappyAgentBotSettingsSnapshot;
     /** The project archive that has been asked for and not yet carried out, if any. */
     readonly projectArchive?: HappyAgentProjectArchiveSnapshot;
     /** The empty workspace/project Cmd-W has offered to archive, if any. */
@@ -1304,6 +1307,25 @@ export type HappyAgentRenameSnapshot = {
           readonly worktreeId: HappyAgentWorktreeId;
       }
 );
+
+/**
+ * A Happy Cloud personal bot's settings, open for editing: what its name and
+ * instructions are being changed to. Only a bot the host reports `editable`
+ * opens here. The picture is not drafted: a chosen one is sent at once and the
+ * bot's row wears it, as the dialog does.
+ */
+export interface HappyAgentBotSettingsSnapshot {
+    readonly botId: HappyAgentBotId;
+    readonly name: string;
+    readonly instructions: string;
+    /** True while the host is being told; the dialog stays up and inert. */
+    readonly submitting: boolean;
+    /** Why the last save or picture was refused, in the reader's words. */
+    readonly error?: string;
+}
+
+/** The most instructions Happy Cloud keeps for one bot, in UTF-8 bytes. */
+export const HAPPY_AGENT_BOT_INSTRUCTIONS_MAX_BYTES = 32 * 1024;
 
 /**
  * A project archive the reader has asked for and has not yet gone through with.
@@ -2183,6 +2205,20 @@ export interface HappyAgentWorkspaceStore {
     renameOpen(projectId: HappyAgentProjectId, worktreeId: HappyAgentWorktreeId | undefined): void;
     /** Opens the same name dialog for a bot's persistent identity. */
     botRenameOpen(botId: string): void;
+    /** Opens a Happy Cloud personal bot's settings; nothing opens for a bot the reader may not edit. */
+    botSettingsOpen(botId: HappyAgentBotId): void;
+    botSettingsNameUpdate(name: string): void;
+    botSettingsInstructionsUpdate(instructions: string): void;
+    /** Sends a picked picture up as the bot's face; a picture the host would refuse is refused here. */
+    botSettingsAvatarChoose(file: Blob): Promise<void>;
+    /** Closes the settings, dropping the drafts. */
+    botSettingsCancel(): void;
+    /**
+     * Saves what changed and closes. A refusal keeps the dialog and its drafts
+     * open with the reason; a blank name or oversized instructions are refused
+     * before the host is asked.
+     */
+    botSettingsSubmit(): Promise<void>;
     /** Edits the pending name. */
     renameDraftUpdate(draft: string): void;
     /** Abandons the rename. */
@@ -2546,6 +2582,7 @@ export function happyAgentWorkspaceStoreCreate(
     let openInTargetsReading = false;
     let openInTargetsTimer: ReturnType<typeof setInterval> | undefined;
     let rename: HappyAgentRenameSnapshot | undefined;
+    let botSettings: HappyAgentBotSettingsSnapshot | undefined;
     let taskBrowseOpen = false;
     let projectArchive: HappyAgentProjectArchiveSnapshot | undefined;
     let groupArchive: HappyAgentGroupArchiveSnapshot | undefined;
@@ -3391,6 +3428,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.openInTargets === openInTargets &&
                 snapshot.openInRecent === openInRecent &&
                 snapshot.rename === rename &&
+                snapshot.botSettings === botSettings &&
                 snapshot.projectArchive === projectArchive &&
                 snapshot.groupArchive === groupArchive &&
                 snapshot.conversationArchiveConfirm === conversationArchiveConfirm &&
@@ -3450,6 +3488,7 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
                           ...(groupSessionDraft ? { groupSessionDraft } : {}),
                           ...(rename ? { rename } : {}),
+                          ...(botSettings ? { botSettings } : {}),
                           ...(projectArchive ? { projectArchive } : {}),
                           ...(groupArchive ? { groupArchive } : {}),
                           ...(conversationArchiveConfirm ? { conversationArchiveConfirm } : {}),
@@ -9246,6 +9285,100 @@ export function happyAgentWorkspaceStoreCreate(
                 submitting: false,
             };
             projectSettingsClose();
+            recompute();
+        },
+        botSettingsOpen(botId) {
+            if (botSettings?.submitting) return;
+            const bot = list.get().bots.find((candidate) => candidate.id === botId);
+            if (bot?.editable !== true || bot.kind !== "personal") return;
+            botSettings = {
+                botId,
+                name: bot.name,
+                instructions: bot.instructions ?? "",
+                submitting: false,
+            };
+            recompute();
+        },
+        botSettingsNameUpdate(name) {
+            if (!botSettings || botSettings.submitting) return;
+            botSettings = { ...botSettings, name };
+            recompute();
+        },
+        botSettingsInstructionsUpdate(instructions) {
+            if (!botSettings || botSettings.submitting) return;
+            botSettings = { ...botSettings, instructions };
+            recompute();
+        },
+        async botSettingsAvatarChoose(file) {
+            const open = botSettings;
+            if (!open || open.submitting) return;
+            const { error: _withdrawn, ...withdrawn } = open;
+            botSettings = withdrawn;
+            recompute();
+            try {
+                list.botAvatarUpdate(open.botId, await happyAgentProfilePhotoRead(file));
+            } catch {
+                // The checks are the profile photo's, and so are their words;
+                // the reader is choosing a bot's picture.
+                if (botSettings?.botId === open.botId) {
+                    botSettings = {
+                        ...botSettings,
+                        error: "The picture must be a PNG, JPEG, or WebP image, up to 8 MiB and 25 megapixels.",
+                    };
+                    recompute();
+                }
+            }
+        },
+        botSettingsCancel() {
+            if (!botSettings) return;
+            botSettings = undefined;
+            recompute();
+        },
+        async botSettingsSubmit() {
+            const pending = botSettings;
+            if (!pending || pending.submitting) return;
+            const bot = list.get().bots.find((candidate) => candidate.id === pending.botId);
+            const name = pending.name.trim();
+            const failed = (message: string) => {
+                botSettings = { ...pending, error: message };
+                recompute();
+            };
+            if (name.length === 0) return failed("A bot needs a name.");
+            if (
+                new TextEncoder().encode(pending.instructions).byteLength >
+                HAPPY_AGENT_BOT_INSTRUCTIONS_MAX_BYTES
+            )
+                return failed("Instructions can be at most 32 KB.");
+            const update = {
+                ...(name === bot?.name ? {} : { name }),
+                ...(pending.instructions === (bot?.instructions ?? "")
+                    ? {}
+                    : { instructions: pending.instructions }),
+            };
+            if (update.name === undefined && update.instructions === undefined) {
+                botSettings = undefined;
+                recompute();
+                return;
+            }
+            const submitting: HappyAgentBotSettingsSnapshot = {
+                botId: pending.botId,
+                name: pending.name,
+                instructions: pending.instructions,
+                submitting: true,
+            };
+            botSettings = submitting;
+            recompute();
+            try {
+                await list.botUpdate(pending.botId, update);
+                if (botSettings === submitting) botSettings = undefined;
+            } catch (error) {
+                if (botSettings === submitting)
+                    botSettings = {
+                        ...submitting,
+                        submitting: false,
+                        error: happyAgentUserError(error).message,
+                    };
+            }
             recompute();
         },
         renameOpen(projectId, worktreeId) {

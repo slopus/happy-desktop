@@ -213,6 +213,7 @@ import {
     happyAgentSidebarVisibilityStoreNoop,
     happyAgentAttentionStoreNoop,
     happyAgentBotAttention,
+    HAPPY_AGENT_BOT_INSTRUCTIONS_MAX_BYTES,
     happyAgentHumanMessageAuthor,
     happyAgentSessionGroupIdOf,
     happyAgentOwnerAuthor,
@@ -329,6 +330,7 @@ import {
     type HappyAgentSurfaceMemberView,
     type HappyAgentSurfaceView,
     HappyAgentProjectSettingsDialog,
+    HappyAgentBotSettingsDialog,
     HappyAgentSessionControls,
     type HappyAgentUserInputAnswerMap,
     HappyAgentUsagePanel,
@@ -1554,6 +1556,8 @@ const ROW_MENU_ARCHIVE = "archive";
 /** Edits the existing sidebar label without changing the row's layout. */
 const ROW_MENU_RENAME = "rename";
 const ROW_MENU_SETTINGS = "settings";
+/** Opens a Happy Cloud personal bot's name, picture, and instructions. */
+const ROW_MENU_BOT_SETTINGS = "bot-settings";
 /**
  * Starts another session in the row's project or worktree. The tab strip's
  * "+" does the same, but a workspace of one chat leaves its strip out, and
@@ -1667,7 +1671,7 @@ function rowAgentId(
  * record rather than anything asked of the machine, so they are offered
  * whether or not the machine is answering.
  */
-function botAttentionMenuItems(attention: HappyAgentBotAttention): MenuItem[] {
+function botAttentionMenuItems(attention: HappyAgentBotAttention, bot?: HappyAgentBot): MenuItem[] {
     return [
         {
             kind: "item",
@@ -1675,8 +1679,22 @@ function botAttentionMenuItems(attention: HappyAgentBotAttention): MenuItem[] {
             label: attention === "muted" ? "Unmute bot" : "Mute bot",
             icon: "bell",
         },
-        { kind: "item", id: ROW_MENU_HIDE, label: "Hide from sidebar", icon: "eye-off" },
+        // A shared bot is a destination of the first group, which is never
+        // thinned out, so it can be quietened but not hidden.
+        ...(bot?.kind === "shared"
+            ? []
+            : ([
+                  { kind: "item", id: ROW_MENU_HIDE, label: "Hide from sidebar", icon: "eye-off" },
+              ] as const)),
     ];
+}
+
+/**
+ * Whether the reader is offered a new bot on this Happy Agent. Happy Cloud's
+ * bots are made by its admin bot, so a person there is offered none.
+ */
+function happyAgentBotCreateOffered(happyAgent: AppHappyAgentEntry | undefined): boolean {
+    return happyAgent?.happyCloud !== true;
 }
 
 /**
@@ -1743,12 +1761,30 @@ export function rowMenuItems(
         ];
     const bot = bots.find((candidate) => candidate.workspaceId === item.id);
     if (bot) {
-        // Happy Cloud's Chief of Staff can be renamed and given a new face,
-        // but never archived.
-        const archivable = !(chiefOfStaffKept && bot.systemKey === "chief_of_staff");
+        // A bot Happy Cloud places is changed only where the host says the
+        // reader may change it: a personal bot's settings hold its name,
+        // picture, and instructions, and a shared bot offers no edits at all.
+        // Neither is archived from here; Happy Cloud's bots are the admin
+        // bot's to make and end. A Happy Agent daemon's bot, which has no
+        // kind, can always be renamed, and Happy Cloud's Chief of Staff from
+        // before kinds can be renamed and given a new face, but never archived.
+        const placed = bot.kind !== undefined;
+        const editable = bot.editable === true;
+        const archivable = !placed && !(chiefOfStaffKept && bot.systemKey === "chief_of_staff");
         const groups: MenuItem[][] = [
-            [{ kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" }],
-            botAttention ? botAttentionMenuItems(botAttention(bot)) : [],
+            placed
+                ? editable && bot.kind === "personal"
+                    ? [
+                          {
+                              kind: "item",
+                              id: ROW_MENU_BOT_SETTINGS,
+                              label: "Bot settings…",
+                              icon: "settings",
+                          },
+                      ]
+                    : []
+                : [{ kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" }],
+            botAttention ? botAttentionMenuItems(botAttention(bot), bot) : [],
             archivable
                 ? [
                       {
@@ -2598,7 +2634,7 @@ function hiddenBotsAction(
     happyAgent: AppHappyAgentEntry,
     attention: HappyAgentAttentionSnapshot,
 ): Pick<SidebarSection, "secondaryAction"> {
-    const hidden = happyAgent.bots.filter(
+    const hidden = happyAgentSidebarTree(happyAgent).bots.filter(
         (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id) === "hidden",
     );
     if (hidden.length === 0) return {};
@@ -2770,59 +2806,19 @@ function happyAgentSections(
     return directory.happyAgents.flatMap((happyAgent) => [
         // Keep the heading even with no bots: its action is where the first
         // one is named, and a machine with none is exactly where that is wanted.
-        {
-            id: happyAgentBotsSectionId(happyAgent.id),
-            label: "Bots",
-            items: [
-                ...happyAgentSidebarTree(happyAgent).bots.flatMap((bot) => {
-                    // A hidden bot leaves the list with everything nested
-                    // under it; a muted one stays, with its whole tree quiet.
-                    const botAttention = happyAgentBotAttention(attention, happyAgent.id, bot.id);
-                    if (botAttention === "hidden") return [];
-                    const muted = botAttention === "muted";
-                    return [
-                        botSidebarItem(bot, titleShimmerEnabled, muted),
-                        ...botSubtaskSidebarItems(
-                            bot.subtasks,
-                            happyAgent.projects,
-                            titleShimmerEnabled,
-                            1,
-                            happyAgent.taskRepositories,
-                        ).map((item) => (muted ? { ...item, muted: true } : item)),
-                    ];
-                }),
-                // The host lists a new bot last, so a bot still being made
-                // stands where it will arrive.
-                ...(happyAgent.botsCreating ?? []).map((bot) =>
-                    botCreatingSidebarItem(bot, titleShimmerEnabled),
-                ),
-            ].map((item) => ({
-                ...item,
-                id: happyAgentItemId(happyAgent.id, item.id),
-            })),
-            // Naming a bot belongs to the Happy Agent named by this section, the
-            // same way adding a project does.
-            // Once the machine has been seen, an outage disables the control
-            // rather than removing it, so the sidebar does not move.
-            ...(happyAgent.session
-                ? {
-                      action: {
-                          disabled: happyAgent.status !== "connected",
-                          icon: "plus" as const,
-                          label: "New bot",
-                          reveal: "always" as const,
-                      },
-                  }
-                : {}),
-            ...hiddenBotsAction(happyAgent, attention),
-            // With the Projects list left out, what the Happy Agent said when it
-            // failed still needs a heading to stand under.
-            ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden &&
-            happyAgent.status === "error" &&
-            happyAgent.message !== undefined
-                ? { error: happyAgent.message }
-                : {}),
-        },
+        // Where no bot can be made here, an empty heading has nothing to offer.
+        ...(happyAgentBotCreateOffered(happyAgent) ||
+        happyAgentSidebarTree(happyAgent).bots.length > 0 ||
+        (happyAgent.botsCreating ?? []).length > 0
+            ? [
+                  happyAgentBotsSection(
+                      happyAgent,
+                      titleShimmerEnabled,
+                      projectsVisibility,
+                      attention,
+                  ),
+              ]
+            : []),
         // A Happy Agent from before tasks has no task list to show, so it
         // offers no heading that could only ever stand empty.
         ...(happyAgentTasksSupported(happyAgent)
@@ -2836,6 +2832,72 @@ function happyAgentSections(
             ? []
             : [happyAgentProjectsSection(happyAgent, titleShimmerEnabled, folded)]),
     ]);
+}
+
+/**
+ * The Bots heading and every bot listed under it, each with its interactive
+ * subtasks nested beneath. Happy Cloud's shared bots are not here; they are
+ * destinations of the first group (`happyAgentTopSection`).
+ */
+function happyAgentBotsSection(
+    happyAgent: AppHappyAgentEntry,
+    titleShimmerEnabled: boolean,
+    projectsVisibility: ProjectsVisibilitySnapshot,
+    attention: HappyAgentAttentionSnapshot,
+): SidebarSection {
+    return {
+        id: happyAgentBotsSectionId(happyAgent.id),
+        label: "Bots",
+        items: [
+            ...happyAgentSidebarTree(happyAgent).bots.flatMap((bot) => {
+                // A hidden bot leaves the list with everything nested
+                // under it; a muted one stays, with its whole tree quiet.
+                const botAttention = happyAgentBotAttention(attention, happyAgent.id, bot.id);
+                if (botAttention === "hidden") return [];
+                const muted = botAttention === "muted";
+                return [
+                    botSidebarItem(bot, titleShimmerEnabled, muted),
+                    ...botSubtaskSidebarItems(
+                        bot.subtasks,
+                        happyAgent.projects,
+                        titleShimmerEnabled,
+                        1,
+                        happyAgent.taskRepositories,
+                    ).map((item) => (muted ? { ...item, muted: true } : item)),
+                ];
+            }),
+            // The host lists a new bot last, so a bot still being made
+            // stands where it will arrive.
+            ...(happyAgent.botsCreating ?? []).map((bot) =>
+                botCreatingSidebarItem(bot, titleShimmerEnabled),
+            ),
+        ].map((item) => ({
+            ...item,
+            id: happyAgentItemId(happyAgent.id, item.id),
+        })),
+        // Naming a bot belongs to the Happy Agent named by this section, the
+        // same way adding a project does.
+        // Once the machine has been seen, an outage disables the control
+        // rather than removing it, so the sidebar does not move.
+        ...(happyAgent.session && happyAgentBotCreateOffered(happyAgent)
+            ? {
+                  action: {
+                      disabled: happyAgent.status !== "connected",
+                      icon: "plus" as const,
+                      label: "New bot",
+                      reveal: "always" as const,
+                  },
+              }
+            : {}),
+        ...hiddenBotsAction(happyAgent, attention),
+        // With the Projects list left out, what the Happy Agent said when it
+        // failed still needs a heading to stand under.
+        ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden &&
+        happyAgent.status === "error" &&
+        happyAgent.message !== undefined
+            ? { error: happyAgent.message }
+            : {}),
+    };
 }
 
 /**
@@ -3211,7 +3273,9 @@ function surfaceTargetLink(
 /**
  * The first group in the sidebar, under no heading. Activity leads it,
  * Artifacts under it; both are always there, never move, and nothing is dragged
- * past them. The reader's
+ * past them. Happy Cloud's shared bots follow the fixed rows as destinations of
+ * their own, each opening its one conversation with its subtasks beneath, and
+ * are not dragged either. The reader's
  * Surfaces follow in their own order and are dragged among themselves only.
  * Every type is listed by its own name and picture, including a type this
  * build cannot show; only opening one depends on its type. Every act on them
@@ -3227,6 +3291,7 @@ function happyAgentTopSection(
     titleShimmerEnabled: boolean,
     feedUnread: number,
     pipelinesAvailable: boolean,
+    attention: HappyAgentAttentionSnapshot,
 ): SidebarSection {
     const offline = happyAgent?.status !== "connected";
     const failure = catalog.failure?.action === "join" ? catalog.failure : undefined;
@@ -3248,6 +3313,9 @@ function happyAgentTopSection(
             ...(pipelinesAvailable && happyAgent?.session?.pipelines?.()
                 ? [PIPELINES_SIDEBAR_ITEM]
                 : []),
+            ...(happyAgent
+                ? sharedBotSidebarItems(happyAgent, titleShimmerEnabled, attention)
+                : []),
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3266,6 +3334,37 @@ function happyAgentTopSection(
                 : []),
         ],
     };
+}
+
+/**
+ * Happy Cloud's shared bots as rows of the first group, addressed like any of
+ * the Happy Agent's rows so selecting one opens its conversation the way a bot
+ * under Bots opens. A shared bot is never hidden; muting quietens its tree.
+ */
+function sharedBotSidebarItems(
+    happyAgent: AppHappyAgentEntry,
+    titleShimmerEnabled: boolean,
+    attention: HappyAgentAttentionSnapshot,
+): SidebarItem[] {
+    return happyAgentSidebarTree(happyAgent)
+        .sharedBots.flatMap((bot) => {
+            const muted = happyAgentBotAttention(attention, happyAgent.id, bot.id) === "muted";
+            return [
+                { ...botSidebarItem(bot, titleShimmerEnabled, muted), reorderable: false },
+                ...botSubtaskSidebarItems(
+                    bot.subtasks,
+                    happyAgent.projects,
+                    titleShimmerEnabled,
+                    1,
+                    happyAgent.taskRepositories,
+                ).map((item) => ({
+                    ...item,
+                    reorderable: false,
+                    ...(muted ? { muted: true } : {}),
+                })),
+            ];
+        })
+        .map((item) => ({ ...item, id: happyAgentItemId(happyAgent.id, item.id) }));
 }
 
 /**
@@ -4369,7 +4468,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const sidebarCreateItems: MenuItem[] = sidebarTaskCreateHappyAgent
         ? [
               ...sidebarCreateSurfaces,
-              ...(props.onBotCreateOpen
+              ...(props.onBotCreateOpen && happyAgentBotCreateOffered(sidebarTaskCreateHappyAgent)
                   ? [
                         ...(sidebarCreateSurfaces.length > 0
                             ? [{ kind: "separator" as const }]
@@ -4557,6 +4656,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return bot && props.attention
                         ? botAttentionMenuItems(
                               happyAgentBotAttention(attention, happyAgent.id, bot.id),
+                              bot,
                           )
                         : [];
                 }
@@ -4729,6 +4829,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 if (bot) {
                     if (actionId === ROW_MENU_ARCHIVE)
                         void workspace.botArchive(bot.id).catch(() => undefined);
+                    if (actionId === ROW_MENU_BOT_SETTINGS) workspace.botSettingsOpen(bot.id);
                     return;
                 }
                 const owner = rowOwnerFind(happyAgent.projects, row.id);
@@ -5017,6 +5118,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     titleShimmerEnabled,
                     feedUnread,
                     pipelinesAvailable,
+                    attention,
                 ),
                 ...sectionsVoiceFocused(
                     happyAgentSections(
@@ -11706,6 +11808,13 @@ function HappyAgentWindowDialogs(props: {
                 props.happyAgentOnline,
                 props.unavailable,
             )}
+            {happyAgentBotSettingsDialog(
+                workspace.botSettings,
+                workspace.list.bots,
+                props.workspace,
+                props.happyAgentOnline,
+                props.unavailable,
+            )}
             {workspace.projectClone ? (
                 <HappyAgentProjectCloneDialog
                     repository={workspace.projectClone.repository}
@@ -11846,6 +11955,43 @@ function happyAgentGroupArchiveDialog(
                 </p>
             </Modal>
         </ModalOverlay>
+    );
+}
+
+/**
+ * A Happy Cloud personal bot's settings, while the reader has them open. The
+ * face is the bot's row's own, which wears a newly chosen picture at once.
+ */
+function happyAgentBotSettingsDialog(
+    settings: HappyAgentWorkspaceSnapshot["botSettings"],
+    bots: readonly HappyAgentBot[],
+    store: HappyAgentWorkspaceStore,
+    happyAgentOnline: () => boolean,
+    unavailable?: string,
+): ReactNode {
+    if (!settings) return null;
+    const bot = bots.find((candidate) => candidate.id === settings.botId);
+    return (
+        <HappyAgentBotSettingsDialog
+            instructions={settings.instructions}
+            instructionsBytes={new TextEncoder().encode(settings.instructions).byteLength}
+            instructionsMaximumBytes={HAPPY_AGENT_BOT_INSTRUCTIONS_MAX_BYTES}
+            name={bot?.name ?? settings.name}
+            nameDraft={settings.name}
+            onAvatarChoose={(file) => {
+                if (happyAgentOnline()) void store.botSettingsAvatarChoose(file);
+            }}
+            onClose={() => store.botSettingsCancel()}
+            onInstructionsChange={(value) => store.botSettingsInstructionsUpdate(value)}
+            onNameChange={(value) => store.botSettingsNameUpdate(value)}
+            onSubmit={() => {
+                if (happyAgentOnline()) void store.botSettingsSubmit();
+            }}
+            submitting={settings.submitting}
+            {...(bot ? botFace(bot) : { placeholderSeed: settings.botId })}
+            {...(settings.error === undefined ? {} : { error: settings.error })}
+            {...(unavailable === undefined ? {} : { submitDisabledReason: unavailable })}
+        />
     );
 }
 

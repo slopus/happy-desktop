@@ -1,0 +1,40 @@
+/*
+ * C-355 HappyAgentBotSettingsDialog — the body of a personal bot's settings.
+ *
+ * One column: the identity strip with the bot's face and the control that
+ * changes it, then the name and the instructions. The column owns the spacing
+ * between them, as the project settings dialog's does.
+ */
+
+.happy-agent-bot-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-sizing: border-box;
+    font-family: var(--happy-font-ui);
+}
+
+.happy-agent-bot-settings * {
+    box-sizing: border-box;
+}
+
+.happy-agent-bot-settings__identity {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-agent-bot-settings__identity-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

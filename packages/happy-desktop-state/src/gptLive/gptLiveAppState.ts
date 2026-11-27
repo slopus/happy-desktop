@@ -168,8 +168,10 @@ export function gptLiveAppStateRead(source: GptLiveDesktopSource): GptLiveAppSta
         const selectedSession = (item: LiveAppStateSession) =>
             item.target.groupId === focusedGroupId &&
             item.target.sessionId === workspace.address.conversationId;
+        // A shared bot is drawn in the first group rather than under Bots,
+        // and is still a bot to talk to.
         server.bots = bounded(
-            tree.bots,
+            [...tree.sharedBots, ...tree.bots],
             ROW_LIMIT,
             (bot) => bot.workspaceId === focusedGroupId,
         ).map((bot) => ({

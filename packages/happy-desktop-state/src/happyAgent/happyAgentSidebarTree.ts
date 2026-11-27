@@ -17,6 +17,11 @@ export interface HappyAgentSidebarProject {
  * "what is in the sidebar" reads this one projection — the sidebar itself and
  * voice — so the order and the filtering are decided once.
  *
+ * Happy Cloud's shared bots are not among the bots: each is a destination of
+ * the sidebar's first group, beside Activity and Artifacts, so they are listed
+ * apart. Only a bot the host says is `shared` goes there; a personal bot and
+ * every bot of a Happy Agent daemon, which sends no kind, stay under Bots.
+ *
  * Bots are the host's top-level roots in catalog order and tasks the reader's
  * joined tasks in the reader's own order; the subtasks of either are
  * descendants listed under them, never roots of their own. Projects keep the
@@ -24,6 +29,9 @@ export interface HappyAgentSidebarProject {
  * once, as that subtask under its root, so the project leaves it out.
  */
 export interface HappyAgentSidebarTree {
+    /** Happy Cloud's shared bots, in catalog order, for the sidebar's first group. */
+    readonly sharedBots: readonly HappyAgentBot[];
+    /** Every other bot, in catalog order, for the Bots section. */
     readonly bots: readonly HappyAgentBot[];
     readonly tasks: readonly HappyAgentTask[];
     readonly projects: readonly HappyAgentSidebarProject[];
@@ -37,6 +45,7 @@ export interface HappyAgentSidebarTreeInput {
 }
 
 const NO_TASKS: readonly HappyAgentTask[] = [];
+const NO_BOTS: readonly HappyAgentBot[] = [];
 const treeCache = new WeakMap<
     readonly HappyAgentProjectGroup[],
     WeakMap<readonly HappyAgentBot[], WeakMap<readonly HappyAgentTask[], HappyAgentSidebarTree>>
@@ -52,8 +61,10 @@ export function happyAgentSidebarTree(entry: HappyAgentSidebarTreeInput): HappyA
     const subtaskWorkspaceIds = new Set(
         happyAgentBotSubtasks([...entry.bots, ...tasks]).map((task) => task.workspaceId),
     );
+    const shared = entry.bots.some((bot) => bot.kind === "shared");
     const tree: HappyAgentSidebarTree = {
-        bots: entry.bots,
+        sharedBots: shared ? entry.bots.filter((bot) => bot.kind === "shared") : NO_BOTS,
+        bots: shared ? entry.bots.filter((bot) => bot.kind !== "shared") : entry.bots,
         tasks,
         projects: entry.projects.map((project) => ({
             project,

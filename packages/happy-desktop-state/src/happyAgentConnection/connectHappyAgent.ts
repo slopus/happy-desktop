@@ -38,6 +38,7 @@ import {
 } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import { happyAgentServiceTierToWire } from "../happyAgentServiceTier.js";
+import { updateBotRequestOf } from "./clusterBot.js";
 import { ChatStore } from "./ChatStore.js";
 import { userProfilesCreate, type UserProfile } from "./userProfiles.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
@@ -4764,7 +4765,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             while (modeSaveOutcomes.size > 256)
                 modeSaveOutcomes.delete(modeSaveOutcomes.keys().next().value!);
         }
-        if (action === "rename_task" || action === "rename_group") {
+        if (action === "rename_task" || action === "rename_group" || action === "update_bot") {
             renameOutcomes.set(mutationId, completed);
             void completed.catch(() => undefined);
             while (renameOutcomes.size > 256)
@@ -6349,6 +6350,29 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     groupsStore.setState((state) => ({
                         bots: replaceResource(state.bots, updated),
                     }));
+                    publishGroups();
+                },
+                undefined,
+                undefined,
+                `bot:${botId}`,
+            );
+        },
+        updateBot(botId, update) {
+            const mutationId = nextId();
+            return mutation(
+                "update_bot",
+                mutationId,
+                () => {
+                    const bot = botOf(botId);
+                    if (bot === undefined) throw new Error("The bot is not loaded.");
+                    return client.renameBot(bot.id, updateBotRequestOf({ ...update, mutationId }), {
+                        ifMatch: bot.version,
+                        signal: rootController.signal,
+                    });
+                },
+                ({ bot }) => {
+                    groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
+                    adoptAgent(bot.agent);
                     publishGroups();
                 },
                 undefined,

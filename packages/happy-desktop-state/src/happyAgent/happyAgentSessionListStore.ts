@@ -252,6 +252,12 @@ export interface HappyAgentBotCreateInput {
     readonly selection?: HappyAgentSelection;
 }
 
+/** What `botUpdate` changes on a Happy Cloud personal bot; a field left out stays as it is. */
+export interface HappyAgentBotUpdate {
+    readonly name?: string;
+    readonly instructions?: string;
+}
+
 /** A task and the address of its one conversation. */
 export interface HappyAgentTaskCreation {
     readonly taskId: HappyAgentTaskId;
@@ -361,6 +367,18 @@ export interface HappyAgentSessionListStore {
     botCreate(input: HappyAgentBotCreateInput): Promise<HappyAgentBotCreation>;
     /** Renames a bot the way `taskRename` renames a task. */
     botRename(botId: string, name: string): Promise<boolean>;
+    /**
+     * Changes a Happy Cloud personal bot's name, instructions, or both. A new
+     * name is on the row at once, the way `botRename` puts it there. Resolves
+     * once the host took the change; rejects with a displayable reason when it
+     * refused, and the row is back on the host's name.
+     */
+    botUpdate(botId: HappyAgentBotId, update: HappyAgentBotUpdate): Promise<void>;
+    /**
+     * Puts a picture on a bot. The row wears it at once and keeps it until the
+     * host serves its own copy back; a refusal takes it off again.
+     */
+    botAvatarUpdate(botId: HappyAgentBotId, image: HappyAgentAvatarImage): void;
     /**
      * Archives a bot, preserving its dedicated folder for a later restore. It
      * goes from `bots` at once and stays gone through any read that still
@@ -616,6 +634,7 @@ export interface HappyAgentSessionListDeps {
         | "renameTask"
         | "renameWait"
         | "setBotAvatar"
+        | "updateBot"
         | "setEffort"
         | "setPermissionMode"
         | "setServiceTier"
@@ -2990,6 +3009,25 @@ export function happyAgentSessionListStoreCreate(
             nameSave("bots", botId, name, () =>
                 deps.connectActions.renameGroup({ kind: "bot", botId }, name),
             ),
+        botUpdate: async (botId, update) => {
+            store.setState({ ...store.getState(), mutationError: undefined });
+            if (!internal.getState().catalog.bots.some((bot) => bot.id === botId))
+                throw new UserError("This bot is no longer listed.");
+            const sent = connectMutationTrack(deps.connectActions.updateBot(botId, update));
+            if (update.name !== undefined) {
+                nameIntents.set(botId, { name: update.name, mutationId: sent });
+                internal.setState((state) => ({
+                    catalog: { ...state.catalog, bots: nameIntentsApply(state.catalog.bots) },
+                }));
+                publish();
+            }
+            try {
+                await deps.connectActions.renameWait(sent);
+            } catch (error) {
+                throw happyAgentUserError(error);
+            }
+        },
+        botAvatarUpdate: (botId, image) => botAvatarSend(botId, image),
         botArchive: (botId) =>
             removal(() => {
                 const pending = botArchives.get(botId);

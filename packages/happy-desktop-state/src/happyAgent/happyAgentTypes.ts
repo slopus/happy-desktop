@@ -51,6 +51,9 @@ export type HappyAgentBotId = string & { readonly [happyAgentBotIdBrand]: true }
 /** Branded identifier of a task the daemon owns durably (CUID2 on the wire). */
 export type HappyAgentTaskId = string & { readonly [happyAgentTaskIdBrand]: true };
 
+/** Where Happy Cloud places a bot; see `HappyAgentBot.kind`. */
+export type HappyAgentBotKind = "shared" | "personal";
+
 /**
  * A bot: one persistent assistant, one dedicated workspace, one conversation
  * that always exists and can never be joined by a second.
@@ -83,6 +86,19 @@ export interface HappyAgentBot {
     readonly username: string;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
     readonly systemKey?: string | null;
+    /**
+     * Where Happy Cloud places the bot: `shared`, one conversation listed with
+     * Activity and Artifacts, or `personal`, listed under Bots with each member
+     * talking to it in a conversation of their own. Absent on a Happy Agent
+     * daemon, whose bots are all listed under Bots.
+     */
+    readonly kind?: HappyAgentBotKind;
+    /** Whether the reader may change the bot's name, picture, and instructions. Happy Cloud only. */
+    readonly editable?: boolean;
+    /** The bot's own instructions, which Happy Cloud sends when the reader may edit them. */
+    readonly instructions?: string;
+    /** The number of the definition Happy Cloud runs a personal bot with. */
+    readonly revision?: number;
     /** Fractional index the host sorts the bot catalog by. */
     readonly orderKey: string;
     readonly path: string;

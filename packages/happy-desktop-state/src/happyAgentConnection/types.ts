@@ -769,6 +769,11 @@ export interface BotGroup {
     username: string;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
     systemKey?: string | null;
+    /** Happy Cloud's placement and editing facts; absent on a Happy Agent daemon. */
+    kind?: "shared" | "personal";
+    editable?: boolean;
+    instructions?: string;
+    revision?: number;
     orderKey: string;
     path: string;
     /** Present when the bot has a picture; the bytes are fetched separately. */
@@ -885,6 +890,7 @@ export type MutationAction =
     | "archive_project"
     | "archive_bot"
     | "set_bot_avatar"
+    | "update_bot"
     | "create_workspace"
     | "archive_workspace"
     | "create_session"
@@ -1066,6 +1072,12 @@ export interface BotCreationRequest {
     readonly workspaceId: string;
     readonly agentId: string;
     readonly bot: Promise<Bot>;
+}
+
+/** What a Happy Cloud personal bot update changes; a field left out stays as it is. */
+export interface BotUpdate {
+    readonly name?: string;
+    readonly instructions?: string;
 }
 
 /**
@@ -1257,7 +1269,7 @@ export interface HappyAgentConnection {
     sessionCreationWait(sessionId: string): Promise<readonly SlashCommand[]>;
     /** Waits for the host to acknowledge this mode mutation, including a refusal. */
     sessionModeSaveWait(mutationId: MutationId): Promise<void>;
-    /** Waits for the host to take a task or group rename, rejecting when it refuses. */
+    /** Waits for the host to take a task or group rename or a bot update, rejecting when it refuses. */
     renameWait(mutationId: MutationId): Promise<void>;
     markSessionRead(sessionId: string): MutationId;
     sendMessage(
@@ -1322,6 +1334,11 @@ export interface HappyAgentConnection {
     createBot(name?: string): BotCreationRequest;
     /** Puts a picture on a bot, guarded by its version like every other bot mutation. */
     setBotAvatar(botId: string, image: HappyAgentAvatarImage): MutationId;
+    /**
+     * Changes a Happy Cloud personal bot's name, instructions, or both, guarded
+     * by its version. Wait on it with `renameWait`.
+     */
+    updateBot(botId: string, update: BotUpdate): MutationId;
     archiveBot(botId: string): MutationId;
     reorderBot(botId: string, afterId: string | null): MutationId;
     reorderProject(projectId: string, afterId: string | null): MutationId;

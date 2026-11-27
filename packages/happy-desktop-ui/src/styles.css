@@ -161,6 +161,7 @@
 @import "./styles/happy-agent-pipelines.css";
 @import "./styles/happy-agent-feed.css";
 @import "./styles/happy-agent-project-settings.css";
+@import "./styles/happy-agent-bot-settings.css";
 @import "./styles/happy-agent-create-bot.css";
 @import "./styles/happy-agent-create-task.css";
 @import "./styles/happy-agent-project-clone-dialog.css";
