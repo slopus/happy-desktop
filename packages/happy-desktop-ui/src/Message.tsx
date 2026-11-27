@@ -1315,6 +1315,9 @@ export function MessageList(props: MessageListProps) {
     >(undefined);
     /* Cancels the scheduled idle refinement slice, if one is waiting. */
     const refinementCancel = useRef<(() => void) | undefined>(undefined);
+    // A splitter gesture changes only viewport geometry. Keep its frames for
+    // visible rows; offscreen preparation resumes on the actual pointer end.
+    const resizeGestureActive = useRef(false);
     const overscanMountCancel = useRef<(() => void) | undefined>(undefined);
     const overscanMountCurrent = useRef(() => {});
     const rowSizeModelRefineCurrent = useRef((_slice: number) => {});
@@ -1651,6 +1654,8 @@ export function MessageList(props: MessageListProps) {
         /* Index-aligned with `items` after every model update. */
         keys: [] as Key[],
         sizes: [] as number[],
+        /* Pending overscan retains this exact DOM width and natural height. */
+        paintWidths: [] as number[],
         starts: [] as number[],
         /* Whether each size was laid out at `width`, rather than a placeholder. */
         exact: [] as boolean[],
@@ -1735,7 +1740,7 @@ export function MessageList(props: MessageListProps) {
             }
         }
         const model = rowSizeModel;
-        const { keys, sizes, starts, exact } = model;
+        const { keys, sizes, starts, exact, paintWidths } = model;
         const count = items.length;
         const previousCount = keys.length;
         const previousKeys = keys.slice();
@@ -1797,6 +1802,7 @@ export function MessageList(props: MessageListProps) {
            placeholder they keep until they are asked again. */
         const tailKeys = keys.slice(kept);
         const tailSizes = sizes.slice(kept);
+        const tailPaintWidths = paintWidths.slice(kept);
         let tailPending = 0;
         for (let index = kept; index < previousCount; index += 1)
             if (!exact[index]) tailPending += 1;
@@ -1804,6 +1810,7 @@ export function MessageList(props: MessageListProps) {
         let pending = model.pending - tailPending + (count - kept);
         keys.length = count;
         sizes.length = count;
+        paintWidths.length = count;
         exact.length = count;
         let unsized = false;
         for (let index = kept; index < count; index += 1) {
@@ -1819,6 +1826,7 @@ export function MessageList(props: MessageListProps) {
             }
             keys[index] = key;
             sizes[index] = previous === undefined ? -1 : tailSizes[previous]!;
+            paintWidths[index] = previous === undefined ? rowWidth : tailPaintWidths[previous]!;
             exact[index] = false;
             if (previous === undefined) unsized = true;
         }
@@ -1828,6 +1836,7 @@ export function MessageList(props: MessageListProps) {
                 const size = estimateItemSize(index, rowWidth);
                 if (size !== sizes[index]) moved = Math.min(moved, index);
                 sizes[index] = size;
+                paintWidths[index] = rowWidth;
                 exact[index] = true;
                 pending -= 1;
             }
@@ -1889,12 +1898,30 @@ export function MessageList(props: MessageListProps) {
                 ? undefined
                 : sentRowIndex(followSentPending.current);
         if (sent !== undefined) for (let index = sent; index < count; index += 1) layout(index);
-        /* Width changes and new rows can leave mounted neighbours at estimates.
-           Their real bodies can overflow those estimates into the viewport.
-           Keep their nodes and lay out this small mounted set before paint. */
-        for (const row of mountedRows.current) {
-            const index = itemIndexOf(row.key, row.index);
-            if (index !== undefined) layout(index);
+        /* Retained overscan DOM is not a demand for synchronous layout. Large
+           offscreen messages otherwise evict the visible message's preparation
+           on every resize. Pending overscan keeps its last exact width below; only
+           a focused row needs exact geometry beyond the visible range. */
+        if (!widthReflow && from < count) {
+            for (const row of mountedRows.current) {
+                const index = itemIndexOf(row.key, row.index);
+                if (index !== undefined) layout(index);
+            }
+        } else {
+            const document = list.current?.ownerDocument;
+            const selection = document?.getSelection();
+            const endpoints = [
+                document?.activeElement,
+                selection?.anchorNode,
+                selection?.focusNode,
+            ];
+            for (const node of endpoints) {
+                const element = node instanceof Element ? node : node?.parentElement;
+                const row = element?.closest(".happy-message-list__virtual-row[data-index]");
+                if (!row || !list.current?.contains(row)) continue;
+                const index = Number(row.getAttribute("data-index"));
+                if (index >= 0 && index < count) layout(index);
+            }
         }
         /* Any other row the caller already holds at this width is exact for
            the price of a lookup, nearest the reader first. */
@@ -1917,6 +1944,7 @@ export function MessageList(props: MessageListProps) {
                 if (size === undefined) continue;
                 if (size !== sizes[index]) moved = Math.min(moved, index);
                 sizes[index] = size;
+                paintWidths[index] = rowWidth;
                 exact[index] = true;
                 pending -= 1;
             }
@@ -2107,7 +2135,7 @@ export function MessageList(props: MessageListProps) {
     /** Lays out pending rows in the browser's idle time, one bounded slice at a time. */
     const refinementSchedule = () => {
         const targetWindow = list.current?.ownerDocument.defaultView;
-        if (refinementCancel.current || !targetWindow) return;
+        if (resizeGestureActive.current || refinementCancel.current || !targetWindow) return;
         const run = (slice: number) => {
             refinementCancel.current = undefined;
             rowSizeModelRefineCurrent.current(slice);
@@ -3705,6 +3733,25 @@ export function MessageList(props: MessageListProps) {
         if (!element) return;
         let wheelDirection = 0;
         const targetWindow = element.ownerDocument.defaultView!;
+        const onResizePointerDown = (event: PointerEvent) => {
+            if (
+                !(event.target instanceof Element) ||
+                !event.target.closest('[data-happy-desktop-ui="app-shell-resize-handle"]')
+            )
+                return;
+            resizeGestureActive.current = true;
+            refinementCancel.current?.();
+            refinementCancel.current = undefined;
+        };
+        const onResizePointerEnd = () => {
+            if (!resizeGestureActive.current) return;
+            resizeGestureActive.current = false;
+            refinementSchedule();
+        };
+        targetWindow.addEventListener("pointerdown", onResizePointerDown, { capture: true });
+        targetWindow.addEventListener("pointerup", onResizePointerEnd, { capture: true });
+        targetWindow.addEventListener("pointercancel", onResizePointerEnd, { capture: true });
+        targetWindow.addEventListener("blur", onResizePointerEnd);
         let wheelExpiry: number | undefined;
         const wheelExpiryCancel = () => {
             if (wheelExpiry !== undefined) targetWindow.cancelAnimationFrame(wheelExpiry);
@@ -4038,6 +4085,13 @@ export function MessageList(props: MessageListProps) {
             positionChange.current?.(position);
             refinementCancel.current?.();
             refinementCancel.current = undefined;
+            resizeGestureActive.current = false;
+            targetWindow.removeEventListener("pointerdown", onResizePointerDown, { capture: true });
+            targetWindow.removeEventListener("pointerup", onResizePointerEnd, { capture: true });
+            targetWindow.removeEventListener("pointercancel", onResizePointerEnd, {
+                capture: true,
+            });
+            targetWindow.removeEventListener("blur", onResizePointerEnd);
             overscanMountCancel.current?.();
             overscanMountCancel.current = undefined;
             observer?.disconnect();
@@ -4131,9 +4185,17 @@ export function MessageList(props: MessageListProps) {
                                         )}
                                         style={{
                                             transform: `translateY(${String(virtualItem.start)}px)`,
+                                            // Retain pending offscreen content at
+                                            // its last exact width, without clipping
+                                            // it or reflowing it during a drag.
+                                            width: `${String(rowSizeModel.paintWidths[virtualItem.index])}px`,
                                         }}
                                     >
-                                        {items[virtualItem.index]}
+                                        <MessageListRowWidthContext.Provider
+                                            value={rowSizeModel.paintWidths[virtualItem.index]}
+                                        >
+                                            {items[virtualItem.index]}
+                                        </MessageListRowWidthContext.Provider>
                                     </div>
                                 ))}
                             </div>

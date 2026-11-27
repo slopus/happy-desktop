@@ -207,7 +207,7 @@ export interface MessageTextLayoutCache {
     runHeights: Dictionary<Dictionary<Dictionary<number>>>;
     /** Prepared mixed-font AST inline runs, grouped by their explicit item signature. */
     richPrepared: Dictionary<PreparedRichInline>;
-    /** Natural widths, grouped by font then source text. */
+    /** Natural widths, grouped by font/white-space mode then source text. */
     naturalWidths: Dictionary<Dictionary<number>>;
     /** Least recently used first; Map order is the LRU over every prepared value. */
     preparedOrder: Map<PreparedValue, PreparedEntry>;
@@ -711,9 +711,10 @@ function markdownInlineItemsAppend(
                 if (item.text.trim().length > 0) last = item;
             if (last) {
                 /* The run's own spaces are in the shaped run, so in its width. */
-                const width = measureNaturalWidth(
-                    preparedTextSegments(run, font, cache, "pre-wrap"),
-                );
+                // Only the rounding scalar is needed here. Retaining another
+                // full preparation beside the rich-inline one makes large
+                // paragraphs evict each other on every fresh resize width.
+                const width = naturalTextWidth(run, font, cache, "pre-wrap");
                 last.extraWidth = (last.extraWidth ?? 0) + Math.ceil(width * 64) / 64 - width;
             }
         }
@@ -2194,12 +2195,18 @@ export function monoTextNaturalWidth(
 ): number {
     return naturalTextWidth(text, `${String(size)}px ${MONO_FAMILY}`, cache);
 }
-function naturalTextWidth(text: string, font: string, cache: MessageTextLayoutCache): number {
+function naturalTextWidth(
+    text: string,
+    font: string,
+    cache: MessageTextLayoutCache,
+    whiteSpace: "normal" | "pre-wrap" = "normal",
+): number {
     const ready = cacheReady(cache);
-    let byText = ready.naturalWidths[font];
+    const fontKey = `${font}\u0000${whiteSpace}`;
+    let byText = ready.naturalWidths[fontKey];
     if (!byText) {
         byText = dictionaryCreate();
-        ready.naturalWidths[font] = byText;
+        ready.naturalWidths[fontKey] = byText;
     }
     const hit = byText[text];
     if (hit !== undefined) return hit;
@@ -2207,10 +2214,10 @@ function naturalTextWidth(text: string, font: string, cache: MessageTextLayoutCa
        same text, but do not retain one only to measure it once. */
     let prepared = preparationHit(
         ready,
-        preparationTable(ready.preparedSegments, font, "normal"),
+        preparationTable(ready.preparedSegments, font, whiteSpace),
         text,
     );
-    prepared ??= prepareWithSegments(text, font, { whiteSpace: "normal" });
+    prepared ??= prepareWithSegments(text, font, { whiteSpace });
     const width = measureNaturalWidth(prepared);
     byText[text] = width;
     return width;
