@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { LocalOnboardingScreen, type LocalOnboardingView } from "../../src/LocalOnboardingScreen";
+import {
+    LocalOnboardingScreen,
+    type LocalOnboardingAssistant,
+    type LocalOnboardingView,
+} from "../../src/LocalOnboardingScreen";
 import type { OnboardingNodeIdentity } from "../../src/OnboardingNode";
 import type { OnboardingStage } from "../../src/OnboardingSteps";
 import { ThemeScope } from "../../src/ThemeScope";
@@ -108,6 +112,7 @@ function connectOnboarding(view: LocalOnboardingView) {
             onAssistantConnectCancel={noop}
             onAssistantInstall={noop}
             onAssistantSignIn={noop}
+            onAssistantSignInCode={noop}
             onAssistantsContinue={noop}
             onClaudeTokenSubmit={noop}
             onConnectRetry={noop}
@@ -156,6 +161,100 @@ const connectSubscriptions: LocalOnboardingView = {
     kind: "provider-authentication",
     installShell: "posix",
 };
+
+/**
+ * Antigravity beside the other three, none of which works yet: Claude to
+ * connect, Codex not installed, Grok to sign in, and Antigravity in the state
+ * each screen is about.
+ */
+function antigravitySubscriptions(antigravity: LocalOnboardingAssistant): LocalOnboardingView {
+    return {
+        assistants: [
+            {
+                authentication: "invalid",
+                connect: { installable: true, installed: true },
+                id: "claude",
+                status: "found",
+            },
+            {
+                authentication: "unavailable",
+                connect: { installable: true, installed: false },
+                id: "codex",
+                status: "missing",
+            },
+            {
+                authentication: "invalid",
+                connect: { installable: true, installed: true },
+                id: "grok",
+                status: "found",
+            },
+            antigravity,
+        ],
+        custom: { authentication: "invalid", providers: [] },
+        kind: "provider-authentication",
+        installShell: "posix",
+    };
+}
+
+/** A fixed moment, so the screen says the same time on every capture. */
+const antigravityExpiresAt = Date.UTC(2026, 10, 27, 11, 52, 30);
+
+const antigravityScreens: readonly {
+    id: string;
+    label: string;
+    antigravity: LocalOnboardingAssistant;
+}[] = [
+    {
+        antigravity: {
+            authentication: "unavailable",
+            connect: { installable: true, installed: false },
+            id: "antigravity",
+            status: "missing",
+        },
+        id: "antigravity-install",
+        label: "Subscriptions · Antigravity not installed",
+    },
+    {
+        antigravity: {
+            authentication: "invalid",
+            connect: { installable: true, installed: true },
+            id: "antigravity",
+            status: "found",
+        },
+        id: "antigravity-sign-in",
+        label: "Subscriptions · Antigravity signed out",
+    },
+    {
+        antigravity: {
+            authentication: "invalid",
+            connect: {
+                installable: true,
+                installed: true,
+                operation: {
+                    acceptsCode: true,
+                    expiresAt: antigravityExpiresAt,
+                    kind: "sign-in",
+                    status: "waiting",
+                    url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=antigravity",
+                },
+            },
+            id: "antigravity",
+            status: "found",
+        },
+        id: "antigravity-waiting",
+        label: "Subscriptions · Antigravity waiting on Google, a code to paste back",
+    },
+    {
+        antigravity: {
+            authentication: "valid",
+            connect: { installable: true, installed: true },
+            id: "antigravity",
+            status: "found",
+        },
+        id: "antigravity-ready",
+        label: "Subscriptions · Antigravity signed in",
+    },
+];
 
 /** Still checking Claude, installing Codex, and a Grok sign-in that did not finish. */
 const connectBusySubscriptions: LocalOnboardingView = {
@@ -528,6 +627,11 @@ const screens: readonly {
         label: "Subscriptions · checking, installing, sign-in failed",
         render: () => connectOnboarding(connectBusySubscriptions),
     },
+    ...antigravityScreens.map((screen) => ({
+        id: `subscriptions-${screen.id}`,
+        label: screen.label,
+        render: () => connectOnboarding(antigravitySubscriptions(screen.antigravity)),
+    })),
     {
         id: "subscriptions-mixed",
         label: "Subscriptions · every card state",

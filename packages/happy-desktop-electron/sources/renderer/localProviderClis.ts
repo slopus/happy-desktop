@@ -1,6 +1,6 @@
 /**
  * Happy Agent's provider CLIs (`/v0/provider-clis`, API.md "Provider CLIs"):
- * the daemon finds Claude Code, Codex, and Grok, installs a missing one from
+ * the daemon finds Claude Code, Codex, Grok, and Antigravity, installs a missing one from
  * the vendor's own installer, and runs the vendor's own sign-in, so first-run
  * setup can make one ready without a terminal.
  *
@@ -9,7 +9,7 @@
  * `LocalProviderCli`; a field this code does not use is not read.
  */
 
-export type LocalProviderCliId = "claude" | "codex" | "grok";
+export type LocalProviderCliId = "claude" | "codex" | "grok" | "antigravity";
 
 export interface LocalProviderCliOperation {
     readonly id: string;
@@ -23,6 +23,10 @@ export interface LocalProviderCliOperation {
         readonly userCode?: string;
         /** The vendor's program already opened the browser itself. */
         readonly openedByProgram: boolean;
+        /** The vendor's page may show a code to paste back instead. */
+        readonly acceptsCode: boolean;
+        /** When Happy Agent stops waiting, in epoch milliseconds. */
+        readonly expiresAt?: number;
     };
 }
 
@@ -32,12 +36,19 @@ export interface LocalProviderCli {
     /** The vendor offers an installer for this operating system. */
     readonly installable: boolean;
     readonly signedIn: "signed_in" | "signed_out" | "unknown";
+    /** The provider account this sign-in serves, when Happy Agent has one. */
+    readonly providerId?: string;
     readonly operation?: LocalProviderCliOperation;
     /** Changes whenever any field does; the greater one is the newer object. */
     readonly version: string;
 }
 
-const IDS: ReadonlySet<string> = new Set<LocalProviderCliId>(["claude", "codex", "grok"]);
+const IDS: ReadonlySet<string> = new Set<LocalProviderCliId>([
+    "claude",
+    "codex",
+    "grok",
+    "antigravity",
+]);
 const STATUSES: ReadonlySet<string> = new Set([
     "running",
     "waiting",
@@ -76,6 +87,10 @@ function operationRead(value: unknown): LocalProviderCliOperation | undefined {
                           ? { userCode: authorization.userCode }
                           : {}),
                       openedByProgram: authorization.openedByProgram === true,
+                      acceptsCode: authorization.acceptsCode === true,
+                      ...(typeof authorization.expiresAt === "number"
+                          ? { expiresAt: authorization.expiresAt }
+                          : {}),
                   },
               }
             : {}),
@@ -97,6 +112,7 @@ export function localProviderCliRead(value: unknown): LocalProviderCli | undefin
             signIn?.status === "signed_in" || signIn?.status === "signed_out"
                 ? signIn.status
                 : "unknown",
+        ...(typeof cli.providerId === "string" ? { providerId: cli.providerId } : {}),
         ...(operation ? { operation } : {}),
         version: typeof cli.version === "string" ? cli.version : "",
     };
@@ -126,6 +142,12 @@ export interface LocalProviderClisApi {
     install(id: LocalProviderCliId, mutationId: string): Promise<LocalProviderCli | undefined>;
     signIn(id: LocalProviderCliId, mutationId: string): Promise<LocalProviderCli | undefined>;
     cancel(id: LocalProviderCliId, mutationId: string): Promise<LocalProviderCli | undefined>;
+    /** Hands the code the vendor's page showed to the sign-in waiting for it. */
+    signInCode(
+        id: LocalProviderCliId,
+        code: string,
+        mutationId: string,
+    ): Promise<LocalProviderCli | undefined>;
     /**
      * Gives Happy Agent a Claude setup token to sign Claude in with. Not every
      * Happy Agent takes one yet; those answer `LocalProviderClisUnavailable`.
@@ -205,6 +227,16 @@ export function localProviderClisApiCreate(input: {
         install: (id, mutationId) => one(id, "install", mutationId),
         signIn: (id, mutationId) => one(id, "sign-in", mutationId),
         cancel: (id, mutationId) => one(id, "cancel", mutationId),
+        async signInCode(id, code, mutationId) {
+            return localProviderCliRead(
+                (
+                    await request("POST", `v0/provider-clis/${id}/sign-in/code`, {
+                        code: code.trim(),
+                        mutationId,
+                    })
+                )?.providerCli,
+            );
+        },
         async claudeSetupTokenSave(token, mutationId) {
             await request("POST", "v0/provider-clis/claude/setup-token", {
                 token: token.replace(/[\s\p{White_Space}]/gu, ""),

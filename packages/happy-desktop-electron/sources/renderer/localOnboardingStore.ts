@@ -35,6 +35,12 @@ import {
 type ProviderAuthenticationResult = "checking" | "valid" | "invalid" | "error";
 
 interface ProviderAuthenticationSnapshot {
+    /**
+     * Whether Happy Agent's Antigravity account is on, from its configuration;
+     * absent until that is read. The scan cannot see agy's sign-in, so this
+     * and agy's own check are what make Antigravity ready.
+     */
+    readonly antigravityEnabled?: boolean;
     readonly claude?: ProviderAuthenticationResult;
     readonly codex?: ProviderAuthenticationResult;
     readonly complete: boolean;
@@ -101,8 +107,8 @@ export interface LocalOnboardingViewSnapshot {
     readonly chiefOfStaffReady: boolean;
     /**
      * Happy Agent's own install and sign-in for each assistant, read while
-     * Subscriptions is on screen. Absent until read, and on a Happy Agent
-     * that has no such routes.
+     * Subscriptions is on screen. Absent until read, and empty on a Happy
+     * Agent that has no such routes.
      */
     readonly providerClis?: ReadonlyMap<LocalProviderCliId, LocalProviderCli>;
     /** Saving a pasted Claude setup token; absent until one is pasted. */
@@ -120,8 +126,10 @@ export interface LocalOnboardingStore {
     chiefOfStaffSetup(): void;
     assistantsContinue(): void;
     stepBack(step: LocalOnboardingStepBack): void;
-    /** Runs Codex's or Grok's own sign-in through Happy Agent, opening its page. */
+    /** Runs Codex's, Grok's or Antigravity's own sign-in through Happy Agent, opening its page. */
     assistantSignIn(id: LocalProviderCliId): void;
+    /** Hands the code the vendor's page showed to the sign-in waiting for it. */
+    assistantSignInCode(id: LocalProviderCliId, code: string): void;
     /** Installs a missing assistant from its vendor through Happy Agent. */
     assistantInstall(id: LocalProviderCliId): void;
     /** Stops the install or sign-in going on for one assistant. */
@@ -231,7 +239,7 @@ export function localOnboardingStoreCreate(
     let verificationConnectionId: number | undefined;
     /** Each CLI whose check failed: when to check again, and why it failed. */
     const verificationRetry = new Map<
-        LocalAssistantState["id"],
+        LocalProviderCliId,
         { readonly at: number; readonly reason: string }
     >();
     /**
@@ -646,6 +654,9 @@ export function localOnboardingStoreCreate(
             publish({
                 ...snapshot,
                 providerAuthentication: {
+                    ...(previous.antigravityEnabled === undefined
+                        ? {}
+                        : { antigravityEnabled: previous.antigravityEnabled }),
                     claude: assistantAuthenticationInitial(assistants, "claude", previous),
                     codex: assistantAuthenticationInitial(assistants, "codex", previous),
                     complete: assistants.length === 0,
@@ -776,6 +787,17 @@ export function localOnboardingStoreCreate(
                 );
                 return;
             }
+            // Antigravity's account is on only once agy's own check found it
+            // signed in; nothing else on the card can say so.
+            const antigravityEnabled = config.config.providers["antigravity"]?.enabled === true;
+            if (snapshot.providerAuthentication.antigravityEnabled !== antigravityEnabled)
+                publish({
+                    ...snapshot,
+                    providerAuthentication: {
+                        ...snapshot.providerAuthentication,
+                        antigravityEnabled,
+                    },
+                });
             const configured = customProvidersFind(config);
             for (const id of customVerificationRetry.keys())
                 if (!configured.some((provider) => provider.id === id))
@@ -1034,8 +1056,7 @@ export function localOnboardingStoreCreate(
                     // A Happy Agent without the routes keeps the cards' commands.
                     if (!(error instanceof LocalProviderClisUnavailable)) return;
                     providerClisReadFor = connectionId;
-                    const { providerClis: _gone, ...rest } = snapshot;
-                    publish(rest);
+                    publish({ ...snapshot, providerClis: new Map() });
                 },
             )
             .finally(() => {
@@ -1237,6 +1258,12 @@ export function localOnboardingStoreCreate(
             providerCliAttempt(
                 (api) => api.signIn(id, crypto.randomUUID()),
                 "Happy could not start that sign-in.",
+            );
+        },
+        assistantSignInCode(id, code) {
+            providerCliAttempt(
+                (api) => api.signInCode(id, code, crypto.randomUUID()),
+                "Happy could not hand over that code.",
             );
         },
         assistantInstall(id) {
@@ -1499,14 +1526,17 @@ function agentSetupProject(
     };
 }
 
-/** The shell's answer about the three assistants, as the screen takes it. */
+/**
+ * The shell's answer about the three assistants, as the screen takes it, and
+ * Antigravity after them, which only Happy Agent answers for.
+ */
 function assistantsProject(
     assistants: readonly LocalAssistantState[] | undefined,
     authentication: ProviderAuthenticationSnapshot,
     refused: boolean,
     providerClis: ReadonlyMap<LocalProviderCliId, LocalProviderCli> | undefined,
 ): readonly LocalOnboardingAssistant[] {
-    return (assistants ?? []).map((assistant) => {
+    const shell = (assistants ?? []).map((assistant): LocalOnboardingAssistant => {
         // Nothing can be checked against a daemon that would not start, and it
         // already said why: none of these works yet.
         const result = refused
@@ -1538,6 +1568,47 @@ function assistantsProject(
             status: assistant.status,
         };
     });
+    return [...shell, antigravityProject(authentication, refused, providerClis)];
+}
+
+/**
+ * Antigravity's card. The scan cannot read agy's sign-in, so it is ready when
+ * agy's own check says signed in, Happy Agent has its account for it, and that
+ * account is on. Nothing runs an inference check through agy.
+ */
+function antigravityProject(
+    authentication: ProviderAuthenticationSnapshot,
+    refused: boolean,
+    providerClis: ReadonlyMap<LocalProviderCliId, LocalProviderCli> | undefined,
+): LocalOnboardingAssistant {
+    const cli = providerClis?.get("antigravity");
+    const connect = cli ? assistantConnectProject(cli) : { installable: false, installed: false };
+    const card = (
+        result: LocalOnboardingAssistant["authentication"],
+        message?: string,
+    ): LocalOnboardingAssistant => ({
+        authentication: result,
+        connect,
+        id: "antigravity",
+        ...(message ? { message } : {}),
+        status: cli?.installed ? "found" : "missing",
+    });
+    if (refused) return card("invalid");
+    // Until Happy Agent answers, the card is checked; one with no answer for
+    // Antigravity cannot set it up at all.
+    if (!cli) return card(providerClis ? "unavailable" : "checking");
+    if (!cli.installed) return card("unavailable");
+    if (cli.signedIn !== "signed_in") return card("invalid");
+    if (cli.providerId !== "antigravity")
+        return card("error", "Update Happy Agent to use Antigravity");
+    switch (authentication.antigravityEnabled) {
+        case undefined:
+            return card("checking");
+        case false:
+            return card("error", "Antigravity is turned off in Happy Agent");
+        case true:
+            return card("valid");
+    }
 }
 
 /**
@@ -1560,6 +1631,10 @@ function assistantConnectProject(cli: LocalProviderCli): LocalOnboardingAssistan
                           ...(operation.authorization.userCode
                               ? { userCode: operation.authorization.userCode }
                               : {}),
+                          ...(operation.authorization.acceptsCode ? { acceptsCode: true } : {}),
+                          ...(operation.authorization.expiresAt === undefined
+                              ? {}
+                              : { expiresAt: operation.authorization.expiresAt }),
                       }
                     : { kind, status: "running" };
             case "failed":
@@ -1630,6 +1705,9 @@ function authenticationResultsProject(
         else delete reasons[result.id];
     }
     return {
+        ...(previous.antigravityEnabled === undefined
+            ? {}
+            : { antigravityEnabled: previous.antigravityEnabled }),
         ...(claude ? { claude } : {}),
         ...(codex ? { codex } : {}),
         complete,
@@ -1679,10 +1757,10 @@ function verificationFailureMessage(result: ProviderVerificationResponse): strin
 const VERIFICATION_REASON_MAX = 500;
 
 /**
- * Model access configured some other way than the three CLIs' own sign-ins:
- * every enabled provider that is not `claude`, `codex`, or `grok`. One with no
- * model enabled is listed too, because it is configured and cannot work. Pools
- * are left out because their members are providers of their own.
+ * Model access configured some other way than the CLIs' own sign-ins: every
+ * enabled provider that is not `claude`, `codex`, `grok`, or `antigravity`.
+ * One with no model enabled is listed too, because it is configured and cannot
+ * work. Pools are left out because their members are providers of their own.
  */
 function customProvidersFind(config: Awaited<ReturnType<HappyAgentClient["getConfig"]>>): readonly {
     readonly id: string;
@@ -1700,7 +1778,7 @@ function customProvidersFind(config: Awaited<ReturnType<HappyAgentClient["getCon
     });
 }
 
-const LOCAL_PROVIDER_IDS: ReadonlySet<string> = new Set(["claude", "codex", "grok"]);
+const LOCAL_PROVIDER_IDS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "antigravity"]);
 
 /** A provider kind as a person would name it on the card. */
 function providerKindLabel(type: string): string {

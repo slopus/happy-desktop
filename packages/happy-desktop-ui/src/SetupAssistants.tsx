@@ -5,6 +5,7 @@ import { CopyButton } from "./CopyButton";
 import { SetupCommand } from "./SetupCommand";
 import { Spinner } from "./Spinner";
 import { Icon, type IconName } from "./Icon";
+import { TextField } from "./TextField";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /** One instruction somebody hands to the coding agent they already use. */
@@ -71,6 +72,13 @@ export type SetupAssistantAction =
           /** What the disabled button says while the page is open, e.g. "In your browser". */
           readonly label: string;
           readonly userCode?: string;
+          /** When the sign-in stops waiting, in epoch milliseconds. */
+          readonly expiresAt?: number;
+          /**
+           * Takes the code the vendor's page shows instead of finishing by
+           * itself. Present only when that page may show one.
+           */
+          readonly onCodeSubmit?: (code: string) => void;
           readonly onOpen: () => void;
           readonly onCancel: () => void;
       }
@@ -307,6 +315,27 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                                                       {action.userCode}
                                                   </span>
                                               )}
+                                              {action.onCodeSubmit === undefined ? null : (
+                                                  <SetupAssistantCode
+                                                      name={assistant.name}
+                                                      onSubmit={action.onCodeSubmit}
+                                                  />
+                                              )}
+                                              {action.expiresAt === undefined ? null : (
+                                                  <span
+                                                      className="happy-setup-assistants__expires"
+                                                      data-happy-desktop-ui="setup-assistants-expires"
+                                                  >
+                                                      Waits until{" "}
+                                                      {new Date(
+                                                          action.expiresAt,
+                                                      ).toLocaleTimeString([], {
+                                                          hour: "numeric",
+                                                          minute: "2-digit",
+                                                          second: "2-digit",
+                                                      })}
+                                                  </span>
+                                              )}
                                               <span className="happy-setup-assistants__links">
                                                   <button
                                                       className="happy-setup-assistants__link"
@@ -428,6 +457,50 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                 </p>
             ) : null}
         </div>
+    );
+}
+
+/**
+ * Where a code the vendor's page shows goes, when its sign-in cannot finish by
+ * itself: the page may be in a browser on another computer, or show the code
+ * rather than coming back here. Enter or the arrow hands it over.
+ */
+function SetupAssistantCode(props: {
+    readonly name: string;
+    readonly onSubmit: (code: string) => void;
+}) {
+    const [code, codeSet] = useState("");
+    const submit = () => {
+        if (code.trim() === "") return;
+        props.onSubmit(code);
+    };
+    return (
+        <span
+            className="happy-setup-assistants__code-entry"
+            data-happy-desktop-ui="setup-assistants-code-entry"
+            style={{ width: ASSISTANT_BUTTON_WIDTH }}
+        >
+            <TextField
+                aria-label={`Code from the ${props.name} sign-in page`}
+                autoComplete="off"
+                fullWidth
+                onSubmit={submit}
+                onValueChange={codeSet}
+                placeholder="Paste code"
+                size="small"
+                value={code}
+            />
+            <Button
+                aria-label="Use this code"
+                disabled={code.trim() === ""}
+                icon="arrow-right"
+                iconOnly
+                onClick={submit}
+                size="small"
+                title="Use this code"
+                variant="secondary"
+            />
+        </span>
     );
 }
 

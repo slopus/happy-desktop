@@ -702,6 +702,7 @@ function DesktopOnboardingGate(props: {
             }}
             selectableStages={selectable}
             onAssistantSignIn={(id) => props.store.assistantSignIn(id)}
+            onAssistantSignInCode={(id, code) => props.store.assistantSignInCode(id, code)}
             onAssistantInstall={(id) => props.store.assistantInstall(id)}
             onAssistantConnectCancel={(id) => props.store.assistantConnectCancel(id)}
             onClaudeTokenSubmit={(token) => props.store.claudeSetupTokenSave(token)}

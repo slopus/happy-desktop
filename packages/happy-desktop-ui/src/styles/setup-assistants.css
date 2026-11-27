@@ -146,6 +146,14 @@
     animation: happy-setup-assistants-fade-in 240ms ease both;
 }
 
+/* A button's width, or the column's when four columns leave less than that:
+   at the smallest window a fixed width would run into the next column. */
+.happy-setup-assistants__action > .happy-button,
+.happy-setup-assistants__checking,
+.happy-setup-assistants__done {
+    max-width: 100%;
+}
+
 /* While a card is checked: a quiet spinner and word in the box a button
    takes (36px tall, the same width). */
 .happy-setup-assistants__checking {
@@ -206,6 +214,29 @@
 .happy-setup-assistants__links {
     display: flex;
     gap: 16px;
+}
+
+/* A code the vendor's page shows, pasted back: the field and its arrow, one
+   button wide, so the column keeps its axis. */
+.happy-setup-assistants__code-entry {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+}
+
+.happy-setup-assistants__code-entry > .happy-text-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* How long the sign-in still waits: the vendor's program gives up on its own. */
+.happy-setup-assistants__expires {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
 }
 
 /*

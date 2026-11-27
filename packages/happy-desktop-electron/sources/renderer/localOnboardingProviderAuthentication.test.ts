@@ -184,7 +184,7 @@ it("settles a check that never answers as couldn't verify", async () => {
 
     await vi.waitFor(() => expect(verifiedIds()).toEqual(["claude", "work-proxy"]));
     expect(localOnboardingView(store.get())).toMatchObject({
-        assistants: [{ authentication: "checking", id: "claude" }, {}, {}],
+        assistants: [{ authentication: "checking", id: "claude" }, {}, {}, {}],
         custom: { authentication: "checking" },
     });
 
@@ -197,6 +197,8 @@ it("settles a check that never answers as couldn't verify", async () => {
                 { authentication: "error", id: "claude", message: "Timed out after 60s" },
                 { authentication: "unavailable", id: "codex" },
                 { authentication: "unavailable", id: "grok" },
+                // Happy Agent never said anything about Antigravity here.
+                { authentication: "checking", id: "antigravity" },
             ],
             custom: {
                 authentication: "error",
@@ -287,7 +289,7 @@ it("checks a sign-in again at once when the check was cut short rather than answ
     await vi.waitFor(() => expect(verifiedIds()).toEqual(["claude", "claude"]));
     await vi.waitFor(() =>
         expect(localOnboardingView(store.get())).toMatchObject({
-            assistants: [{ authentication: "valid", id: "claude" }, {}, {}],
+            assistants: [{ authentication: "valid", id: "claude" }, {}, {}, {}],
         }),
     );
 });
@@ -314,7 +316,12 @@ it("asks for the install, not a sign-in, when an assistant that is not here fail
     await vi.waitFor(() => expect(store.get().providerAuthentication.complete).toBe(true));
     const view = localOnboardingView(store.get());
     expect(view).toMatchObject({
-        assistants: [{ authentication: "unavailable", id: "claude", status: "missing" }, {}, {}],
+        assistants: [
+            { authentication: "unavailable", id: "claude", status: "missing" },
+            {},
+            {},
+            {},
+        ],
     });
     const claude = cardFind(screenRender(view as LocalOnboardingView), "Claude Code");
     // Claude's one button opens the dialog that installs it first; the card
@@ -344,7 +351,7 @@ it("counts a sign-in that works as Ready even without the command", async () => 
     // Happy Agent brings its own Claude Code, so only the sign-in matters.
     await vi.waitFor(() =>
         expect(localOnboardingView(store.get())).toMatchObject({
-            assistants: [{ authentication: "valid", id: "claude" }, {}, {}],
+            assistants: [{ authentication: "valid", id: "claude" }, {}, {}, {}],
         }),
     );
 });
@@ -359,6 +366,7 @@ function screenRender(view: LocalOnboardingView, claudeDialogOpen = false): HTML
             appearance: "dark",
             claudeDialogOpen,
             happyMobilePairingOptions: { completed: false, verifying: false, view: null },
+            onAssistantSignInCode: noop,
             onAssistantsContinue: noop,
             onClaudeTokenSubmit: noop,
             onConnectRetry: noop,
@@ -671,6 +679,7 @@ it("says why a sign-in could not be verified under its button", async () => {
                 },
                 {},
                 {},
+                {},
             ],
         }),
     );
@@ -791,4 +800,166 @@ it("stays on Subscriptions from the moment it opens while the configuration is r
         "subscriptions:examining",
         "subscriptions:provider-authentication",
     ]);
+});
+
+/** Antigravity as Happy Agent reports it, installed, with what a test changes. */
+function antigravityCli(fields: Record<string, unknown> = {}) {
+    return {
+        id: "antigravity",
+        installation: { status: "installed" },
+        installer: { command: "curl -fsSL https://antigravity.google/cli/install.sh | bash" },
+        operation: null,
+        providerId: "antigravity",
+        signIn: { methods: ["browser"], status: "signed_in" },
+        version: "01991f3a-5c1e-7000-8000-2f9a1b3c4d5e",
+        ...fields,
+    };
+}
+
+/** Happy Agent's provider CLI routes, answering with only Antigravity. */
+function providerClisServe(cli: Record<string, unknown>) {
+    const fetch = vi
+        .fn()
+        .mockImplementation(async (url: string) =>
+            url.endsWith("/v0/provider-clis")
+                ? Response.json({ providerClis: [cli] })
+                : Response.json({ providerCli: cli }),
+        );
+    vi.stubGlobal("fetch", fetch);
+    return fetch;
+}
+
+/** Happy Agent's configuration with its Antigravity account on or off. */
+function antigravityConfigSet(enabled: boolean) {
+    daemon.getConfig.mockResolvedValue({
+        config: {
+            providers: {
+                antigravity: {
+                    enabled,
+                    models: [{ enabled: true, id: "gemini-3-pro" }],
+                    type: "antigravity",
+                },
+            },
+        },
+    });
+}
+
+it.each([
+    ["signed in with its account on", {}, true, { authentication: "valid" }],
+    [
+        "signed in with its account off",
+        {},
+        false,
+        {
+            authentication: "error",
+            message: "Antigravity is turned off in Happy Agent",
+        },
+    ],
+    [
+        "signed in to a Happy Agent with no account for it",
+        { providerId: null },
+        true,
+        { authentication: "error", message: "Update Happy Agent to use Antigravity" },
+    ],
+    [
+        "signed out",
+        { signIn: { methods: ["browser"], status: "signed_out" } },
+        true,
+        { authentication: "invalid" },
+    ],
+    [
+        "not installed",
+        { installation: { status: "missing" } },
+        false,
+        { authentication: "unavailable", connect: { installable: true, installed: false } },
+    ],
+])("reads Antigravity %s from agy's check and its account, not the scan", async (...args) => {
+    const [, fields, enabled, card] = args;
+    // The scan cannot read agy's keyring, so it always says missing.
+    daemon.scanProviders.mockResolvedValue({
+        providers: [
+            { credentials: "available", providerId: "claude" },
+            { credentials: "missing", providerId: "antigravity" },
+        ],
+    });
+    daemon.verifyProvider.mockResolvedValue(verification(true));
+    antigravityConfigSet(enabled);
+    providerClisServe(antigravityCli(fields));
+    const store = storeOpen();
+
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            assistants: [{}, {}, {}, { id: "antigravity", ...card }],
+            // Its account is the card's, never a custom row of its own.
+            custom: { providers: [] },
+        }),
+    );
+    // Nothing runs a paid check through agy.
+    expect(verifiedIds()).not.toContain("antigravity");
+});
+
+it("offers the Google page and takes the code it shows for a waiting Antigravity sign-in", async () => {
+    antigravityConfigSet(false);
+    const expiresAt = Date.UTC(2026, 10, 27, 11, 52, 30);
+    const fetch = providerClisServe(
+        antigravityCli({
+            operation: {
+                authorization: {
+                    acceptsCode: true,
+                    expiresAt,
+                    method: "browser",
+                    openedByProgram: true,
+                    url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=agy",
+                    userCode: null,
+                },
+                id: "q7x0v2m9k3c1a8b4d6e5f0g1",
+                kind: "sign_in",
+                message: "Waiting for you to finish signing in to Antigravity in your browser.",
+                status: "waiting",
+            },
+            signIn: { methods: ["browser"], status: "signed_out" },
+        }),
+    );
+    const store = storeOpen();
+
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            assistants: [
+                {},
+                {},
+                {},
+                {
+                    authentication: "invalid",
+                    connect: {
+                        operation: {
+                            acceptsCode: true,
+                            expiresAt,
+                            kind: "sign-in",
+                            status: "waiting",
+                            url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=agy",
+                        },
+                    },
+                    id: "antigravity",
+                },
+            ],
+        }),
+    );
+    const card = cardFind(
+        screenRender(localOnboardingView(store.get()) as LocalOnboardingView),
+        "Antigravity",
+    );
+    expect(card?.querySelector("input")).not.toBeNull();
+
+    store.assistantSignInCode("antigravity", " 4/0AbCdEf \n");
+    await vi.waitFor(() =>
+        expect(fetch).toHaveBeenCalledWith(
+            "http://happy-agent.test/v0/provider-clis/antigravity/sign-in/code",
+            expect.objectContaining({ method: "POST" }),
+        ),
+    );
+    const [, request] = fetch.mock.calls.find(([url]) => String(url).endsWith("/sign-in/code")) as [
+        string,
+        RequestInit,
+    ];
+    expect(JSON.parse(String(request.body))).toMatchObject({ code: "4/0AbCdEf" });
 });

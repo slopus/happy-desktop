@@ -23,7 +23,7 @@ import type { ThemeMode } from "./ThemeScope";
 import { windowsSandboxSetupPage, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
 
 /** The coding assistants Happy looks for, and nothing beyond them. */
-export type LocalOnboardingAssistantId = "claude" | "codex" | "grok";
+export type LocalOnboardingAssistantId = "claude" | "codex" | "grok" | "antigravity";
 
 /**
  * One Subscriptions card's command the person copied: whose card, and whether
@@ -75,6 +75,10 @@ export type LocalOnboardingAssistantOperation =
           readonly url: string;
           /** The code to confirm on that page, for a sign-in on another device. */
           readonly userCode?: string;
+          /** The page may show a code to paste back here instead. */
+          readonly acceptsCode?: boolean;
+          /** When Happy Agent stops waiting, in epoch milliseconds. */
+          readonly expiresAt?: number;
       }
     | { readonly kind: "install" | "sign-in"; readonly status: "failed"; readonly message: string };
 
@@ -231,8 +235,10 @@ export interface LocalOnboardingScreenProps {
     onHappyMobileSkip(): void;
     /** Both pairing methods, shown side by side while linking. */
     readonly happyMobilePairingOptions: DesktopMobilePairingOptions;
-    /** Asks Happy Agent to run Codex's or Grok's own sign-in. */
+    /** Asks Happy Agent to run Codex's, Grok's or Antigravity's own sign-in. */
     onAssistantSignIn?(assistant: LocalOnboardingAssistantId): void;
+    /** Hands the code a vendor's page showed to the sign-in waiting for it. */
+    onAssistantSignInCode?(assistant: LocalOnboardingAssistantId, code: string): void;
     /** Asks Happy Agent to install a missing assistant from its vendor. */
     onAssistantInstall?(assistant: LocalOnboardingAssistantId): void;
     /** Stops the install or sign-in going on for one assistant. */
@@ -348,6 +354,18 @@ const ASSISTANTS: Record<
         name: "Grok",
         signIn: "grok login",
     },
+    antigravity: {
+        command: "agy",
+        install: {
+            posix: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+            powershell: "irm https://antigravity.google/cli/install.ps1 | iex",
+        },
+        // Antigravity signs in with a Google account to Gemini, whose mark it carries.
+        mark: "gemini",
+        name: "Antigravity",
+        // agy has no sign-in command: its first prompt while signed out signs in.
+        signIn: "agy",
+    },
 };
 
 /**
@@ -374,6 +392,7 @@ export function localOnboardingInstallCommand(
 interface AssistantCardHandlers {
     readonly onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void;
     readonly onSignIn?: (assistant: LocalOnboardingAssistantId) => void;
+    readonly onSignInCode?: (assistant: LocalOnboardingAssistantId, code: string) => void;
     readonly onInstall?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onCancel?: (assistant: LocalOnboardingAssistantId) => void;
     readonly onExternalOpen?: (url: string) => void;
@@ -395,8 +414,8 @@ function assistantSettledAction(
 
 /**
  * Every card is one button: Claude opens the dialog that explains its setup
- * token, and Codex and Grok install and sign in through Happy Agent with the
- * vendor's own page. The button is the card's status as well as its action:
+ * token, and Codex, Grok and Antigravity install and sign in through Happy
+ * Agent with the vendor's own page. The button is the card's status as well as its action:
  * what it says is where the assistant stands, and a connected one keeps its
  * place, so the row never loses a member. A card never sends anyone to a
  * terminal: there are no commands to copy.
@@ -431,6 +450,12 @@ function assistantConnectProject(
             onCancel: () => onCancel?.(id),
             onOpen: () => handlers.onExternalOpen?.(operation.url),
             ...(operation.userCode === undefined ? {} : { userCode: operation.userCode }),
+            ...(operation.expiresAt === undefined ? {} : { expiresAt: operation.expiresAt }),
+            ...(operation.acceptsCode && handlers.onSignInCode
+                ? {
+                      onCodeSubmit: (code: string) => handlers.onSignInCode?.(id, code),
+                  }
+                : {}),
         };
     if (!connect.installed)
         return {
@@ -493,7 +518,7 @@ const AGENT_PROMPTS = [
     {
         id: "sign-in",
         label: "Sign me in",
-        text: `Sign me in to Claude Code, Codex, or Grok on this computer so Happy can use it. Guide: ${HAPPY_DOCS}/configuration.md (Providers).`,
+        text: `Sign me in to Claude Code, Codex, Grok, or Antigravity on this computer so Happy can use it. Guide: ${HAPPY_DOCS}/configuration.md (Providers).`,
     },
 ] as const;
 
@@ -723,6 +748,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     const machineSetup = machineSetupProject(view, props.agentPromptsOpen === true, {
         ...(props.onCommandCopy ? { onCommandCopy: props.onCommandCopy } : {}),
         ...(props.onAssistantSignIn ? { onSignIn: props.onAssistantSignIn } : {}),
+        ...(props.onAssistantSignInCode ? { onSignInCode: props.onAssistantSignInCode } : {}),
         ...(props.onAssistantInstall ? { onInstall: props.onAssistantInstall } : {}),
         ...(props.onAssistantConnectCancel ? { onCancel: props.onAssistantConnectCancel } : {}),
         ...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {}),

@@ -1345,6 +1345,8 @@ export function desktopAnalyticsCreate(options: {
                     if (view?.kind === "provider-authentication") {
                         const found = snapshot.onboarding?.assistants ?? [];
                         for (const assistant of view.assistants) {
+                            // The shared catalog does not name Antigravity yet.
+                            if (assistant.id === "antigravity") continue;
                             const status = assistantStatus(assistant.authentication);
                             if (status)
                                 track(LOCAL_HAPPY_AGENT_ID, "onboarding_assistant_status", {

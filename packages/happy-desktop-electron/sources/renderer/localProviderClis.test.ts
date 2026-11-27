@@ -88,3 +88,69 @@ describe("Claude setup token", () => {
         await expect(result).rejects.toThrow(message);
     });
 });
+
+describe("Antigravity", () => {
+    it("reads its account, and a sign-in that takes a pasted code until it expires", async () => {
+        const cli = {
+            id: "antigravity",
+            installation: { status: "installed" },
+            installer: null,
+            operation: {
+                authorization: {
+                    acceptsCode: true,
+                    expiresAt: 1_755_400_060_000,
+                    openedByProgram: true,
+                    url: "https://accounts.google.com/o/oauth2/v2/auth",
+                },
+                id: "operation",
+                kind: "sign_in",
+                message: "Waiting.",
+                status: "waiting",
+            },
+            providerId: "antigravity",
+            signIn: { status: "signed_out" },
+            version: "01991f3a",
+        };
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ providerCli: cli })));
+        expect(await api().get("antigravity")).toEqual({
+            id: "antigravity",
+            installable: false,
+            installed: true,
+            operation: {
+                authorization: {
+                    acceptsCode: true,
+                    expiresAt: 1_755_400_060_000,
+                    openedByProgram: true,
+                    url: "https://accounts.google.com/o/oauth2/v2/auth",
+                },
+                id: "operation",
+                kind: "sign_in",
+                message: "Waiting.",
+                status: "waiting",
+            },
+            providerId: "antigravity",
+            signedIn: "signed_out",
+            version: "01991f3a",
+        });
+    });
+
+    it("hands the pasted code, trimmed, to the waiting sign-in", async () => {
+        const fetch = vi.fn().mockResolvedValue(Response.json({ providerCli: {} }));
+        vi.stubGlobal("fetch", fetch);
+        await api().signInCode("antigravity", "  http://localhost:1/?code=4/0Ab \n", "mutation");
+        expect(fetch).toHaveBeenCalledWith(
+            "https://agent.example/v0/provider-clis/antigravity/sign-in/code",
+            {
+                method: "POST",
+                headers: {
+                    authorization: "Bearer local-capability",
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    code: "http://localhost:1/?code=4/0Ab",
+                    mutationId: "mutation",
+                }),
+            },
+        );
+    });
+});
