@@ -211,6 +211,7 @@ const screens: readonly Screen[] = [
                 image={null}
                 installation={{
                     id: "inst-github",
+                    enabled: true,
                     pluginId: "github",
                     kind: "integration",
                     name: "GitHub",
