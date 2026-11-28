@@ -104,6 +104,7 @@ import {
     ZoomIndicator,
     ConnectionShell,
     CloudConnectScreen,
+    imageCropOpen,
     CloudSignInNoticeDialog,
     HappyLinkNoticeDialog,
     ConnectionSurface,
@@ -1418,6 +1419,8 @@ function DesktopCloudSignInNotice(props: { store: DesktopCloudSignInNoticeStore 
         />
     );
 }
+const pictureSubscribeNone = () => () => undefined;
+const pictureNone = () => undefined;
 /** The sidebar "+" to Happy Cloud, full window over everything else. */
 function DesktopCloudConnect(props: {
     store: DesktopCloudConnectStore;
@@ -1429,10 +1432,31 @@ function DesktopCloudConnect(props: {
         props.appearance.get,
         props.appearance.get,
     );
+    const pictureStore = props.store.picture;
+    const picture = useSyncExternalStore(
+        pictureStore?.subscribe ?? pictureSubscribeNone,
+        pictureStore?.get ?? pictureNone,
+        pictureStore?.get ?? pictureNone,
+    );
     if (!view) return null;
     return (
         <CloudConnectScreen
             appearance={appearance.mode}
+            {...(pictureStore && picture
+                ? {
+                      picture: {
+                          opening: picture.opening,
+                          ...(picture.picked ? { url: picture.picked.imageUrl } : {}),
+                          ...(picture.crop ? { crop: picture.crop } : {}),
+                          ...(picture.error ? { error: picture.error } : {}),
+                          onChoose: (file: File) => void pictureStore.pictureChoose(file),
+                          onCropCancel: pictureStore.pictureCropCancel,
+                          onCropConfirm: (
+                              region: Parameters<typeof pictureStore.pictureCropConfirm>[0],
+                          ) => void pictureStore.pictureCropConfirm(region),
+                      },
+                  }
+                : {})}
             onAgentAdd={props.store.agentAdd}
             onBack={props.store.back}
             onClose={props.store.connectCancel}
@@ -1902,10 +1926,11 @@ if (mediaPreviewBridge) {
                       cloud: desktopBridge.happyCloud,
                       bridge: desktopBridge,
                       chiefOfStaffAsk,
+                      photoCodec: { open: imageCropOpen },
                       // A start page left for Happy Cloud is acknowledged only
                       // once a team is connected; until then Back returns to it.
-                      connect: async (connectionId) => {
-                          const connected = await cloudConnectAction(connectionId);
+                      connect: async (connectionId, picture) => {
+                          const connected = await cloudConnectAction(connectionId, picture);
                           if (connected.ok && !welcome.get().welcomeAcknowledged) {
                               desktopBootSkip();
                               welcome.welcomeAcknowledge();

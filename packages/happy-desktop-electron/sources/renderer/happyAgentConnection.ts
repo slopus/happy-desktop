@@ -564,6 +564,7 @@ export function happyAgentConnectionOpen(input: {
                   away: desktopCloudOnboardingAway(input.happyAgentId),
                   onAwayChange: (away) =>
                       desktopCloudOnboardingAwayUpdate(input.happyAgentId, away),
+                  photoCodec: { open: imageCropOpen },
                   plugins: () => client.plugins(),
                   // The first owner to finish starts the Chief of Staff's first
                   // conversation, which is where the reader goes next.

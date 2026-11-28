@@ -21,6 +21,12 @@ import type {
     HappyAgentPluginConnectTarget,
     HappyAgentPluginsStore,
 } from "./happyAgentPluginsStore.js";
+import {
+    happyAgentPicturePickStoreCreate,
+    type HappyAgentPicturePickStore,
+} from "./happyAgentPicturePickStore.js";
+import type { HappyAgentProfilePhotoCodec } from "./happyAgentProfilePhoto.js";
+import type { HappyAgentAvatarImage } from "./happyAgentTypes.js";
 import { UserError } from "../types.js";
 import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
 
@@ -136,6 +142,11 @@ export interface HappyAgentOnboardingSnapshot {
 
 export interface HappyAgentOnboardingStore {
     readonly mobile: HappyMobileOnboardingStore;
+    /**
+     * The admin bot gate's picture, sent as soon as it is cropped. Absent
+     * without a way to crop pictures or reach Happy Cloud's routes.
+     */
+    readonly adminBotPicture?: HappyAgentPicturePickStore;
     get(): HappyAgentOnboardingSnapshot;
     subscribe(listener: () => void): () => void;
     onboardingBegin(): void;
@@ -267,6 +278,8 @@ export function happyAgentOnboardingStoreCreate(
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
         /** Happy Cloud's own routes, which skip gates and name the admin bot. */
         readonly cloudRequest?: HappyCloudRequest;
+        /** Decodes and crops the pictures the admin bot gate is given. */
+        readonly photoCodec?: HappyAgentProfilePhotoCodec;
         /** The server's plugins, which the plugins gate installs. */
         readonly plugins?: () => HappyAgentPluginsStore | undefined;
         /** The reader left this server's setup to finish later, on an earlier run. */
@@ -758,8 +771,56 @@ export function happyAgentOnboardingStoreCreate(
         if (retry) clearTimeout(retry);
         retry = undefined;
     };
+    /**
+     * Gives the admin bot the picture just cropped for it, off to one side of
+     * the gate: Continue never waits on it. Its version is read again and the
+     * picture sent once more if someone changed the bot in the meantime, and
+     * the gates are read after, so the picture the server keeps is shown.
+     */
+    const adminBotPictureSend = async (image: HappyAgentAvatarImage): Promise<void> => {
+        const gate = snapshot.flow?.current;
+        if (gate?.kind !== "adminBot" || gate.botId === "") return;
+        const signal = controller?.signal ?? new AbortController().signal;
+        const send = (version: string) =>
+            cloud()(
+                "PUT",
+                `v0/bots/${encodeURIComponent(gate.botId)}/avatar`,
+                new Blob([image.data], { type: image.contentType }),
+                {
+                    "content-type": image.contentType,
+                    ...(version === "" ? {} : { "if-match": version }),
+                },
+            );
+        try {
+            try {
+                await send(gate.version);
+            } catch (error) {
+                if (!(error instanceof HappyCloudRequestRefusal) || error.status !== 409)
+                    throw error;
+                await gatesRead(signal);
+                const current = snapshot.flow?.gates.find((item) => item.id === gate.id);
+                if (current?.kind !== "adminBot") return;
+                await send(current.version);
+            }
+        } catch (error) {
+            throw new UserError(
+                "The picture didn't upload. You can change it later.",
+                undefined,
+                error,
+            );
+        }
+        await gatesRead(signal).catch(() => undefined);
+    };
+    const adminBotPicture =
+        options.photoCodec && options.cloudRequest
+            ? happyAgentPicturePickStoreCreate({
+                  codec: options.photoCodec,
+                  onPicked: adminBotPictureSend,
+              })
+            : undefined;
     return {
         mobile,
+        ...(adminBotPicture ? { adminBotPicture } : {}),
         get: () => snapshot,
         onboardingBegin() {
             setupActive = true;
@@ -906,6 +967,7 @@ export function happyAgentOnboardingStoreCreate(
             disposed = true;
             stop();
             mobile[Symbol.dispose]();
+            adminBotPicture?.[Symbol.dispose]();
             listeners.clear();
         },
     };

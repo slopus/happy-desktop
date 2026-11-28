@@ -222,6 +222,12 @@ export function AppCloudOnboarding(props: {
         paymentsStore?.get ?? noSnapshot,
         paymentsStore?.get ?? noSnapshot,
     );
+    const pictureStore = gate.kind === "adminBot" ? props.store.adminBotPicture : undefined;
+    const picture = useSyncExternalStore(
+        pictureStore?.subscribe ?? noopSubscribe,
+        pictureStore?.get ?? noSnapshot,
+        pictureStore?.get ?? noSnapshot,
+    );
     const { store, profile, profileSnapshot } = props;
     const pending = flow.pending === gate.id;
     const done = gate.status === "done" || gate.status === "skipped";
@@ -340,6 +346,24 @@ export function AppCloudOnboarding(props: {
                         name: props.snapshot.adminBotName ?? gate.name,
                         avatarUrl: gate.avatarUrl,
                         placeholderSeed: gate.botId || "chief-of-staff",
+                        ...(pictureStore && picture && gate.botId !== ""
+                            ? {
+                                  picture: {
+                                      opening: picture.opening,
+                                      ...(picture.picked ? { url: picture.picked.imageUrl } : {}),
+                                      ...(picture.crop ? { crop: picture.crop } : {}),
+                                      ...(picture.error ? { error: picture.error } : {}),
+                                      onChoose: (file: File) =>
+                                          void pictureStore.pictureChoose(file),
+                                      onCropCancel: pictureStore.pictureCropCancel,
+                                      onCropConfirm: (
+                                          region: Parameters<
+                                              typeof pictureStore.pictureCropConfirm
+                                          >[0],
+                                      ) => void pictureStore.pictureCropConfirm(region),
+                                  },
+                              }
+                            : {}),
                         busy: pending,
                         ...(flow.error ? { error: flow.error } : {}),
                         onNameChange: store.adminBotNameUpdate,

@@ -36,6 +36,9 @@ function stepsBefore(current: string): readonly CloudOnboardingStep[] {
 const APP_STORE = "https://apps.apple.com/us/app/happy-claude-code-client/id6748571505";
 const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.ex3ndr.happy";
 
+/** The admin bot's default picture, as happy-agent gives the Chief of Staff. */
+const chiefOfStaffAvatarUrl = new URL("../assets/chief-of-staff-avatar.webp", import.meta.url).href;
+
 const ADMIN_BOT_DESCRIPTION =
     "This is your server's admin bot. It has expanded capabilities: it can change the server's settings, connect tools and create other bots, so it can adapt Happy and build a system around how your team works. Only owners can talk to it.";
 const ADMIN_BOT_LEAD = "It has expanded capabilities, so it can shape Happy around your team.";
@@ -90,8 +93,14 @@ const screens: readonly Screen[] = [
                 points: ADMIN_BOT_POINTS,
                 note: "Only owners can talk to it.",
                 name: "Chief of Staff",
-                avatarUrl: null,
+                avatarUrl: chiefOfStaffAvatarUrl,
                 placeholderSeed: "chief-of-staff",
+                picture: {
+                    opening: false,
+                    onChoose: noop,
+                    onCropCancel: noop,
+                    onCropConfirm: noop,
+                },
                 busy: false,
                 onNameChange: noop,
                 onSubmit: noop,

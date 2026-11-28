@@ -9,6 +9,13 @@ export const componentNumber = "C-336";
 const WINDOW = { height: 760, width: 1100 } as const;
 const SMALL_WINDOW = { height: 560, width: 720 } as const;
 const noop = () => undefined;
+/** The create step's picture, before one is chosen. */
+const PICTURE = {
+    opening: false,
+    onChoose: noop,
+    onCropCancel: noop,
+    onCropConfirm: noop,
+} as const;
 
 /** Contains the fixed window inside its window-sized viewport. */
 function frame(children: ReactNode) {
@@ -267,6 +274,9 @@ export function CloudConnectScreenPage() {
                                     onEmailChangeOpen={noop}
                                     onServerPick={noop}
                                     onServersContinue={noop}
+                                    {...(specimen.view.kind === "create"
+                                        ? { picture: PICTURE }
+                                        : {})}
                                     view={specimen.view}
                                 />
                             </ThemeScope>,

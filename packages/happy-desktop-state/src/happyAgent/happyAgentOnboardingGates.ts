@@ -136,8 +136,12 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
             return { ...common, kind: id };
         case "adminBot": {
             const botId = textOf(data.botId);
+            // happy-cluster sends the bot's default picture as `{ kind, source,
+            // thumbhash }` with no digest; any avatar it describes is the bot's
+            // `/v0/bots/:id/avatar`, and whichever token it gives keys the cache.
             const avatar = recordOf(data.avatar);
-            const thumbhash = textOf(avatar?.thumbhash) || textOf(avatar?.digest);
+            const version =
+                textOf(avatar?.thumbhash) || textOf(avatar?.digest) || textOf(data.version);
             return {
                 ...common,
                 kind: "adminBot",
@@ -145,11 +149,11 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
                 version: textOf(data.version),
                 name: textOf(data.name),
                 avatarUrl:
-                    botId !== "" && thumbhash !== ""
+                    botId !== "" && avatar !== undefined
                         ? happyAgentImageUrl(
                               endpoint,
                               `/v0/bots/${encodeURIComponent(botId)}/avatar`,
-                              thumbhash,
+                              version,
                           )
                         : null,
                 title: textOf(data.title),

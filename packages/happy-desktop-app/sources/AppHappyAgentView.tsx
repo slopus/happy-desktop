@@ -687,6 +687,12 @@ export interface AppHappyAgentEntry {
         }
     >;
     /**
+     * Why the picture chosen for this server when it was created was not kept.
+     * The server is there either way; this is said once in the sidebar's notice
+     * until dismissed. Absent reads as none.
+     */
+    readonly pictureFailure?: string;
+    /**
      * The server stopped accepting this window's sign-in, and where signing in
      * again has got to. Absent while the sign-in holds.
      */
@@ -925,6 +931,8 @@ export interface AppHappyAgentDirectoryStore {
      * afresh, leaving every other one alone. Absent on a host that cannot.
      */
     happyAgentReset?(id: string): void;
+    /** Puts away an entry's `pictureFailure`. */
+    pictureFailureDismiss?(id: string): void;
 }
 
 /**
@@ -3464,9 +3472,15 @@ function rowDestination(
  */
 function sidebarMutationFailure(
     directory: AppHappyAgentDirectorySnapshot,
+    store: AppHappyAgentDirectoryStore,
 ): { readonly message: string; readonly dismiss: () => void } | undefined {
     for (const happyAgent of directory.happyAgents) {
         const workspace = happyAgent.session?.workspace;
+        if (happyAgent.pictureFailure !== undefined)
+            return {
+                message: happyAgent.pictureFailure,
+                dismiss: () => store.pictureFailureDismiss?.(happyAgent.id),
+            };
         for (const task of happyAgent.tasks ?? []) {
             const failure = happyAgent.taskFailures?.get(task.id);
             if (failure && failure.action !== "join")
@@ -4345,7 +4359,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const restart = outage?.restart;
     // This component stays mounted when the outage clears, so an open card
     // can report Connected until the person dismisses it.
-    const mutationFailure = sidebarMutationFailure(directory);
+    const mutationFailure = sidebarMutationFailure(directory, props.happyAgents);
     const sidebarOutage = (
         <SidebarConnectionAction
             location={`Happy Agent on ${updateHost?.label ?? "this computer"}`}

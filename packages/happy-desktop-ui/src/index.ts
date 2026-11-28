@@ -767,6 +767,12 @@ export {
     type ClaudeSetupTokenStepsProps,
 } from "./ClaudeSetupTokenDialog";
 export {
+    PicturePicker,
+    PICTURE_PICKER_ACCEPT,
+    type PictureChoice,
+    type PicturePickerProps,
+} from "./PicturePicker";
+export {
     ProfileSetupForm,
     ProfileSetupScreen,
     type ProfileSetupFormProps,
