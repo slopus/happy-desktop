@@ -1246,6 +1246,131 @@
     white-space: nowrap;
 }
 
+/* "Connect with": one radio row per way, its name over what it runs on. The
+   rows' fill reaches past the text column, so their rings line up with it. */
+.happy-agent-provider-add__options {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 2px;
+    margin-inline: -8px;
+}
+
+.happy-agent-provider-add__option {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-provider-add__option:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-agent-provider-add__option:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 0;
+}
+
+.happy-agent-provider-add__option:disabled {
+    cursor: default;
+}
+
+/* The radio's ring is the same box chosen or not; only its dot is filled in. */
+.happy-agent-provider-add__radio {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+}
+
+.happy-agent-provider-add__radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: transparent;
+}
+
+.happy-agent-provider-add__option[aria-checked="true"] .happy-agent-provider-add__radio {
+    border-color: var(--radio-active);
+}
+
+.happy-agent-provider-add__option[aria-checked="true"] .happy-agent-provider-add__radio::after {
+    background: var(--radio-active);
+}
+
+.happy-agent-provider-add__option-text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-provider-add__option-name {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-agent-provider-add__option-detail {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* Headers: a name, its masked value and a way to take it out, per row. */
+.happy-agent-provider-headers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-provider-headers__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-agent-provider-headers__row > :first-child {
+    flex: 2 1 0%;
+    min-width: 0;
+}
+
+.happy-agent-provider-headers__row > :nth-child(2) {
+    flex: 3 1 0%;
+    min-width: 0;
+}
+
+/* "Add header" starts where the fields do; a ghost button's own padding is taken back. */
+.happy-agent-provider-headers__add {
+    display: flex;
+    margin-inline-start: -8px;
+}
+
+.happy-agent-provider-headers__stored {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .happy-agent-provider-add__user-code {
     font-family: var(--happy-font-mono);
     font-size: 20px;

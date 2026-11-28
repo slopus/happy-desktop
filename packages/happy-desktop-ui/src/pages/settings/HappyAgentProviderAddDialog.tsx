@@ -11,6 +11,16 @@ import { SegmentedControl } from "../../SegmentedControl";
 import { Select } from "../../Select";
 import { Spinner } from "../../Spinner";
 import { TextField } from "../../TextField";
+import {
+    HappyAgentProviderAuthSelect,
+    HappyAgentProviderHeadersEditor,
+    happyAgentProviderHeadersComplete,
+    happyAgentProviderHeadersOf,
+    type HappyAgentProviderAuth,
+    type HappyAgentProviderEndpointVendor,
+    type HappyAgentProviderHeader,
+    type HappyAgentProviderHeaderRow,
+} from "./HappyAgentProviderConnectionFields";
 
 /** The vendors an API key is added for by hand; Bedrock also takes AWS access keys. */
 export type HappyAgentProviderKeyVendor = "openai" | "anthropic" | "grok" | "bedrock";
@@ -58,16 +68,28 @@ export interface HappyAgentProviderAddFormProps {
     readonly teamRoutingEditable: boolean;
     /**
      * Whether an OpenAI, Anthropic or xAI key may name its own endpoint, such
-     * as a proxy; with one typed, the key may be left empty.
+     * as a proxy, with how it signs requests there and headers of its own.
      */
     readonly endpoints: boolean;
     /** The endpoint typed; empty for the vendor's own API. */
     readonly endpoint: string;
+    /** How the key signs requests to `endpoint`; `none` takes no key. */
+    readonly auth: HappyAgentProviderAuth;
     onFlowSelect: (flow: HappyAgentProviderAddFlow) => void;
     onLabelChange: (label: string) => void;
     onEndpointChange: (endpoint: string) => void;
-    /** A Bedrock key may name the region every team Bedrock key routes to. */
-    onApiKeySubmit: (secret: string, region?: string) => void;
+    onAuthChange: (auth: HappyAgentProviderAuth) => void;
+    /**
+     * A Bedrock key may name the region every team Bedrock key routes to; a
+     * key with an endpoint of its own may add headers.
+     */
+    onApiKeySubmit: (
+        secret: string,
+        options: {
+            readonly region?: string;
+            readonly headers?: readonly HappyAgentProviderHeader[];
+        },
+    ) => void;
     onAwsKeysSubmit: (input: {
         readonly accessKeyId: string;
         readonly secretAccessKey: string;
@@ -137,16 +159,6 @@ const VENDOR_NAMES: Record<HappyAgentProviderKeyVendor, string> = {
     bedrock: "Amazon Bedrock",
 };
 
-/** The vendors' own APIs, which a key without an endpoint of its own is sent to. */
-export const HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS: Record<
-    Exclude<HappyAgentProviderKeyVendor, "bedrock">,
-    string
-> = {
-    openai: "https://api.openai.com/v1",
-    anthropic: "https://api.anthropic.com",
-    grok: "https://api.x.ai/v1",
-};
-
 const KEY_PLACEHOLDERS: Record<HappyAgentProviderKeyVendor, string> = {
     openai: "sk-…",
     anthropic: "sk-ant-…",
@@ -162,7 +174,7 @@ function familyOf(flow: HappyAgentProviderAddFlow): FamilyId {
     return flow.vendor;
 }
 
-/** A way's segment in "Connect with"; Bedrock's access keys are a segment of their own. */
+/** A way in "Connect with"; Bedrock's access keys are a way of their own. */
 type Method = "sign-in" | "setup-token" | "api-key" | "aws";
 
 function methodOf(flow: HappyAgentProviderAddFlow): Method {
@@ -170,11 +182,41 @@ function methodOf(flow: HappyAgentProviderAddFlow): Method {
     return flow.kind === "claude" && flow.setupToken ? "setup-token" : "sign-in";
 }
 
-const METHOD_LABELS: Record<Method, string> = {
-    "sign-in": "Sign in",
-    "setup-token": "Setup token",
-    "api-key": "API key",
-    aws: "Access keys",
+/** A way's radio: what it is, and what it runs on. */
+function methodWords(
+    family: FamilyId,
+    method: Method,
+    endpoints: boolean,
+): { readonly title: string; readonly detail: string } {
+    if (method === "aws")
+        return { title: "AWS access keys", detail: "An access key ID and its secret" };
+    if (family === "bedrock") return { title: "API key", detail: "A Bedrock API key" };
+    if (method === "sign-in")
+        return family === "chatgpt"
+            ? { title: "ChatGPT subscription", detail: "Sign in with your ChatGPT plan" }
+            : { title: "Claude subscription", detail: "Sign in with your Claude plan" };
+    if (method === "setup-token")
+        return {
+            title: "Claude subscription (setup token)",
+            detail: "Your Claude plan, through Claude Code itself",
+        };
+    const vendor = family === "chatgpt" ? "OpenAI" : family === "claude" ? "Anthropic" : "xAI";
+    return endpoints
+        ? {
+              title: "API key or custom endpoint",
+              detail: `${vendor}’s API, or a proxy that speaks it, with your own auth and headers`,
+          }
+        : { title: "API key", detail: `Billed to your ${vendor} account` };
+}
+
+/** Each vendor whose API keys may name an endpoint of their own, and how it signs its own API's requests. */
+export const HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS: Record<
+    Exclude<HappyAgentProviderKeyVendor, "bedrock">,
+    HappyAgentProviderEndpointVendor
+> = {
+    openai: { name: "OpenAI", official: "https://api.openai.com/v1", signs: "bearer" },
+    anthropic: { name: "Anthropic", official: "https://api.anthropic.com", signs: "x-api-key" },
+    grok: { name: "xAI", official: "https://api.x.ai/v1", signs: "bearer" },
 };
 
 function flowKey(flow: HappyAgentProviderAddFlow): string {
@@ -191,6 +233,7 @@ interface Draft {
     readonly secretAccessKey: string;
     readonly region: string;
     readonly code: string;
+    readonly headers: readonly HappyAgentProviderHeaderRow[];
 }
 
 interface Primary {
@@ -226,6 +269,7 @@ function useProviderAddForm(
                   secretAccessKey: "",
                   region: "",
                   code: "",
+                  headers: [],
               };
     const update = (change: Partial<Omit<Draft, "flow">>): void => setHeld({ ...draft, ...change });
     const busy = props.phase === "busy";
@@ -238,7 +282,12 @@ function useProviderAddForm(
     };
     const keySubmit = (): void => {
         const region = draft.region.trim();
-        props.onApiKeySubmit(draft.secret, region === "" ? undefined : region);
+        props.onApiKeySubmit(draft.secret, {
+            ...(region === "" ? {} : { region }),
+            ...(custom && draft.headers.length > 0
+                ? { headers: happyAgentProviderHeadersOf(draft.headers) }
+                : {}),
+        });
     };
     const awsSubmit = (): void =>
         props.onAwsKeysSubmit({
@@ -290,38 +339,66 @@ function useProviderAddForm(
                     ))}
                 </Box>
             </Box>
-            {methods.length > 1 ? (
-                <Box className="happy-agent-provider-add__field">
-                    <span className="happy-agent-provider-add__label">Connect with</span>
-                    <SegmentedControl
-                        aria-label="Connect with"
-                        disabled={busy}
-                        onChange={(value) => {
-                            if (value === "aws") {
-                                update({ aws: true, secret: "" });
-                                return;
-                            }
-                            if (draft.aws) update({ aws: false });
-                            const picked = ways.find((offered) => methodOf(offered) === value);
-                            if (picked && flowKey(picked) !== key) props.onFlowSelect(picked);
-                        }}
-                        segments={methods.map((value) => ({
-                            value,
-                            label: METHOD_LABELS[value],
-                        }))}
-                        size="small"
-                        value={method}
-                    />
+            <Box className="happy-agent-provider-add__field">
+                <span className="happy-agent-provider-add__label">Connect with</span>
+                <Box
+                    aria-label="Connect with"
+                    className="happy-agent-provider-add__options"
+                    data-happy-desktop-ui="happy-agent-provider-add-methods"
+                    role="radiogroup"
+                >
+                    {methods.map((value) => {
+                        const words = methodWords(family, value, props.endpoints);
+                        return (
+                            <button
+                                aria-checked={value === method}
+                                className="happy-agent-provider-add__option"
+                                data-method={value}
+                                disabled={busy}
+                                key={value}
+                                onClick={() => {
+                                    if (value === "aws") {
+                                        update({ aws: true, secret: "" });
+                                        return;
+                                    }
+                                    if (draft.aws) update({ aws: false });
+                                    const picked = ways.find(
+                                        (offered) => methodOf(offered) === value,
+                                    );
+                                    if (picked && flowKey(picked) !== key)
+                                        props.onFlowSelect(picked);
+                                }}
+                                role="radio"
+                                type="button"
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className="happy-agent-provider-add__radio"
+                                />
+                                <span className="happy-agent-provider-add__option-text">
+                                    <span className="happy-agent-provider-add__option-name">
+                                        {words.title}
+                                    </span>
+                                    <span className="happy-agent-provider-add__option-detail">
+                                        {words.detail}
+                                    </span>
+                                </span>
+                            </button>
+                        );
+                    })}
                 </Box>
-            ) : null}
+            </Box>
         </>
     );
 
     const signIn = flow.kind === "chatgpt" || (flow.kind === "claude" && !flow.setupToken);
-    const endpointShown =
-        props.endpoints && flow.kind === "apiKey" && flow.vendor !== "bedrock" && !draft.aws;
-    // A key sent to an endpoint of its own, such as a proxy, may need none.
-    const keyOptional = endpointShown && props.endpoint.trim() !== "";
+    const endpointVendor =
+        props.endpoints && flow.kind === "apiKey" && flow.vendor !== "bedrock" && !draft.aws
+            ? HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS[flow.vendor]
+            : undefined;
+    // Auth and headers belong to an endpoint of the key's own, such as a proxy.
+    const custom = endpointVendor !== undefined && props.endpoint.trim() !== "";
+    const keyless = custom && props.auth === "none";
     const name =
         props.reauth === true ? null : (
             <TextField
@@ -376,31 +453,47 @@ function useProviderAddForm(
         if (flow.kind === "apiKey")
             return (
                 <>
-                    {endpointShown ? (
+                    {endpointVendor ? (
                         <TextField
                             autoComplete="off"
                             disabled={!idle}
                             fullWidth
-                            hint={`Optional: a proxy or gateway that speaks ${VENDOR_NAMES[flow.vendor]}’s API. Leave empty for ${VENDOR_NAMES[flow.vendor]} itself.`}
+                            hint={`Optional: a proxy or gateway that speaks ${endpointVendor.name}’s API. Leave empty for ${endpointVendor.name} itself.`}
                             label="Endpoint"
                             onSubmit={keySubmit}
                             onValueChange={props.onEndpointChange}
-                            placeholder={HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS[flow.vendor]}
+                            placeholder={endpointVendor.official}
                             value={props.endpoint}
                         />
                     ) : null}
-                    <TextField
-                        autoComplete="off"
-                        disabled={busy}
-                        fullWidth
-                        {...(keyOptional ? { hint: "Optional with an endpoint of its own." } : {})}
-                        label={`${VENDOR_NAMES[flow.vendor]} API key`}
-                        onSubmit={keySubmit}
-                        onValueChange={(secret) => update({ secret })}
-                        placeholder={KEY_PLACEHOLDERS[flow.vendor]}
-                        type="password"
-                        value={draft.secret}
-                    />
+                    {custom ? (
+                        <HappyAgentProviderAuthSelect
+                            disabled={!idle}
+                            onChange={props.onAuthChange}
+                            value={props.auth}
+                            vendor={endpointVendor}
+                        />
+                    ) : null}
+                    {keyless ? null : (
+                        <TextField
+                            autoComplete="off"
+                            disabled={busy}
+                            fullWidth
+                            label={custom ? "Token" : `${VENDOR_NAMES[flow.vendor]} API key`}
+                            onSubmit={keySubmit}
+                            onValueChange={(secret) => update({ secret })}
+                            placeholder={custom ? "" : KEY_PLACEHOLDERS[flow.vendor]}
+                            type="password"
+                            value={draft.secret}
+                        />
+                    )}
+                    {custom ? (
+                        <HappyAgentProviderHeadersEditor
+                            disabled={!idle}
+                            onChange={(headers) => update({ headers })}
+                            rows={draft.headers}
+                        />
+                    ) : null}
                     {flow.vendor === "bedrock" && props.teamRoutingEditable ? (
                         <TextField
                             autoComplete="off"
@@ -530,7 +623,10 @@ function useProviderAddForm(
                 ...base,
                 label: "Add key",
                 onClick: keySubmit,
-                disabled: !busy && draft.secret.trim() === "" && !keyOptional,
+                disabled:
+                    !busy &&
+                    ((draft.secret.trim() === "" && !keyless) ||
+                        (custom && !happyAgentProviderHeadersComplete(draft.headers))),
             };
         if (!signIn)
             return {
@@ -566,9 +662,10 @@ const NEW_DESTINATION = "new";
 
 /**
  * Adds an AI provider's token on Happy Cloud, all on one page in one fixed
- * card: the vendor and how to connect it, whose it is, which provider keeps
- * it — one already there or a new one by name — what the token is called,
- * and the key, or a button that runs the sign-in. Nothing opens over it and
+ * card: the vendor, how to connect it and what that takes — the key and,
+ * for an API, its endpoint, auth and headers, or a button that runs the
+ * sign-in — then whose it is, which provider keeps it, one already there or
+ * a new one by name, and what the token is called. Nothing opens over it and
  * nothing goes back.
  */
 export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogProps) {
@@ -620,18 +717,7 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                         <>
                             {errorBanner(props.error)}
                             {form.chooser}
-                            {props.onCustomProviderCreate ? (
-                                <span className="happy-agent-provider-add__hint">
-                                    A different API with its own models?{" "}
-                                    <button
-                                        className="happy-agent-provider-add__link"
-                                        onClick={props.onCustomProviderCreate}
-                                        type="button"
-                                    >
-                                        Add a custom provider
-                                    </button>
-                                </span>
-                            ) : null}
+                            {form.credential}
                             <Box className="happy-agent-provider-add__divider" />
                             {props.scopeChoice ? (
                                 <Box className="happy-agent-provider-add__field">
@@ -693,8 +779,18 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                 />
                             ) : null}
                             {form.name}
-                            <Box className="happy-agent-provider-add__divider" />
-                            {form.credential}
+                            {props.onCustomProviderCreate ? (
+                                <span className="happy-agent-provider-add__hint">
+                                    A different API with its own models?{" "}
+                                    <button
+                                        className="happy-agent-provider-add__link"
+                                        onClick={props.onCustomProviderCreate}
+                                        type="button"
+                                    >
+                                        Add a custom provider
+                                    </button>
+                                </span>
+                            ) : null}
                         </>
                     )}
                 </Box>
@@ -722,8 +818,8 @@ export function HappyAgentProviderAddPanel(props: HappyAgentProviderAddPanelProp
         >
             {errorBanner(props.error)}
             {form.chooser}
-            {form.name}
             {form.credential}
+            {form.name}
             <Box className="happy-agent-provider-add__buttons">
                 <Button disabled={busy} onClick={props.onCancel} size="small" variant="ghost">
                     Cancel

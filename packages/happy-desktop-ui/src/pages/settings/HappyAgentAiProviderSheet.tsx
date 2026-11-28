@@ -14,6 +14,12 @@ import {
     HappyAgentProviderAddPanel,
     type HappyAgentProviderAddPanelProps,
 } from "./HappyAgentProviderAddDialog";
+import {
+    HappyAgentProviderConnectionEditor,
+    type HappyAgentProviderConnection,
+    type HappyAgentProviderConnectionChange,
+    type HappyAgentProviderEndpointVendor,
+} from "./HappyAgentProviderConnectionFields";
 import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
 /** Where one token stands, as the server reports it. */
@@ -36,18 +42,20 @@ export interface HappyAgentAiProviderCredentialRow {
     /** Whether its sign-in can be run again here. */
     readonly reauth?: boolean;
     /**
-     * Where an API key sends its requests, when it may say: `url` its own
-     * endpoint, such as a proxy, or absent for the vendor's own API at
-     * `official`. Absent for a sign-in or setup token, which always run on the vendor's own.
+     * Where and how an API key connects, when it may say: its own endpoint,
+     * such as a proxy, its auth and its headers' names. Absent for a sign-in
+     * or setup token, which always run on the vendor's own.
      */
-    readonly endpoint?: { readonly url?: string; readonly official: string };
+    readonly connection?: HappyAgentProviderConnection & {
+        readonly vendor: HappyAgentProviderEndpointVendor;
+    };
 }
 
 /** The one thing open on the sheet: its name, or one token's name, secret or removal. */
 export type HappyAgentAiProviderSheetAction =
     | { readonly kind: "name" }
     | {
-          readonly kind: "label" | "secret" | "endpoint" | "remove";
+          readonly kind: "label" | "secret" | "connection" | "remove";
           readonly credentialId: string;
       };
 
@@ -83,9 +91,9 @@ export interface HappyAgentAiProviderSheetProps {
     onActionCancel: () => void;
     onCredentialLabelSave: (label: string) => void;
     onCredentialSecretSave: (secret: string) => void;
-    onCredentialEndpointOpen: (credentialId: string) => void;
-    /** Empty sends it to the vendor's own API again. */
-    onCredentialEndpointSave: (baseUrl: string) => void;
+    onCredentialConnectionOpen: (credentialId: string) => void;
+    /** An empty `baseUrl` sends it to the vendor's own API again. */
+    onCredentialConnectionSave: (change: HappyAgentProviderConnectionChange) => void;
     onCredentialRemove: (credentialId: string) => void;
     /** Adds a token to this provider; absent where the reader may not. */
     onAdd?: () => void;
@@ -118,8 +126,10 @@ function endpointHost(url: string): string {
 }
 
 function credentialMeta(credential: HappyAgentAiProviderCredentialRow): string {
-    const url = credential.endpoint?.url;
-    const meta = url ? `${credential.meta} · via ${endpointHost(url)}` : credential.meta;
+    const url = credential.connection?.url;
+    const meta = url
+        ? `${credential.meta} · via ${endpointHost(url)}${credential.connection?.auth === "none" ? ", no token" : ""}`
+        : credential.meta;
     return credential.state === "cooling" && credential.coolingUntil
         ? `${meta} · Tried again at ${credential.coolingUntil}`
         : meta;
@@ -159,9 +169,7 @@ export function HappyAgentAiProviderSheet(props: HappyAgentAiProviderSheetProps)
               ? props.name
               : action?.kind === "label"
                 ? (opened?.label ?? "")
-                : action?.kind === "endpoint"
-                  ? (opened?.endpoint?.url ?? "")
-                  : "";
+                : "";
     const valueUpdate = (next: string): void => setHeld({ key, value: next });
     const addBusy = props.add?.panel.phase === "busy";
     const close = (): void => {
@@ -334,9 +342,6 @@ function CredentialList(
                 const locked = busy || entry.saving === true;
                 const labelSave = valueSave(props.onCredentialLabelSave);
                 const secretSave = valueSave(props.onCredentialSecretSave);
-                const endpointSave = (): void => {
-                    if (!busy) props.onCredentialEndpointSave(props.value);
-                };
                 const secretWord = entry.replaceWith === "token" ? "token" : "key";
                 return (
                     <Box
@@ -401,15 +406,15 @@ function CredentialList(
                                         {`Replace ${secretWord}`}
                                     </Button>
                                 ) : null}
-                                {entry.endpoint ? (
+                                {entry.connection ? (
                                     <Button
                                         disabled={locked}
                                         icon="link"
-                                        onClick={() => props.onCredentialEndpointOpen(entry.id)}
+                                        onClick={() => props.onCredentialConnectionOpen(entry.id)}
                                         size="small"
                                         variant="ghost"
                                     >
-                                        Endpoint
+                                        Connection
                                     </Button>
                                 ) : null}
                                 {entry.reauth ? (
@@ -479,27 +484,15 @@ function CredentialList(
                                     value={props.value}
                                 />
                             </ActionPanel>
-                        ) : current === "endpoint" && entry.endpoint ? (
-                            <ActionPanel
+                        ) : current === "connection" && entry.connection ? (
+                            <HappyAgentProviderConnectionEditor
                                 busy={busy}
-                                confirm="Save"
+                                connection={entry.connection}
                                 error={props.openError}
                                 onCancel={props.onActionCancel}
-                                onConfirm={endpointSave}
-                            >
-                                <TextField
-                                    autoComplete="off"
-                                    autoFocus
-                                    disabled={busy}
-                                    fullWidth
-                                    hint="A proxy or gateway that speaks the vendor’s API. Leave empty for the vendor itself."
-                                    label="Endpoint"
-                                    onSubmit={endpointSave}
-                                    onValueChange={props.valueUpdate}
-                                    placeholder={entry.endpoint.official}
-                                    value={props.value}
-                                />
-                            </ActionPanel>
+                                onSave={props.onCredentialConnectionSave}
+                                vendor={entry.connection.vendor}
+                            />
                         ) : current === "remove" ? (
                             <ActionPanel
                                 busy={busy}

@@ -97,8 +97,8 @@ function apiCreate(overrides: Partial<HappyAgentCloudProvidersApi> = {}) {
         credentialLabelUpdate: async (connectionId, credentialId, label) => {
             calls.push(`label ${connectionId} ${credentialId} ${label}`);
         },
-        credentialEndpointUpdate: async (connectionId, credentialId, baseUrl) => {
-            calls.push(`endpoint ${connectionId} ${credentialId} ${String(baseUrl)}`);
+        credentialConnectionUpdate: async (connectionId, credentialId, change) => {
+            calls.push(`connection ${connectionId} ${credentialId} ${JSON.stringify(change)}`);
         },
         bedrockRegionSave: async () => undefined,
         permissionsRead: async () => new Set(["providers.own", "providers.manage"]),
@@ -474,7 +474,7 @@ it("says nothing was renamed when the server refuses", async () => {
     store[Symbol.dispose]();
 });
 
-it("points a key at its own endpoint and back, and replaces it on the same one", async () => {
+it("points a key at its own endpoint with its auth and headers, and back", async () => {
     let connections = [TEAM];
     const { api, calls } = apiCreate({
         providersRead: vi.fn(async () => ({
@@ -490,53 +490,113 @@ it("points a key at its own endpoint and back, and replaces it on the same one",
     await vi.waitFor(() => expect(store.get().endpoints).toBe(true));
     store.detailOpen("p-acme");
     // A sign-in always runs on the vendor's own.
-    store.credentialEndpointOpen("c-oauth");
+    store.credentialConnectionOpen("c-oauth");
     expect(store.get().detail).toEqual(closed("p-acme"));
-    store.credentialEndpointOpen("c-key");
-    expect(store.get().detail?.action).toEqual({ kind: "endpoint", credentialId: "c-key" });
-    store.credentialEndpointSave(" https://llm-proxy.example.com/v1 ");
+    store.credentialConnectionOpen("c-key");
+    expect(store.get().detail?.action).toEqual({ kind: "connection", credentialId: "c-key" });
+    // A header without a value is not sent.
+    store.credentialConnectionSave({
+        baseUrl: "https://llm-proxy.example.com/v1",
+        auth: "bearer",
+        headers: [{ name: "X-Org", value: " " }],
+    });
+    expect(store.get().detail?.phase).toBe("idle");
+    store.credentialConnectionSave({
+        baseUrl: " https://llm-proxy.example.com/v1 ",
+        auth: "bearer",
+        headers: [
+            { name: " X-Org ", value: "acme" },
+            { name: "", value: "" },
+        ],
+    });
     await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
-    expect(calls).toEqual(["endpoint p-acme c-key https://llm-proxy.example.com/v1"]);
+    expect(calls).toEqual([
+        'connection p-acme c-key {"baseUrl":"https://llm-proxy.example.com/v1","auth":"bearer","headers":[{"name":"X-Org","value":"acme"}]}',
+    ]);
 
     connections = [
         {
             ...TEAM,
             credentials: [
-                { ...TEAM.credentials![0]!, baseUrl: "https://llm-proxy.example.com/v1" },
+                {
+                    ...TEAM.credentials![0]!,
+                    baseUrl: "https://llm-proxy.example.com/v1",
+                    auth: "bearer",
+                    headerNames: ["X-Org"],
+                },
                 TEAM.credentials![1]!,
             ],
         },
     ];
     store.credentialEnabledUpdate("p-acme", "c-oauth", true);
     await vi.waitFor(() =>
-        expect(store.get().connections[0]?.credentials?.[0]?.baseUrl).toBe(
-            "https://llm-proxy.example.com/v1",
-        ),
+        expect(store.get().connections[0]?.credentials?.[0]?.headerNames).toEqual(["X-Org"]),
     );
-    // The same endpoint again sends nothing; empty goes back to the vendor's own.
-    store.credentialEndpointOpen("c-key");
-    store.credentialEndpointSave("https://llm-proxy.example.com/v1");
+    // The same connection, headers untouched, sends nothing.
+    store.credentialConnectionOpen("c-key");
+    store.credentialConnectionSave({ baseUrl: "https://llm-proxy.example.com/v1", auth: "bearer" });
     await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
-    store.credentialEndpointOpen("c-key");
-    store.credentialEndpointSave("");
-    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
-    expect(calls.slice(1)).toEqual(["endpoint p-acme c-key null"]);
+    expect(calls).toHaveLength(1);
 
+    // A key on its own endpoint is replaced in place, so its headers stay.
     actionOpen(store, "p-acme", "secret", "c-key");
     store.credentialSecretSave("sk-proxy");
     await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
-    expect(calls.slice(2)).toEqual([
-        "add p-acme openai api_key OpenAI API key https://llm-proxy.example.com/v1",
-        "remove p-acme c-key",
+    expect(calls.slice(1)).toEqual(['connection p-acme c-key {"secret":"sk-proxy"}']);
+
+    // Empty goes back to the vendor's own API, which drops its auth and headers.
+    store.credentialConnectionOpen("c-key");
+    store.credentialConnectionSave({ baseUrl: "", auth: "bearer" });
+    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
+    expect(calls.slice(2)).toEqual(['connection p-acme c-key {"baseUrl":null}']);
+    store[Symbol.dispose]();
+});
+
+it("asks a token that took no key for one before it signs again", async () => {
+    const keyless: HappyAgentCloudConnection = {
+        ...TEAM,
+        credentials: [
+            {
+                ...TEAM.credentials![0]!,
+                baseUrl: "https://llm-proxy.example.com/v1",
+                auth: "none",
+            },
+        ],
+    };
+    const { api, calls } = apiCreate({
+        providersRead: vi.fn(async () => ({
+            connections: [keyless],
+            capabilities: {
+                claudeSetupToken: false,
+                claudeSignIn: false,
+                credentialEndpoints: true,
+            },
+        })),
+    });
+    const { store } = await storeRead(api);
+    await vi.waitFor(() => expect(store.get().endpoints).toBe(true));
+    store.detailOpen("p-acme");
+    store.credentialConnectionOpen("c-key");
+    store.credentialConnectionSave({ baseUrl: "https://llm-proxy.example.com/v1", auth: "bearer" });
+    expect(store.get().detail?.phase).toBe("idle");
+    expect(calls).toEqual([]);
+    store.credentialConnectionSave({
+        baseUrl: "https://llm-proxy.example.com/v1",
+        auth: "bearer",
+        secret: "sk-now",
+    });
+    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
+    expect(calls).toEqual([
+        'connection p-acme c-key {"baseUrl":"https://llm-proxy.example.com/v1","auth":"bearer","secret":"sk-now"}',
     ]);
     store[Symbol.dispose]();
 });
 
-it("opens no endpoint where the server takes none", async () => {
+it("opens no connection where the server takes none", async () => {
     const { api } = apiCreate();
     const { store } = await storeRead(api);
     store.detailOpen("p-acme");
-    store.credentialEndpointOpen("c-key");
+    store.credentialConnectionOpen("c-key");
     expect(store.get().detail).toEqual(closed("p-acme"));
     store[Symbol.dispose]();
 });
@@ -592,7 +652,7 @@ it("renames on the connection, relabels on the credential, and rekeys with its s
     ]);
 });
 
-it("reads and sends a key's endpoint, and the server's word that it takes one", async () => {
+it("reads and sends a key's connection, and the server's word that it takes one", async () => {
     const request = vi.fn(
         async (_method: string, path: string): Promise<unknown> =>
             path === "v0/cloud/providers"
@@ -601,7 +661,12 @@ it("reads and sends a key's endpoint, and the server's word that it takes one", 
                           {
                               ...TEAM,
                               credentials: [
-                                  { ...TEAM.credentials![0], baseUrl: "https://proxy.example.com" },
+                                  {
+                                      ...TEAM.credentials![0],
+                                      baseUrl: "https://proxy.example.com",
+                                      auth: "x-api-key",
+                                      headerNames: ["X-Org"],
+                                  },
                               ],
                           },
                       ],
@@ -611,18 +676,32 @@ it("reads and sends a key's endpoint, and the server's word that it takes one", 
     );
     const api = happyAgentCloudProvidersApiCreate(request);
     const { connections, capabilities } = await api.providersRead();
-    expect(connections[0]?.credentials?.[0]?.baseUrl).toBe("https://proxy.example.com");
+    expect(connections[0]?.credentials?.[0]).toMatchObject({
+        baseUrl: "https://proxy.example.com",
+        auth: "x-api-key",
+        headerNames: ["X-Org"],
+    });
     expect(capabilities?.credentialEndpoints).toBe(true);
-    await api.credentialEndpointUpdate("p acme", "c-key", null);
+    await api.credentialConnectionUpdate("p acme", "c-key", {
+        baseUrl: null,
+        auth: "default",
+        headers: [],
+    });
     await api.credentialAdd("p acme", {
         vendor: "anthropic",
         kind: "api_key",
         secret: "",
         baseUrl: "https://proxy.example.com",
+        auth: "none",
+        headers: [{ name: "X-Org", value: "acme" }],
         label: "Proxy",
     });
     expect(request.mock.calls.slice(1)).toEqual([
-        ["PATCH", "v0/cloud/providers/p%20acme/credentials/c-key", { baseUrl: null }],
+        [
+            "PATCH",
+            "v0/cloud/providers/p%20acme/credentials/c-key",
+            { baseUrl: null, auth: "default", headers: {} },
+        ],
         [
             "POST",
             "v0/cloud/providers/p%20acme/credentials",
@@ -631,6 +710,8 @@ it("reads and sends a key's endpoint, and the server's word that it takes one", 
                 kind: "api_key",
                 secret: "",
                 baseUrl: "https://proxy.example.com",
+                auth: "none",
+                headers: { "X-Org": "acme" },
                 label: "Proxy",
             },
         ],
