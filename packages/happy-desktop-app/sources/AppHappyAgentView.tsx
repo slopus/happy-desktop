@@ -434,6 +434,7 @@ import {
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
 import { HappyAgentPipelinesSurface } from "./views/HappyAgentPipelinesSurface";
+import { HappyAgentHandbookSurface } from "./views/HappyAgentHandbookSurface";
 import { useFeatureAvailable } from "./featureAvailable";
 import { HappyAgentUserProfileSurface } from "./views/HappyAgentUserProfileSurface";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
@@ -807,6 +808,12 @@ export interface AppHappyAgentSession {
         | undefined;
     /** The pipelines a Happy Cloud server runs; absent or undefined anywhere it runs none. */
     readonly pipelines?: () => import("happy-desktop-state").PipelinesStore | undefined;
+    /**
+     * The team's handbook on a Happy Cloud server whose health says
+     * `capabilities.handbook`; absent or undefined elsewhere, which keeps the
+     * global instructions in Settings instead.
+     */
+    readonly handbook?: () => import("happy-desktop-state").HappyAgentHandbookStore | undefined;
     /** One pipeline's page; undefined wherever `pipelines` is. */
     readonly pipeline?: (
         pipelineId: string,
@@ -1163,6 +1170,12 @@ export interface AppHappyAgentViewProps {
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
     /** Addresses one plugin of this window's Happy Agent, in Settings › Plugins. */
     onPluginOpen?(pluginId: string): void;
+    /** Whether the URL addresses the addressed Happy Cloud server's handbook. */
+    handbookOpen?: boolean;
+    /** The handbook item the URL opens, within that handbook. */
+    handbookItemId?: string;
+    /** Addresses one server's handbook, or one item in it. */
+    onHandbookOpen?(happyAgentId: string, itemId?: string): void;
     /** Whether the URL addresses the addressed Happy Cloud server's pipelines. */
     pipelinesOpen?: boolean;
     /** The pipeline the URL opens, within those pipelines. */
@@ -3378,6 +3391,7 @@ function happyAgentTopSection(
             ...(pipelinesAvailable && happyAgent?.session?.pipelines?.()
                 ? [PIPELINES_SIDEBAR_ITEM]
                 : []),
+            ...(happyAgent?.session?.handbook?.() ? [HANDBOOK_SIDEBAR_ITEM] : []),
             // A document or a todo list is found in its section, not as a row.
             ...(catalog.availability === "available"
                 ? catalog.joined
@@ -3780,6 +3794,13 @@ const ARTIFACTS_ITEM = "artifacts";
 const PIPELINES_ITEM = "pipelines";
 
 /**
+ * The row that opens a Happy Cloud server's team handbook, under Pipelines.
+ * The handbook is team content rather than a setting, so it is a page of its
+ * own; the row is there only where the server's health says it has one.
+ */
+const HANDBOOK_ITEM = "handbook";
+
+/**
  * The rows that open the addressed Happy Agent's Documents and TODOs, under
  * Artifacts. Each lists every Surface of its type on the machine and opens the
  * ones picked as tabs, so no document or todo list is a row of its own. Like
@@ -3901,6 +3922,15 @@ const PIPELINES_SIDEBAR_ITEM: SidebarItem = {
     id: PIPELINES_ITEM,
     kind: "project",
     label: "Pipelines",
+    reorderable: false,
+};
+
+const HANDBOOK_SIDEBAR_ITEM: SidebarItem = {
+    icon: "book",
+    tint: "orange",
+    id: HANDBOOK_ITEM,
+    kind: "project",
+    label: "Handbook",
     reorderable: false,
 };
 
@@ -4760,23 +4790,28 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       ? artifactsItemId
                       : props.pipelinesOpen && pipelinesAvailable
                         ? PIPELINES_ITEM
-                        : props.feedOpen
-                          ? FEED_ITEM
-                          : surfaceSectionShown !== undefined
-                            ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
-                            : props.surfaceId !== undefined
-                              ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                              : props.groupId
+                        : props.handbookOpen
+                          ? HANDBOOK_ITEM
+                          : props.feedOpen
+                            ? FEED_ITEM
+                            : surfaceSectionShown !== undefined
+                              ? SURFACE_SECTION_ITEMS[surfaceSectionShown]
+                              : props.surfaceId !== undefined
                                 ? happyAgentItemId(
                                       props.happyAgentId,
-                                      activeRowId(
-                                          active?.bots ?? [],
-                                          active?.tasks ?? [],
-                                          props.groupId,
-                                          props.chatId,
-                                      ),
+                                      surfaceRowId(props.surfaceId),
                                   )
-                                : ""
+                                : props.groupId
+                                  ? happyAgentItemId(
+                                        props.happyAgentId,
+                                        activeRowId(
+                                            active?.bots ?? [],
+                                            active?.tasks ?? [],
+                                            props.groupId,
+                                            props.chatId,
+                                        ),
+                                    )
+                                  : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -5074,6 +5109,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 if (id === PIPELINES_ITEM) {
                     props.onPipelinesOpen?.(active?.id ?? props.happyAgentId);
+                    return;
+                }
+                if (id === HANDBOOK_ITEM) {
+                    props.onHandbookOpen?.(active?.id ?? props.happyAgentId);
                     return;
                 }
                 if (id === DOCUMENTS_ITEM || id === TODOS_ITEM) {
@@ -5548,6 +5587,35 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     pipelines={pipelines}
                     {...(session.team ? { team: session.team() } : {})}
                     workspace={session.workspace}
+                />
+            );
+        }
+
+        // The handbook belongs to the addressed Happy Cloud server's team. A
+        // server without one says so, in case its address was reached some
+        // other way than its sidebar row.
+        if (props.handbookOpen && active?.session) {
+            const session = active.session;
+            const handbook = session.handbook?.();
+            if (!handbook)
+                return (
+                    <EmptyState
+                        description="This server keeps its agents' instructions in Settings › Instructions."
+                        icon="book"
+                        size="panel"
+                        title="No handbook here"
+                    />
+                );
+            return (
+                <HappyAgentHandbookSurface
+                    clock={session.clock}
+                    handbook={handbook}
+                    {...(props.handbookItemId === undefined
+                        ? {}
+                        : { itemId: props.handbookItemId })}
+                    onItemOpen={(itemId) => props.onHandbookOpen?.(active.id, itemId)}
+                    {...(session.team ? { team: session.team() } : {})}
+                    user={documentUserOf(surfaceCatalog)}
                 />
             );
         }

@@ -1460,7 +1460,13 @@ export {
     HappyAgentSystemMonitorSurfacePage,
     type HappyAgentSystemMonitorSurfacePageProps,
 } from "./pages/surfaces/HappyAgentSystemMonitorSurfacePage";
-export { localAgoTime, localAgoTimeChangedAt, localListTime } from "./localTime";
+export {
+    localAgoTime,
+    localAgoTimeChangedAt,
+    localClockTime,
+    localDayTime,
+    localListTime,
+} from "./localTime";
 
 export { CloudWebSignInScreen, type CloudWebSignInScreenProps } from "./CloudWebSignInScreen";
 export {

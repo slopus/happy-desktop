@@ -57,6 +57,8 @@ export type HappyAgentRoute =
     | { readonly kind: "plugin"; readonly happyAgentId: string; readonly pluginId: string }
     /** The pipelines a Happy Cloud server runs. */
     | { readonly kind: "pipelines"; readonly happyAgentId: string }
+    /** A Happy Cloud server's team handbook, with one item open when `itemId` names it. */
+    | { readonly kind: "handbook"; readonly happyAgentId: string; readonly itemId?: string }
     /** One pipeline on one server: its graph and history. */
     | { readonly kind: "pipeline"; readonly happyAgentId: string; readonly pipelineId: string }
     /** One run of a pipeline on one server, live. A run is addressed alone, as a child run's parent links to it. */
@@ -135,6 +137,10 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/plugins/${part(route.happyAgentId)}/${part(route.pluginId)}`;
         case "pipelines":
             return `/pipelines/${part(route.happyAgentId)}`;
+        case "handbook":
+            return route.itemId === undefined
+                ? `/handbook/${part(route.happyAgentId)}`
+                : `/handbook/${part(route.happyAgentId)}/${part(route.itemId)}`;
         case "pipeline":
             return `/pipelines/${part(route.happyAgentId)}/${part(route.pipelineId)}`;
         case "pipelineRun":
@@ -261,6 +267,11 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             return second === undefined
                 ? { kind: "pipelines", happyAgentId: first }
                 : { kind: "pipeline", happyAgentId: first, pipelineId: second };
+        case "handbook":
+            if (first === undefined || segments.length > 3) return undefined;
+            return second === undefined
+                ? { kind: "handbook", happyAgentId: first }
+                : { kind: "handbook", happyAgentId: first, itemId: second };
         case "pipeline-runs":
             return first !== undefined && second !== undefined && segments.length === 3
                 ? { kind: "pipelineRun", happyAgentId: first, runId: second }
@@ -367,6 +378,14 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         case "pipelines": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             return happyAgentId ? { kind: "pipelines", happyAgentId } : undefined;
+        }
+        case "handbook": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            const itemId = fieldOf(record, "itemId");
+            if (!happyAgentId) return undefined;
+            return itemId
+                ? { kind: "handbook", happyAgentId, itemId }
+                : { kind: "handbook", happyAgentId };
         }
         case "pipelineRun": {
             const happyAgentId = fieldOf(record, "happyAgentId");

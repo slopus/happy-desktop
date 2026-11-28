@@ -546,6 +546,8 @@ export interface AppHappyAgentSettingsViewProps {
     onUserProfileOpen?(happyAgentId: string, userId: string): void;
     /** Opens one plugin of this window's Happy Agent, where it is set up and connected. */
     onPluginOpen?(pluginId: string): void;
+    /** Opens a Happy Cloud server's team handbook, which holds its agents' instructions there. */
+    onHandbookOpen?(happyAgentId: string): void;
     /** The plugin open inside Plugins, when the address names one. */
     pluginId?: string;
     platform?: "desktop" | "web";
@@ -644,7 +646,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
-    const instructionsStore = host?.session?.instructions;
+    // A server with a handbook keeps its team instructions there, so the
+    // AGENTS.md tab points at it and nothing reads the old document.
+    const handbookPresent = host?.session?.handbook?.() !== undefined;
+    const instructionsStore = handbookPresent ? undefined : host?.session?.instructions;
     const instructions = useSyncExternalStore(
         instructionsStore?.subscribe ?? noSubscribe,
         instructionsStore?.get ?? instructionsUnavailable,
@@ -1454,39 +1459,52 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             ) : section === "instructions" ? (
                 <HappyAgentInstructionsSettings
                     documents={[
-                        {
-                            bytes: instructions.bytes,
-                            description: happyCloud
-                                ? `Given to every agent on this team, on top of the project's own AGENTS.md. ${OWNERS_ONLY}`
-                                : "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
-                            dirty: instructions.dirty,
-                            error: documentError(instructionsStore, instructions),
-                            id: "agents",
-                            label: "AGENTS.md",
-                            loading: documentLoading(instructionsStore, instructions),
-                            maximumBytes: HAPPY_AGENT_INSTRUCTIONS_MAX_BYTES,
-                            onRevert: () => instructionsStore?.revert(),
-                            onSave: () => {
-                                if (happyAgentOnline()) instructionsStore?.save();
-                            },
-                            onValueChange: (value) => instructionsStore?.draftUpdate(value),
-                            path: happyCloud ? "Team AGENTS.md" : INSTRUCTIONS_PATH,
-                            placeholder: instructionsReadOnly
-                                ? "No team instructions yet."
-                                : happyCloud
-                                  ? "Anything every agent on this team should know…"
-                                  : "Anything every agent on this machine should know…",
-                            readOnly: instructionsReadOnly,
-                            saveError: instructions.saveError?.message,
-                            saving: instructions.saving,
-                            value: instructions.draft,
-                            ...(unavailable === undefined
-                                ? {}
-                                : {
-                                      saveDisabled: true,
-                                      saveDisabledReason: unavailable,
-                                  }),
-                        },
+                        handbookPresent && host
+                            ? {
+                                  kind: "link",
+                                  id: "agents",
+                                  label: "AGENTS.md",
+                                  description:
+                                      "Given to every agent on this team, on top of the project's own AGENTS.md.",
+                                  title: "Team instructions live in the Handbook",
+                                  message:
+                                      "Edit them together there, and apply a revision when it is ready for agents.",
+                                  action: "Open Handbook",
+                                  onOpen: () => props.onHandbookOpen?.(host.id),
+                              }
+                            : {
+                                  bytes: instructions.bytes,
+                                  description: happyCloud
+                                      ? `Given to every agent on this team, on top of the project's own AGENTS.md. ${OWNERS_ONLY}`
+                                      : "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
+                                  dirty: instructions.dirty,
+                                  error: documentError(instructionsStore, instructions),
+                                  id: "agents",
+                                  label: "AGENTS.md",
+                                  loading: documentLoading(instructionsStore, instructions),
+                                  maximumBytes: HAPPY_AGENT_INSTRUCTIONS_MAX_BYTES,
+                                  onRevert: () => instructionsStore?.revert(),
+                                  onSave: () => {
+                                      if (happyAgentOnline()) instructionsStore?.save();
+                                  },
+                                  onValueChange: (value) => instructionsStore?.draftUpdate(value),
+                                  path: happyCloud ? "Team AGENTS.md" : INSTRUCTIONS_PATH,
+                                  placeholder: instructionsReadOnly
+                                      ? "No team instructions yet."
+                                      : happyCloud
+                                        ? "Anything every agent on this team should know…"
+                                        : "Anything every agent on this machine should know…",
+                                  readOnly: instructionsReadOnly,
+                                  saveError: instructions.saveError?.message,
+                                  saving: instructions.saving,
+                                  value: instructions.draft,
+                                  ...(unavailable === undefined
+                                      ? {}
+                                      : {
+                                            saveDisabled: true,
+                                            saveDisabledReason: unavailable,
+                                        }),
+                              },
                         {
                             bytes: securityPolicy.bytes,
                             description: happyCloud

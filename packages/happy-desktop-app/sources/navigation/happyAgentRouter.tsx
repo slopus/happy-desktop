@@ -583,6 +583,18 @@ const pipelineRoute = createRoute({
     path: "/pipelines/$happyAgentId/$pipelineId",
 });
 
+/** A Happy Cloud server's team handbook. */
+const handbookRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/handbook/$happyAgentId",
+});
+
+/** One handbook item open beside the list. */
+const handbookItemRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/handbook/$happyAgentId/$itemId",
+});
+
 /** One run of a pipeline, live, on the server that runs it. */
 const pipelineRunRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -762,6 +774,8 @@ const routeTree = rootRoute.addChildren([
         pipelinesRoute,
         pipelineRoute,
         pipelineRunRoute,
+        handbookRoute,
+        handbookItemRoute,
         feedRoute,
         userProfileRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
@@ -822,6 +836,7 @@ function HappyAgentWorkspaceLayout() {
         blueprint: matched.has(blueprintRoute.id),
         botCreate: matched.has(botCreateRoute.id),
         feed: matched.has(feedRoute.id),
+        handbook: matched.has(handbookRoute.id) || matched.has(handbookItemRoute.id),
         inbox: matched.has(inboxRoute.id),
         pipelines:
             matched.has(pipelinesRoute.id) ||
@@ -882,6 +897,18 @@ function HappyAgentWorkspaceLayout() {
             feedOpen={shows.feed}
             onPluginOpen={(pluginId) =>
                 void navigate({ params: { pluginId }, to: "/settings/plugins/$pluginId" })
+            }
+            handbookOpen={shows.handbook}
+            {...(shows.handbook && params.itemId !== undefined
+                ? { handbookItemId: params.itemId }
+                : {})}
+            onHandbookOpen={(happyAgentId, itemId) =>
+                void (itemId === undefined
+                    ? navigate({ params: { happyAgentId }, to: "/handbook/$happyAgentId" })
+                    : navigate({
+                          params: { happyAgentId, itemId },
+                          to: "/handbook/$happyAgentId/$itemId",
+                      }))
             }
             pipelinesOpen={shows.pipelines}
             {...(shows.pipelines && params.pipelineId !== undefined
@@ -1140,6 +1167,9 @@ function HappyAgentSettingsRoute() {
                     params: { happyAgentId, userId },
                     to: "/people/$happyAgentId/$userId",
                 })
+            }
+            onHandbookOpen={(happyAgentId) =>
+                void navigate({ params: { happyAgentId }, to: "/handbook/$happyAgentId" })
             }
             happyAgents={context.happyAgents}
             platform={context.platform}
