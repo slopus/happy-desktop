@@ -78,6 +78,7 @@ export {
 export { terminalDriverCreate } from "./terminalDriver";
 export { ghosttyEmulatorCreate, type TerminalEmulator } from "./ghosttyTerminal";
 export { happyAgentWelcomeSlides } from "./onboarding/happyAgentWelcomeSlides";
+export { appCloudServerCreateSteps } from "./components/AppCloudOnboarding";
 export { AppGptLiveCallBar, AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 export { gptLiveDropSoundConnect } from "./gptLive/gptLiveDropSound";
 export { gptLiveMediaOpen } from "./gptLive/gptLiveMedia";

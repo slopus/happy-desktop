@@ -275,6 +275,7 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             clock={setup.clock}
             online={entry?.status === "connected"}
             {...(entry ? { serverLabel: entry.label } : {})}
+            {...(entry?.created ? { serverCreated: true } : {})}
             // The new member has no ID of their own yet, so the server's picks
             // their placeholder, and it holds still while they type.
             placeholderSeed={entry?.remoteId ?? entry?.id ?? "happy-agent"}

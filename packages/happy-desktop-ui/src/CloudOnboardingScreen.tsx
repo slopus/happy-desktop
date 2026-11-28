@@ -578,6 +578,42 @@ function NoticeMark(props: {
 }
 
 /**
+ * The bar across the top of setup: one segment per step, the one the reader
+ * is on full in the strongest ink. Nothing for a single step.
+ */
+export function cloudOnboardingStepsBar(
+    steps: readonly CloudOnboardingStep[],
+    currentStep: string,
+): ReactNode {
+    if (steps.length <= 1) return undefined;
+    return (
+        <SegmentedProgress
+            label="Setup"
+            mode="steps"
+            segments={steps.map((step) =>
+                step.id === currentStep
+                    ? // The step you are on fills its whole segment, in
+                      // the strongest ink: the person sets the pace, so
+                      // there is no share of it to draw.
+                      {
+                          id: step.id,
+                          label: step.label,
+                          state: "running" as const,
+                          fraction: 1,
+                      }
+                    : {
+                          id: step.id,
+                          label: step.label,
+                          state: step.done ? ("done" as const) : ("pending" as const),
+                      },
+            )}
+            // The sky follows the appearance, and so does the ink on it.
+            tone="default"
+        />
+    );
+}
+
+/**
  * C-345 CloudOnboardingScreen — a Happy Cloud server's onboarding, one gate per
  * page, in the order the server lists them.
  *
@@ -609,33 +645,7 @@ export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
             // A gate's body varies in height and changes while it is open, so
             // the words hold one line and the body hangs under them.
             placement="top"
-            steps={
-                props.steps.length > 1 ? (
-                    <SegmentedProgress
-                        label="Setup"
-                        mode="steps"
-                        segments={props.steps.map((step) =>
-                            step.id === props.currentStep
-                                ? // The step you are on fills its whole segment, in
-                                  // the strongest ink: the person sets the pace, so
-                                  // there is no share of it to draw.
-                                  {
-                                      id: step.id,
-                                      label: step.label,
-                                      state: "running" as const,
-                                      fraction: 1,
-                                  }
-                                : {
-                                      id: step.id,
-                                      label: step.label,
-                                      state: step.done ? ("done" as const) : ("pending" as const),
-                                  },
-                        )}
-                        // The sky follows the appearance, and so does the ink on it.
-                        tone="default"
-                    />
-                ) : undefined
-            }
+            steps={cloudOnboardingStepsBar(props.steps, props.currentStep)}
             title={current.title}
             transitionKey={props.currentStep}
         >

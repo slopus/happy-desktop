@@ -36,6 +36,16 @@ const MEMBER: typeof OWNER = [
     { id: "compute", label: "Computer" },
 ];
 
+/**
+ * Step 0, creating the server, before the steps it is expected to ask; the app
+ * lists the same ones (`appCloudServerCreateSteps`).
+ */
+const SERVER_STEP = { id: "server", label: "Server" };
+const CREATE_STEPS: readonly CloudOnboardingStep[] = [SERVER_STEP, ...OWNER].map((step) => ({
+    ...step,
+    done: false,
+}));
+
 /** The bar for someone walking forward: every step before `current` is finished. */
 function bar(flow: typeof OWNER, current: string): readonly CloudOnboardingStep[] {
     const index = flow.findIndex((step) => step.id === current);
@@ -98,8 +108,11 @@ function Gate(props: {
     readonly mode: ThemeMode;
     readonly flow: typeof OWNER;
     readonly props: Omit<CloudOnboardingScreenProps, "appearance" | "steps">;
+    /** Created in this window a moment ago: the bar leads with that step, done. */
+    readonly created?: boolean;
 }) {
     const first = props.flow[0]?.id === props.props.currentStep;
+    const steps = bar(props.flow, props.props.currentStep);
     return (
         <ConnectionShell
             add={{ label: "Connect to Happy Cloud", onAdd: noop }}
@@ -112,7 +125,7 @@ function Gate(props: {
                 <SetupCover>
                     <CloudOnboardingScreen
                         appearance={props.mode}
-                        steps={bar(props.flow, props.props.currentStep)}
+                        steps={props.created ? [{ ...SERVER_STEP, done: true }, ...steps] : steps}
                         {...props.props}
                         {...(first ? {} : { back: { onSelect: noop } })}
                         exit={{ onSelect: noop }}
@@ -144,6 +157,7 @@ function Create(props: {
     return (
         <CloudConnectScreen
             appearance={props.mode}
+            createSteps={CREATE_STEPS}
             onAgentAdd={noop}
             onBack={noop}
             onCloudOpen={noop}
@@ -233,6 +247,14 @@ const shots: readonly Shot[] = [
         label: "Profile · nothing uploaded, the initials",
         light: true,
         render: (mode) => <Gate flow={OWNER} mode={mode} props={profile("Steve Korshakov")} />,
+    },
+    {
+        id: "o03c-profile-after-bootstrap",
+        label: "Profile · just after Bootstrap, the Server step done",
+        light: true,
+        render: (mode) => (
+            <Gate created flow={OWNER} mode={mode} props={profile("Steve Korshakov")} />
+        ),
     },
     {
         id: "o03a-profile-photo",

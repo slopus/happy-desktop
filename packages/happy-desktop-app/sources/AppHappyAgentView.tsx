@@ -693,6 +693,11 @@ export interface AppHappyAgentEntry {
      */
     readonly pictureFailure?: string;
     /**
+     * This window created the server in this run and the reader has not left
+     * its setup since: the setup's bar leads with the step that created it.
+     */
+    readonly created?: true;
+    /**
      * The server stopped accepting this window's sign-in, and where signing in
      * again has got to. Absent while the sign-in holds.
      */

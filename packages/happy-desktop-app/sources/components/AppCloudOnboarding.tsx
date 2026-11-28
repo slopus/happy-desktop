@@ -28,6 +28,7 @@ import {
     type CloudOnboardingProviderRow,
     type CloudOnboardingProviderWay,
     type CloudOnboardingScreenProps,
+    type CloudOnboardingStep,
     type ThemeMode,
 } from "happy-desktop-ui";
 import { AppCustomProviderDialog } from "../views/AppHappyAgentSettingsView";
@@ -46,6 +47,27 @@ const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = 
     payment: "Credit",
     unknown: "More",
 };
+
+/** Creating the server: step 0, before the server has steps of its own. */
+const SERVER_STEP = { id: "server", label: "Server" } as const;
+
+/**
+ * The steps a server about to be bootstrapped is drawn with on step 0, before
+ * it exists to say its own; the one place they are listed.
+ */
+const SERVER_STEPS_EXPECTED: readonly HappyAgentOnboardingGate["kind"][] = [
+    "profile",
+    "inference",
+    "plugins",
+    "computer",
+    "teammates",
+];
+
+/** Step 0's bar: creating the server, then the steps it is expected to ask. */
+export const appCloudServerCreateSteps: readonly CloudOnboardingStep[] = [
+    { ...SERVER_STEP, done: false },
+    ...SERVER_STEPS_EXPECTED.map((kind) => ({ id: kind, label: STEP_LABELS[kind], done: false })),
+];
 
 /**
  * The credential vendors each AI row counts as its accounts: a plan and an API
@@ -347,6 +369,11 @@ export function AppCloudOnboarding(props: {
     readonly providers?: () => HappyAgentProvidersStore;
     readonly appearance: ThemeMode;
     readonly serverLabel?: string;
+    /**
+     * The reader created this server in this window and has not left its
+     * setup since: the bar leads with that step, done.
+     */
+    readonly serverCreated?: boolean;
     readonly placeholderSeed: string;
     readonly onExternalOpen?: (url: string) => void;
 }) {
@@ -674,14 +701,17 @@ export function AppCloudOnboarding(props: {
             <CloudOnboardingScreen
                 appearance={props.appearance}
                 currentStep={gate.id}
-                steps={flow.sequence.map((id) => {
-                    const entry = flow.gates.find((entry) => entry.id === id);
-                    return {
-                        id,
-                        label: STEP_LABELS[entry?.kind ?? "unknown"],
-                        done: entry?.status === "done" || entry?.status === "skipped",
-                    };
-                })}
+                steps={[
+                    ...(props.serverCreated ? [{ ...SERVER_STEP, done: true }] : []),
+                    ...flow.sequence.map((id) => {
+                        const entry = flow.gates.find((entry) => entry.id === id);
+                        return {
+                            id,
+                            label: STEP_LABELS[entry?.kind ?? "unknown"],
+                            done: entry?.status === "done" || entry?.status === "skipped",
+                        };
+                    }),
+                ]}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
                 {...(flow.previous === undefined

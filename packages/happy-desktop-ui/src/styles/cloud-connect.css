@@ -87,15 +87,17 @@
 }
 
 /*
- * Top right, the same 12px from the top edge as from the right, so it sits
- * square in the corner, clear of the window's rounded corner. A plain ghost
- * button, round: the window and the class together outrank the shared ghost
- * shape, so the hover stays a circle rather than a rounded square.
+ * Top right, its mark exactly where setup's "Save and exit" holds its own
+ * (setup-page.css: a 36px button 12px from the top and right, its 16px mark
+ * inside 14px of padding), so the mark stays put when the sheet gives way to
+ * the server's setup. A plain ghost button, round: the window and the class
+ * together outrank the shared ghost shape, so the hover stays a circle rather
+ * than a rounded square.
  */
 .happy-cloud-connect__window > .happy-cloud-connect__close.happy-button {
     position: absolute;
     top: 12px;
-    right: 12px;
+    right: 16px;
     z-index: 3;
     border-radius: var(--happy-radius-pill);
     color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);

@@ -35,6 +35,7 @@ import {
     type AppHappyAgentProfilerStore,
     type HappyAgentRouter,
     viewersActivityCreate,
+    appCloudServerCreateSteps,
 } from "happy-desktop-app";
 import {
     HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
@@ -1425,6 +1426,7 @@ const pictureNone = () => undefined;
 function DesktopCloudConnect(props: {
     store: DesktopCloudConnectStore;
     appearance: AppearanceStore;
+    externalOpen?: (url: string) => void;
 }): ReactNode {
     const view = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const appearance = useSyncExternalStore(
@@ -1442,6 +1444,8 @@ function DesktopCloudConnect(props: {
     return (
         <CloudConnectScreen
             appearance={appearance.mode}
+            createSteps={appCloudServerCreateSteps}
+            {...(props.externalOpen ? { onExternalOpen: props.externalOpen } : {})}
             {...(pictureStore && picture
                 ? {
                       picture: {
@@ -1929,8 +1933,8 @@ if (mediaPreviewBridge) {
                       photoCodec: { open: imageCropOpen },
                       // A start page left for Happy Cloud is acknowledged only
                       // once a team is connected; until then Back returns to it.
-                      connect: async (connectionId, picture) => {
-                          const connected = await cloudConnectAction(connectionId, picture);
+                      connect: async (connectionId, created) => {
+                          const connected = await cloudConnectAction(connectionId, created);
                           if (connected.ok && !welcome.get().welcomeAcknowledged) {
                               desktopBootSkip();
                               welcome.welcomeAcknowledge();
@@ -2302,7 +2306,13 @@ if (mediaPreviewBridge) {
                     tree order and later ones win, so the app's title-bar band would
                     otherwise re-cover the sheet's close button and leave it dead. */}
                     {cloudConnect ? (
-                        <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
+                        <DesktopCloudConnect
+                            appearance={appearance}
+                            store={cloudConnect}
+                            {...(browserLocal
+                                ? {}
+                                : { externalOpen: desktopExternalLinkOpen(desktopBridge) })}
+                        />
                     ) : null}
                 </DesktopAppearance>
             </RenderErrorBoundary>,

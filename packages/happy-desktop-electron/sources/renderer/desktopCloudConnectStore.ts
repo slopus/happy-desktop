@@ -113,10 +113,13 @@ export function desktopCloudConnectStoreCreate(input: {
     >;
     /** Decodes and crops the picture the create step is given. */
     readonly photoCodec?: HappyAgentProfilePhotoCodec;
-    /** `picture`, from the create step, is given to the server once signed in to. */
+    /**
+     * `created` marks a server the create step just made, with its picture,
+     * which the server is given once its creator's profile is saved.
+     */
     readonly connect: (
         connectionId: string,
-        picture?: HappyAgentAvatarImage,
+        created?: { readonly picture?: HappyAgentAvatarImage },
     ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
     /**
      * Writes the request into This Mac's Chief of Staff draft and opens that
@@ -292,14 +295,14 @@ export function desktopCloudConnectStoreCreate(input: {
     /** Signs this app in to one of the account's servers, which selects it behind the screen. */
     const enter = async (
         server: HappyCloudServer,
-        image?: HappyAgentAvatarImage,
+        created?: { readonly picture?: HappyAgentAvatarImage },
     ): Promise<
         | { readonly ok: true }
         | { readonly ok: false; readonly code?: string; readonly message: string }
     > => {
         const added = await cloud.serverConnect(server.id);
         if (!added.ok) return added;
-        return input.connect(added.value, image);
+        return input.connect(added.value, created);
     };
 
     /**
@@ -309,7 +312,7 @@ export function desktopCloudConnectStoreCreate(input: {
     const connect = async (server: HappyCloudServer): Promise<void> => {
         const asked = generation;
         const image = await picture?.pictureTake().catch(() => undefined);
-        const answer = await enter(server, image).catch(() => ({
+        const answer = await enter(server, image ? { picture: image } : {}).catch(() => ({
             ok: false as const,
             message: "Happy Cloud isn't reachable right now.",
         }));

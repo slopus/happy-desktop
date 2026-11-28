@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
+import { cloudOnboardingStepsBar, type CloudOnboardingStep } from "./CloudOnboardingScreen";
+import { OnboardingHelp } from "./OnboardingHelp";
 import { PicturePicker, type PictureChoice } from "./PicturePicker";
 import { SetupDrift } from "./SetupDrift";
 import { SetupPage, type SetupPageProps } from "./SetupPage";
@@ -139,6 +141,14 @@ export interface CloudConnectScreenProps {
      * device until the server exists. Absent, the step asks only for a name.
      */
     readonly picture?: PictureChoice;
+    /**
+     * The bar the create step wears as step 0 of the server's setup: its own
+     * step first, then the steps a new server is expected to ask. The caller
+     * lists them; the create step is the one with the ID `server`.
+     */
+    readonly createSteps?: readonly CloudOnboardingStep[];
+    /** Opens a link from "Ask a question" in the browser. */
+    onExternalOpen?(url: string): void;
     /** The close button, Esc, and Cancel: back to the app. */
     onClose(): void;
     /** A Happy Agent of the reader's own, or their team's: drafted to the Chief of Staff. */
@@ -794,6 +804,8 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 view.error ??
                                 picture?.error ??
                                 availabilityHint(view.availability, view.name);
+                            // Step 0 of the server's setup, in its frame: its
+                            // bar, Back in the corner, and no way to skip it.
                             return (
                                 <SetupPage
                                     {...frame}
@@ -803,13 +815,24 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                         label: "Bootstrap",
                                         onSelect: props.onCreate,
                                     }}
+                                    back={back(view.busy)}
+                                    // Its bar is drawn as the server's setup draws it.
+                                    className="happy-cloud-connect happy-cloud-onboarding"
                                     copy={
                                         view.back
                                             ? "Name your team’s new server. You can change it later."
                                             : "Name your team’s first server, or open an invite link."
                                     }
+                                    help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
                                     placement="top"
-                                    secondary={back(view.busy)}
+                                    {...(props.createSteps
+                                        ? {
+                                              steps: cloudOnboardingStepsBar(
+                                                  props.createSteps,
+                                                  "server",
+                                              ),
+                                          }
+                                        : {})}
                                     title="Bootstrap a server"
                                 >
                                     <div className="happy-cloud-connect__column">
