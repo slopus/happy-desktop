@@ -13,6 +13,11 @@ const STEPS: Readonly<Record<string, { readonly label: string; readonly descript
     },
     inference: { label: "AI", description: "The team connects an AI account of its own." },
     plugins: { label: "Plugins", description: "The team connects the tools agents work in." },
+    computer: {
+        label: "Computer",
+        description:
+            "Each person adds a computer of their own, and only their agents work on it. Required also stops anyone who only has a Windows PC, which can’t run work yet.",
+    },
     teammates: { label: "Team", description: "Someone invites a teammate." },
     mobileApp: { label: "Phone", description: "Each person signs in to the mobile app." },
     paymentMethod: { label: "Payment method", description: "The team adds a card." },

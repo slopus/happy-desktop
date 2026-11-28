@@ -665,6 +665,16 @@ export {
     type CloudOnboardingToolsJob,
 } from "./CloudOnboardingTools";
 export {
+    CloudOnboardingComputerAddDialog,
+    CloudOnboardingComputerExplainerDialog,
+    type CloudOnboardingComputerCommand,
+    type CloudOnboardingComputerConnect,
+    type CloudOnboardingComputerOs,
+    type CloudOnboardingComputerReader,
+    type CloudOnboardingComputerRow,
+    type CloudOnboardingComputerRowState,
+} from "./CloudOnboardingComputer";
+export {
     CloudOnboardingScreen,
     type CloudOnboardingAmount,
     type CloudOnboardingInvite,

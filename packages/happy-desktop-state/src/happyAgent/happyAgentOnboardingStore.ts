@@ -7,6 +7,10 @@ import {
     type HappyMobileOnboardingStore,
 } from "../onboarding/happyMobileOnboardingStore.js";
 import {
+    happyAgentOnboardingComputerCreate,
+    type HappyAgentOnboardingComputerStore,
+} from "./happyAgentOnboardingComputer.js";
+import {
     happyAgentOnboardingFlowDerive,
     happyAgentOnboardingGatesRead,
     happyAgentOnboardingSummaryRead,
@@ -180,6 +184,8 @@ export interface HappyAgentOnboardingStore {
      * without a way to crop pictures or reach Happy Cloud's routes.
      */
     readonly adminBotPicture?: HappyAgentPicturePickStore;
+    /** The computer gate's dialogs, its setup command and "Connect this Mac". */
+    readonly computer: HappyAgentOnboardingComputerStore;
     get(): HappyAgentOnboardingSnapshot;
     subscribe(listener: () => void): () => void;
     onboardingBegin(): void;
@@ -248,6 +254,8 @@ export interface HappyAgentOnboardingStore {
 
 /** Gates the server completes on its own, from another device or service. */
 const GATE_POLL_KINDS: ReadonlySet<HappyAgentOnboardingGate["kind"]> = new Set([
+    // A computer going offline is announced by nothing.
+    "computer",
     "mobileApp",
     "paymentMethod",
     "payment",
@@ -372,6 +380,7 @@ export function happyAgentOnboardingStoreCreate(
         onOutput: options.onMobileSkip,
         ...(options.mobileConnector ? { mobileConnector: options.mobileConnector } : {}),
     });
+    const computer = happyAgentOnboardingComputerCreate({ request: options.cloudRequest });
     /** The gate on screen, held until the reader leaves it. */
     let pinned: string | undefined;
     /** Gates the reader left in this flow; the server may still show a blocking one again. */
@@ -451,6 +460,7 @@ export function happyAgentOnboardingStoreCreate(
             ...(pluginDialog && !connected ? { pluginDialog } : {}),
         };
         for (const listener of listeners) listener();
+        computer.gateUpdate(flow?.gates.find((gate) => gate.kind === "computer"));
     };
     const reconcile = async (signal: AbortSignal): Promise<void> => {
         const request = ++readRequest;
@@ -786,6 +796,7 @@ export function happyAgentOnboardingStoreCreate(
                     "member.updated",
                     "member.removed",
                     "onboarding.updated",
+                    "compute.nodes.updated",
                 ],
                 onOnboarding: (input) => {
                     ++readRequest;
@@ -925,6 +936,7 @@ export function happyAgentOnboardingStoreCreate(
     return {
         mobile,
         ...(adminBotPicture ? { adminBotPicture } : {}),
+        computer,
         get: () => snapshot,
         onboardingBegin() {
             setupActive = true;
@@ -1196,6 +1208,7 @@ export function happyAgentOnboardingStoreCreate(
             stop();
             mobile[Symbol.dispose]();
             adminBotPicture?.[Symbol.dispose]();
+            computer[Symbol.dispose]();
             listeners.clear();
         },
     };

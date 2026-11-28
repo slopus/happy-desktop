@@ -1,4 +1,9 @@
 import type { ReactNode } from "react";
+import {
+    CloudOnboardingComputerBody,
+    cloudOnboardingComputerCopy,
+    type CloudOnboardingComputerBodyProps,
+} from "./CloudOnboardingComputer";
 import { CopyButton } from "./CopyButton";
 import {
     CloudOnboardingToolsBody,
@@ -91,6 +96,13 @@ export type CloudOnboardingView =
           /** GitHub in the Code box, then every other tool by the job it does. */
           readonly kind: "plugins";
       } & CloudOnboardingToolsBodyProps)
+    | ({
+          readonly kind: "computer";
+          /** The step is required: the line under the title says the server asks for it. */
+          readonly required: boolean;
+          /** The team already has a shared computer the reader's agents may use. */
+          readonly shared: boolean;
+      } & Omit<CloudOnboardingComputerBodyProps, "serverName">)
     | {
           readonly kind: "teammates";
           readonly email: string;
@@ -381,6 +393,18 @@ function page(
                         : "Plugins let agents work in the tools your team already uses.",
                 body: <CloudOnboardingToolsBody {...view} />,
             };
+        case "computer": {
+            const { kind: _kind, required, shared, ...body } = view;
+            return {
+                ...cloudOnboardingComputerCopy({
+                    reader: view.reader,
+                    serverName: server,
+                    required,
+                    shared,
+                }),
+                body: <CloudOnboardingComputerBody {...body} serverName={server} />,
+            };
+        }
         case "teammates":
             return {
                 title: "Invite your team",
@@ -731,7 +755,9 @@ export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
             {...(props.exit ? { exit: { ...props.exit, label: "Save and exit" } } : {})}
             backdrop={{ appearance: props.appearance, kind: "sky" }}
             className={
-                props.view.kind === "inference" || props.view.kind === "plugins"
+                props.view.kind === "inference" ||
+                props.view.kind === "plugins" ||
+                props.view.kind === "computer"
                     ? "happy-cloud-onboarding happy-cloud-onboarding--wide"
                     : "happy-cloud-onboarding"
             }
