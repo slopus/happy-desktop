@@ -422,7 +422,11 @@
 }
 
 .happy-file-tree__section:hover .happy-file-tree__chevron,
-.happy-file-tree__section:hover /* A checkout's heading: the repository's picture in the lane a file icon
+.happy-file-tree__section:hover .happy-file-tree__section-count {
+    color: var(--text);
+}
+
+/* A checkout's heading: the repository's picture in the lane a file icon
    takes, its name in full weight, then the branch it is on, which is the part
    that gives way when the column is narrow. */
 .happy-file-tree__section-mark {
@@ -462,10 +466,6 @@
 
 .happy-file-tree__section-stats [data-tone="deleted"] {
     color: var(--git-removed-text);
-}
-
-.happy-file-tree__section-count {
-    color: var(--text);
 }
 
 .happy-file-tree__section:focus-visible {
