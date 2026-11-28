@@ -68,6 +68,9 @@ function apiCreate(overrides: Partial<HappyAgentCloudProvidersApi> = {}) {
         credentialLabelUpdate: async (connectionId, credentialId, label) => {
             calls.push(`label ${connectionId} ${credentialId} ${label}`);
         },
+        credentialEndpointUpdate: async (connectionId, credentialId, baseUrl) => {
+            calls.push(`endpoint ${connectionId} ${credentialId} ${String(baseUrl)}`);
+        },
         bedrockRegionSave: async () => undefined,
         permissionsRead: async () => new Set(["providers.own", "providers.manage"]),
         signInsRead: async () => new Set(["codex" as const]),
@@ -276,6 +279,51 @@ it("offers only the ways this server and role can add", async () => {
         { kind: "apiKey", vendor: "grok" },
         { kind: "apiKey", vendor: "bedrock" },
     ]);
+    store[Symbol.dispose]();
+});
+
+it("sends a key to its own endpoint, where it may then have none", async () => {
+    const { api } = apiCreate({
+        providersRead: vi.fn(async () => ({
+            connections: CONNECTIONS,
+            capabilities: {
+                claudeSetupToken: true,
+                claudeSignIn: false,
+                credentialEndpoints: true,
+            },
+        })),
+    });
+    const store = await storeRead(api);
+    await vi.waitFor(() => expect(store.get().endpoints).toBe(true));
+    store.addOpen({ flow: { kind: "apiKey", vendor: "anthropic" }, to: "team" });
+    // Without an endpoint a key is still needed.
+    store.apiKeySubmit("");
+    expect(api.credentialAdd).not.toHaveBeenCalled();
+    store.addEndpointUpdate(" https://llm-proxy.example.com/v1 ");
+    store.apiKeySubmit("");
+    await vi.waitFor(() => expect(store.get().add?.phase).toBe("done"));
+    expect(api.credentialAdd).toHaveBeenCalledWith("anthropic", {
+        vendor: "anthropic",
+        kind: "api_key",
+        secret: "",
+        baseUrl: "https://llm-proxy.example.com/v1",
+        label: "Anthropic API key",
+    });
+    // A setup token always runs on Claude itself.
+    store.addOpen({ flow: { kind: "claude", setupToken: true }, to: "team" });
+    store.addEndpointUpdate("https://llm-proxy.example.com");
+    expect(store.get().add?.endpoint).toBe("");
+    store[Symbol.dispose]();
+});
+
+it("offers no endpoint where the server takes none", async () => {
+    const { api } = apiCreate();
+    const store = await storeRead(api);
+    store.addOpen({ flow: { kind: "apiKey", vendor: "openai" }, to: "team" });
+    store.addEndpointUpdate("https://llm-proxy.example.com");
+    expect(store.get().add?.endpoint).toBe("");
+    store.apiKeySubmit("");
+    expect(api.credentialAdd).not.toHaveBeenCalled();
     store[Symbol.dispose]();
 });
 

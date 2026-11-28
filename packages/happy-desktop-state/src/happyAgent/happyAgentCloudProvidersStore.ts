@@ -14,6 +14,7 @@ import type {
 } from "./happyAgentCloudProviders.js";
 import {
     happyAgentCloudConnectionNamed,
+    happyAgentCloudCredentialEndpointVendor,
     happyAgentCloudCredentialReplaceable,
 } from "./happyAgentCloudProviders.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
@@ -55,6 +56,11 @@ export interface HappyAgentCloudProviderAdd {
     readonly to: HappyAgentCloudScope;
     /** The name typed for what is added; empty keeps the one it is given by default. */
     readonly label: string;
+    /**
+     * The endpoint typed for an API key, such as a proxy; empty sends it to
+     * the vendor's own API. With one, the key may be left empty.
+     */
+    readonly endpoint: string;
     readonly destination: HappyAgentCloudProviderAddDestination;
     /**
      * - `idle`: waiting on the person.
@@ -84,6 +90,7 @@ export type HappyAgentCloudProviderDetailAction =
     | { readonly kind: "name" }
     | { readonly kind: "label"; readonly credentialId: string }
     | { readonly kind: "secret"; readonly credentialId: string }
+    | { readonly kind: "endpoint"; readonly credentialId: string }
     | { readonly kind: "remove"; readonly credentialId: string };
 
 /** One provider's sheet, while it is open. */
@@ -110,6 +117,8 @@ export interface HappyAgentCloudProvidersSnapshot {
     readonly signIns: ReadonlySet<HappyAgentCloudSignInCli>;
     /** Whether this server takes a Claude setup token. */
     readonly setupToken: boolean;
+    /** Whether an API key may name its own endpoint, such as a proxy, and then go without a key. */
+    readonly endpoints: boolean;
     /** Credentials whose change the server hasn't answered. */
     readonly credentialsSaving: ReadonlySet<string>;
     readonly add?: HappyAgentCloudProviderAdd;
@@ -148,6 +157,8 @@ export interface HappyAgentCloudProvidersStore {
     addClose(): void;
     addScopeUpdate(to: HappyAgentCloudScope): void;
     addLabelUpdate(label: string): void;
+    /** Types the endpoint an API key being added sends to; empty for the vendor's own. */
+    addEndpointUpdate(endpoint: string): void;
     addDestinationSelect(connectionId: string): void;
     /** Keeps what is added in a new provider, named with `addDestinationNameUpdate`. */
     addDestinationNewSelect(): void;
@@ -189,6 +200,10 @@ export interface HappyAgentCloudProvidersStore {
     credentialLabelSave(label: string): void;
     /** Adds the new key, with the old one's settings, then removes the old one. */
     credentialSecretSave(secret: string): void;
+    /** Opens changing where an API key sends its requests. */
+    credentialEndpointOpen(credentialId: string): void;
+    /** Points the open token at `baseUrl`, or back at the vendor's own API when empty. */
+    credentialEndpointSave(baseUrl: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -318,6 +333,11 @@ export function happyAgentCloudProviderAddFlows(
     });
 }
 
+/** Whether a flow adds an API key that may name its own endpoint. */
+function endpointTaken(flow: HappyAgentCloudProviderAddFlow): boolean {
+    return flow.kind === "apiKey" && flow.vendor !== "bedrock";
+}
+
 function signInCliOf(flow: HappyAgentCloudProviderAddFlow): HappyAgentCloudSignInCli | undefined {
     if (flow.kind === "chatgpt") return "codex";
     if (flow.kind === "claude" && !flow.setupToken) return "claude";
@@ -335,6 +355,7 @@ export function happyAgentCloudProvidersStoreCreate(
         teamAllowed: false,
         signIns: NO_SIGN_INS,
         setupToken: false,
+        endpoints: false,
         credentialsSaving: NO_SAVING,
     }));
     /** The sign-ins `/v0/provider-clis` lists, before the server's capabilities narrow them. */
@@ -461,12 +482,14 @@ export function happyAgentCloudProvidersStoreCreate(
                 ? new Set([...listedSignIns].filter((cli) => cli !== "claude"))
                 : listedSignIns;
         const setupToken = capabilities?.claudeSetupToken === true;
+        const endpoints = capabilities?.credentialEndpoints === true;
         const current = store.getState();
         const same =
             current.setupToken === setupToken &&
+            current.endpoints === endpoints &&
             current.signIns.size === signIns.size &&
             [...signIns].every((cli) => current.signIns.has(cli));
-        if (!same) store.setState({ signIns, setupToken }, false);
+        if (!same) store.setState({ signIns, setupToken, endpoints }, false);
         const add = store.getState().add;
         if (add) {
             const flow = flowOffered(add.flow);
@@ -707,7 +730,11 @@ export function happyAgentCloudProvidersStoreCreate(
         before?: () => Promise<void>,
     ): void => {
         const add = store.getState().add;
-        if (disposed || !add || add.phase !== "idle" || secret.trim() === "") return;
+        if (disposed || !add || add.phase !== "idle") return;
+        // Only an API key sent to an endpoint of its own may go without one.
+        const endpoint =
+            store.getState().endpoints && endpointTaken(add.flow) ? add.endpoint.trim() : "";
+        if (secret.trim() === "" && endpoint === "") return;
         if (add.destination.kind === "new" && add.destination.name.trim() === "") return;
         const { error: _cleared, ...rest } = add;
         addSet({ ...rest, phase: "busy" });
@@ -719,6 +746,7 @@ export function happyAgentCloudProvidersStoreCreate(
                 return deps.api.credentialAdd(connectionId, {
                     ...input,
                     secret: secret.trim(),
+                    ...(endpoint === "" ? {} : { baseUrl: endpoint }),
                     label: add.label.trim() || label,
                 });
             })
@@ -866,7 +894,9 @@ export function happyAgentCloudProvidersStoreCreate(
     };
 
     /** The open action's token, while it is listed. */
-    const detailCredential = (kind: "label" | "secret"): HappyAgentCloudCredential | undefined => {
+    const detailCredential = (
+        kind: "label" | "secret" | "endpoint",
+    ): HappyAgentCloudCredential | undefined => {
         const action = store.getState().detail?.action;
         if (action?.kind !== kind) return undefined;
         return detailConnection()?.credentials?.find((entry) => entry.id === action.credentialId);
@@ -909,6 +939,7 @@ export function happyAgentCloudProvidersStoreCreate(
                 flow,
                 to,
                 label: "",
+                endpoint: "",
                 destination: destinationOf(
                     options?.connectionId === undefined
                         ? undefined
@@ -938,6 +969,7 @@ export function happyAgentCloudProvidersStoreCreate(
                 anchor: { connectionId: connection.id },
                 to: connection.scope,
                 label: "",
+                endpoint: "",
                 destination: { kind: "existing", connectionId: connection.id },
                 phase: "idle",
             });
@@ -965,6 +997,7 @@ export function happyAgentCloudProvidersStoreCreate(
                 to: connection.scope,
                 // Signing the same account in again keeps the token's name.
                 label: "",
+                endpoint: "",
                 destination: { kind: "existing", connectionId: connection.id },
                 phase: "idle",
             });
@@ -1013,6 +1046,12 @@ export function happyAgentCloudProvidersStoreCreate(
             const add = store.getState().add;
             if (disposed || !add || add.phase !== "idle") return;
             addSet({ ...add, label });
+        },
+        addEndpointUpdate(endpoint) {
+            const add = store.getState().add;
+            if (disposed || !add || add.phase !== "idle") return;
+            if (!store.getState().endpoints || !endpointTaken(add.flow)) return;
+            addSet({ ...add, endpoint });
         },
         addDestinationSelect(connectionId) {
             const add = store.getState().add;
@@ -1228,6 +1267,10 @@ export function happyAgentCloudProvidersStoreCreate(
                             vendor: credential.vendor,
                             kind: credential.kind,
                             secret: typed,
+                            // The same endpoint, whether the vendor's own or a proxy.
+                            ...(credential.baseUrl === undefined
+                                ? {}
+                                : { baseUrl: credential.baseUrl }),
                             label: credential.label,
                             enabled: credential.enabled,
                             ...(credential.usage === undefined ? {} : { usage: credential.usage }),
@@ -1246,6 +1289,36 @@ export function happyAgentCloudProvidersStoreCreate(
                             : deps.api.credentialRemove(connection.id, credential.id),
                 ],
                 (saved) => (saved > 0 ? "Partly replaced" : "Not replaced"),
+            );
+        },
+        credentialEndpointOpen(credentialId) {
+            const credential = detailConnection()?.credentials?.find(
+                (entry) => entry.id === credentialId,
+            );
+            if (
+                store.getState().endpoints &&
+                credential &&
+                happyAgentCloudCredentialEndpointVendor(credential) !== undefined
+            )
+                detailActionOpen({ kind: "endpoint", credentialId });
+        },
+        credentialEndpointSave(baseUrl) {
+            const connection = detailConnection();
+            const credential = detailCredential("endpoint");
+            if (!connection || !credential) return;
+            const typed = baseUrl.trim();
+            detailRun(
+                typed === (credential.baseUrl ?? "")
+                    ? []
+                    : [
+                          () =>
+                              deps.api.credentialEndpointUpdate(
+                                  connection.id,
+                                  credential.id,
+                                  typed === "" ? null : typed,
+                              ),
+                      ],
+                () => "Endpoint not changed",
             );
         },
         [Symbol.dispose]() {
@@ -1267,6 +1340,7 @@ const INERT_SNAPSHOT: HappyAgentCloudProvidersSnapshot = {
     teamAllowed: false,
     signIns: NO_SIGN_INS,
     setupToken: false,
+    endpoints: false,
     credentialsSaving: NO_SAVING,
 };
 
@@ -1282,6 +1356,7 @@ export const happyAgentCloudProvidersStoreNoop: HappyAgentCloudProvidersStore = 
     addClose: () => undefined,
     addScopeUpdate: () => undefined,
     addLabelUpdate: () => undefined,
+    addEndpointUpdate: () => undefined,
     addDestinationSelect: () => undefined,
     addDestinationNewSelect: () => undefined,
     addDestinationNameUpdate: () => undefined,
@@ -1302,5 +1377,7 @@ export const happyAgentCloudProvidersStoreNoop: HappyAgentCloudProvidersStore = 
     connectionNameSave: () => undefined,
     credentialLabelSave: () => undefined,
     credentialSecretSave: () => undefined,
+    credentialEndpointOpen: () => undefined,
+    credentialEndpointSave: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

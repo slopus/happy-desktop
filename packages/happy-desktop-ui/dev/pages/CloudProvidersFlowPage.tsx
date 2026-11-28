@@ -60,6 +60,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: true,
                 state: "ready",
                 replaceWith: "key",
+                endpoint: { official: "https://api.anthropic.com" },
             },
             {
                 id: "c2",
@@ -69,6 +70,10 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 state: "cooling",
                 coolingUntil: "3:40 PM",
                 replaceWith: "key",
+                endpoint: {
+                    url: "https://llm-gateway.acme.dev/anthropic",
+                    official: "https://api.anthropic.com",
+                },
             },
         ],
     },
@@ -111,6 +116,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: true,
                 state: "invalid",
                 replaceWith: "key",
+                endpoint: { official: "https://api.openai.com/v1" },
             },
         ],
     },
@@ -140,6 +146,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: false,
                 state: "disabled",
                 replaceWith: "key",
+                endpoint: { official: "https://api.x.ai/v1" },
             },
         ],
     },
@@ -190,6 +197,7 @@ type AiProvidersForm = Pick<
     "flow" | "phase" | "signIn" | "error"
 > & {
     readonly label?: string;
+    readonly endpoint?: string;
 };
 
 /** The add dialog a specimen opens on. */
@@ -218,6 +226,9 @@ function formProps(
         label: form.label ?? "",
         ...(labelPlaceholder === undefined ? {} : { labelPlaceholder }),
         teamRoutingEditable: true,
+        endpoints: true,
+        endpoint: form.endpoint ?? "",
+        onEndpointChange: (endpoint) => set({ ...form, endpoint }),
         onFlowSelect: (flow) => set({ flow, phase: "idle" }),
         onLabelChange: (label) => set({ ...form, label }),
         onApiKeySubmit: noop,
@@ -378,6 +389,9 @@ function AiProvidersSpecimen(props: {
                                   onActionCancel: () => actionSet(undefined),
                                   onCredentialLabelSave: () => actionSet(undefined),
                                   onCredentialSecretSave: () => actionSet(undefined),
+                                  onCredentialEndpointOpen: (credentialId) =>
+                                      actionSet({ kind: "endpoint", credentialId }),
+                                  onCredentialEndpointSave: () => actionSet(undefined),
                                   onCredentialRemove: () => actionSet(undefined),
                                   onAdd: () =>
                                       detailSet({
@@ -613,6 +627,36 @@ export function CloudProvidersFlowPage() {
                                 userCode: "ABCD-1234",
                                 acceptsCode: false,
                             },
+                        }}
+                    />
+                )}
+            </Screens>
+            <Screens
+                detail="Each key has its own endpoint: one on Anthropic itself, one through a gateway"
+                label="A key's endpoint"
+                step="17-endpoint"
+            >
+                {() => (
+                    <AiProvidersSpecimen
+                        detail={{
+                            id: "anthropic",
+                            action: { kind: "endpoint", credentialId: "c2" },
+                        }}
+                    />
+                )}
+            </Screens>
+            <Screens
+                detail="A key sent to a proxy of its own: with an endpoint, the key may be left empty"
+                label="Add: through a proxy"
+                step="18-add-proxy"
+            >
+                {() => (
+                    <AiProvidersSpecimen
+                        add={{
+                            flow: { kind: "apiKey", vendor: "anthropic" },
+                            phase: "idle",
+                            label: "Gateway",
+                            endpoint: "https://llm-gateway.acme.dev/anthropic",
                         }}
                     />
                 )}

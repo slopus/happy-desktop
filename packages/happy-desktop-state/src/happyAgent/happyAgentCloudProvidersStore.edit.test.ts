@@ -78,7 +78,9 @@ function apiCreate(overrides: Partial<HappyAgentCloudProvidersApi> = {}) {
         connectionsRead: async () => [TEAM, OPENAI, OPERATOR],
         providersRead: vi.fn(async () => ({ connections: [TEAM, OPENAI, OPERATOR] })),
         credentialAdd: async (connectionId, input) => {
-            calls.push(`add ${connectionId} ${input.vendor} ${input.kind} ${input.label}`);
+            calls.push(
+                `add ${connectionId} ${input.vendor} ${input.kind} ${input.label}${input.baseUrl ? ` ${input.baseUrl}` : ""}`,
+            );
             return { duplicate: false, credentialId: "c-new" };
         },
         credentialEnabledUpdate: async () => undefined,
@@ -94,6 +96,9 @@ function apiCreate(overrides: Partial<HappyAgentCloudProvidersApi> = {}) {
         },
         credentialLabelUpdate: async (connectionId, credentialId, label) => {
             calls.push(`label ${connectionId} ${credentialId} ${label}`);
+        },
+        credentialEndpointUpdate: async (connectionId, credentialId, baseUrl) => {
+            calls.push(`endpoint ${connectionId} ${credentialId} ${String(baseUrl)}`);
         },
         bedrockRegionSave: async () => undefined,
         permissionsRead: async () => new Set(["providers.own", "providers.manage"]),
@@ -469,6 +474,73 @@ it("says nothing was renamed when the server refuses", async () => {
     store[Symbol.dispose]();
 });
 
+it("points a key at its own endpoint and back, and replaces it on the same one", async () => {
+    let connections = [TEAM];
+    const { api, calls } = apiCreate({
+        providersRead: vi.fn(async () => ({
+            connections,
+            capabilities: {
+                claudeSetupToken: false,
+                claudeSignIn: false,
+                credentialEndpoints: true,
+            },
+        })),
+    });
+    const { store } = await storeRead(api);
+    await vi.waitFor(() => expect(store.get().endpoints).toBe(true));
+    store.detailOpen("p-acme");
+    // A sign-in always runs on the vendor's own.
+    store.credentialEndpointOpen("c-oauth");
+    expect(store.get().detail).toEqual(closed("p-acme"));
+    store.credentialEndpointOpen("c-key");
+    expect(store.get().detail?.action).toEqual({ kind: "endpoint", credentialId: "c-key" });
+    store.credentialEndpointSave(" https://llm-proxy.example.com/v1 ");
+    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
+    expect(calls).toEqual(["endpoint p-acme c-key https://llm-proxy.example.com/v1"]);
+
+    connections = [
+        {
+            ...TEAM,
+            credentials: [
+                { ...TEAM.credentials![0]!, baseUrl: "https://llm-proxy.example.com/v1" },
+                TEAM.credentials![1]!,
+            ],
+        },
+    ];
+    store.credentialEnabledUpdate("p-acme", "c-oauth", true);
+    await vi.waitFor(() =>
+        expect(store.get().connections[0]?.credentials?.[0]?.baseUrl).toBe(
+            "https://llm-proxy.example.com/v1",
+        ),
+    );
+    // The same endpoint again sends nothing; empty goes back to the vendor's own.
+    store.credentialEndpointOpen("c-key");
+    store.credentialEndpointSave("https://llm-proxy.example.com/v1");
+    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
+    store.credentialEndpointOpen("c-key");
+    store.credentialEndpointSave("");
+    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
+    expect(calls.slice(1)).toEqual(["endpoint p-acme c-key null"]);
+
+    actionOpen(store, "p-acme", "secret", "c-key");
+    store.credentialSecretSave("sk-proxy");
+    await vi.waitFor(() => expect(store.get().detail).toEqual(closed("p-acme")));
+    expect(calls.slice(2)).toEqual([
+        "add p-acme openai api_key OpenAI API key https://llm-proxy.example.com/v1",
+        "remove p-acme c-key",
+    ]);
+    store[Symbol.dispose]();
+});
+
+it("opens no endpoint where the server takes none", async () => {
+    const { api } = apiCreate();
+    const { store } = await storeRead(api);
+    store.detailOpen("p-acme");
+    store.credentialEndpointOpen("c-key");
+    expect(store.get().detail).toEqual(closed("p-acme"));
+    store[Symbol.dispose]();
+});
+
 it("renames on the connection, relabels on the credential, and rekeys with its settings", async () => {
     const usage = { models: ["gpt-5"] };
     const request = vi.fn(
@@ -515,6 +587,51 @@ it("renames on the connection, relabels on the credential, and rekeys with its s
                 label: "Prod key",
                 enabled: false,
                 usage,
+            },
+        ],
+    ]);
+});
+
+it("reads and sends a key's endpoint, and the server's word that it takes one", async () => {
+    const request = vi.fn(
+        async (_method: string, path: string): Promise<unknown> =>
+            path === "v0/cloud/providers"
+                ? {
+                      providers: [
+                          {
+                              ...TEAM,
+                              credentials: [
+                                  { ...TEAM.credentials![0], baseUrl: "https://proxy.example.com" },
+                              ],
+                          },
+                      ],
+                      capabilities: { credentialEndpoints: true },
+                  }
+                : {},
+    );
+    const api = happyAgentCloudProvidersApiCreate(request);
+    const { connections, capabilities } = await api.providersRead();
+    expect(connections[0]?.credentials?.[0]?.baseUrl).toBe("https://proxy.example.com");
+    expect(capabilities?.credentialEndpoints).toBe(true);
+    await api.credentialEndpointUpdate("p acme", "c-key", null);
+    await api.credentialAdd("p acme", {
+        vendor: "anthropic",
+        kind: "api_key",
+        secret: "",
+        baseUrl: "https://proxy.example.com",
+        label: "Proxy",
+    });
+    expect(request.mock.calls.slice(1)).toEqual([
+        ["PATCH", "v0/cloud/providers/p%20acme/credentials/c-key", { baseUrl: null }],
+        [
+            "POST",
+            "v0/cloud/providers/p%20acme/credentials",
+            {
+                vendor: "anthropic",
+                kind: "api_key",
+                secret: "",
+                baseUrl: "https://proxy.example.com",
+                label: "Proxy",
             },
         ],
     ]);
