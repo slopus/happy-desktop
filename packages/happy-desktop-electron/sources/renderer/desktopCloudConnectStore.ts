@@ -303,8 +303,8 @@ export function desktopCloudConnectStoreCreate(input: {
     };
 
     /**
-     * A server just created: once in, the screen goes and
-     * the app is there, on that server's home.
+     * A server just created: Bootstrap stays busy until its first step is
+     * drawn behind the screen, then the screen goes and that step is there.
      */
     const connect = async (server: HappyCloudServer): Promise<void> => {
         const asked = generation;
@@ -544,7 +544,8 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         serversContinue() {
             if (view?.kind !== "servers" || ![...joins.values()].includes("joined")) return;
-            // The last server joined is already selected behind the screen.
+            // The last server joined is already selected behind the screen,
+            // and its first screen drawn there: a row says joined only then.
             generation += 1;
             set(undefined);
         },

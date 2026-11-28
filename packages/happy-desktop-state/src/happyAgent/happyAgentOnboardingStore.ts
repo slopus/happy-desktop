@@ -163,6 +163,23 @@ export interface HappyAgentOnboardingSnapshot {
     readonly error?: string;
 }
 
+/**
+ * Whether this onboarding takes the window in place of the server's
+ * workspace: a step of the server's setup, a required one held open, or what
+ * a member still has to do. Nothing is decided before the first read.
+ */
+export function happyAgentOnboardingCovers(snapshot: HappyAgentOnboardingSnapshot): boolean {
+    if (snapshot.flow)
+        return (
+            snapshot.flow.current !== undefined && (!snapshot.flow.away || snapshot.flow.blocked)
+        );
+    return (
+        snapshot.state !== undefined &&
+        !snapshot.state.completed &&
+        snapshot.state.member?.completed !== true
+    );
+}
+
 export interface HappyAgentOnboardingStore {
     readonly mobile: HappyMobileOnboardingStore;
     /** The computer gate's dialogs, its setup command and "Connect this Mac". */

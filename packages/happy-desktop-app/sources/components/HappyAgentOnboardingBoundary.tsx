@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import {
     happyAgentMobileConnectorStoreUnfollowed,
+    happyAgentOnboardingCovers,
     type AppearanceStore,
     type HappyAgentCloudProvidersStore,
     type HappyAgentPaymentsStore,
@@ -76,16 +77,17 @@ export function HappyAgentOnboardingBoundary(props: {
         ...(online ? {} : { unavailable: "Happy can't reach this Happy Agent right now." }),
     });
     // A server with onboarding gates decides every step; the reader is in once
-    // none is left on screen.
+    // none is left on screen. With only optional steps left and the reader
+    // away, the workspace offers the way back. A Happy Cloud member is in once
+    // their profile is saved; the server's own setup, naming its Chief of
+    // Staff, happens in that bot's chat.
+    if (!happyAgentOnboardingCovers(snapshot)) return props.children;
     if (snapshot.flow) {
         // Setup takes the whole window, the connection rail included, and
         // gives it back when the reader finishes or leaves.
-        if (!snapshot.flow.current) return props.children;
         if (snapshot.flow.away) {
-            // With only optional steps left the reader is in; the workspace
-            // offers the way back. A required step still holds the server
-            // shut, so its surface says so and nothing else.
-            if (!snapshot.flow.blocked) return props.children;
+            // A required step still holds the server shut, so its surface
+            // says so and nothing else.
             const left = snapshot.flow.remaining;
             return (
                 <>
@@ -120,10 +122,7 @@ export function HappyAgentOnboardingBoundary(props: {
             </SetupCover>
         );
     }
-    // A Happy Cloud member is in once their profile is saved. The server's own
-    // setup, naming its Chief of Staff, happens in that bot's chat.
-    if (!snapshot.state || snapshot.state.completed || snapshot.state.member?.completed)
-        return props.children;
+    if (!snapshot.state) return props.children;
     if (!welcome.welcomeAcknowledged)
         return (
             <WelcomeScreen

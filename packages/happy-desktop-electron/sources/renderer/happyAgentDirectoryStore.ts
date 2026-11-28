@@ -4,6 +4,7 @@ import {
     happyAgentConnectionsStoreCreate,
     happyShareLinkParse,
     happyAgentNodeStoreCreate,
+    happyAgentOnboardingCovers,
     happyAgentUserError,
     happyCloudRequestCreate,
     serverAuthenticationOutcome,
@@ -202,8 +203,38 @@ export interface HappyAgentDirectoryStore {
 
 const PICTURE_FAILED = "Couldn't set the server picture. You can change it later in Settings.";
 
-/** How long a Happy Cloud server may take to be reported signed in after the shell holds its tokens. */
+/**
+ * How long a Happy Cloud server may take, after the shell holds its tokens, to
+ * be reported signed in and to show its first screen.
+ */
 const CLOUD_SIGNED_IN_WAIT_MS = 15_000;
+
+/** Resolves true once `check` holds, rechecked on each notification, or false at `deadline`. */
+function waitUntil(
+    deadline: number,
+    check: () => boolean,
+    subscribe: (listener: () => void) => () => void,
+): Promise<boolean> {
+    return new Promise((resolve) => {
+        if (check()) {
+            resolve(true);
+            return;
+        }
+        const timer = setTimeout(
+            () => {
+                unsubscribe();
+                resolve(false);
+            },
+            Math.max(0, deadline - Date.now()),
+        );
+        const unsubscribe = subscribe(() => {
+            if (!check()) return;
+            clearTimeout(timer);
+            unsubscribe();
+            resolve(true);
+        });
+    });
+}
 
 export interface HappyAgentDirectoryDeps {
     readonly cloudHostFor: (id: string) => HappyAgentCloudHost;
@@ -462,6 +493,8 @@ export function happyAgentDirectoryStoreCreate(
     deps: HappyAgentDirectoryDeps,
 ): HappyAgentDirectoryStore {
     const listeners = new Set<() => void>();
+    /** This store's own waits on what it publishes, apart from its subscribers. */
+    const publishWaiters = new Set<() => void>();
     const happyAgent: LocalHappyAgent = {
         entry: {
             id: LOCAL_HAPPY_AGENT_ID,
@@ -555,6 +588,22 @@ export function happyAgentDirectoryStoreCreate(
                 : {}),
         };
         for (const listener of listeners) listener();
+        for (const waiter of publishWaiters) waiter();
+    };
+
+    /**
+     * Whether the window, on this server, already shows what it will show
+     * next rather than its "Connecting": a step of its onboarding, the
+     * workspace, or the way to sign in again.
+     */
+    const cloudLanded = (id: string): boolean => {
+        const entry = remotes.get(id)?.entry;
+        if (!entry) return false;
+        return (
+            entry.signIn !== undefined ||
+            entry.session !== undefined ||
+            (entry.setup !== undefined && happyAgentOnboardingCovers(entry.setup.onboarding.get()))
+        );
     };
 
     /**
@@ -1388,27 +1437,16 @@ export function happyAgentDirectoryStoreCreate(
                                     };
                                 cloudWanted = new Set([...cloudWanted, connectionId]);
                                 sessionsReconcile();
+                                const deadline = Date.now() + CLOUD_SIGNED_IN_WAIT_MS;
                                 // The shell signed in with tokens the accounts
                                 // service issued; the window waits to hear it.
-                                const signedIn = await new Promise<boolean>((resolve) => {
-                                    const check = (): boolean =>
+                                const signedIn = await waitUntil(
+                                    deadline,
+                                    () =>
                                         sessions.get().sessions.get(connectionId)?.state ===
-                                        "signedIn";
-                                    if (check()) {
-                                        resolve(true);
-                                        return;
-                                    }
-                                    const timer = setTimeout(() => {
-                                        unsubscribe();
-                                        resolve(false);
-                                    }, CLOUD_SIGNED_IN_WAIT_MS);
-                                    const unsubscribe = sessions.subscribe(() => {
-                                        if (!check()) return;
-                                        clearTimeout(timer);
-                                        unsubscribe();
-                                        resolve(true);
-                                    });
-                                });
+                                        "signedIn",
+                                    sessions.subscribe,
+                                );
                                 if (!signedIn)
                                     return {
                                         ok: false,
@@ -1420,6 +1458,18 @@ export function happyAgentDirectoryStoreCreate(
                                     remote.picturePending = picture;
                                     pictureFollow(remote);
                                 }
+                                // The screen that asked stays up until what
+                                // follows it is drawn behind it, so the window
+                                // changes once. Past the same wait it goes
+                                // anyway, onto the server's own "Connecting".
+                                await waitUntil(
+                                    deadline,
+                                    () => cloudLanded(item.id),
+                                    (listener) => {
+                                        publishWaiters.add(listener);
+                                        return () => publishWaiters.delete(listener);
+                                    },
+                                );
                                 return { ok: true };
                             },
                             happyAgentCloudForget: cloudForget,

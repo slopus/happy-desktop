@@ -41,18 +41,30 @@ const contextAttributes: WebGLContextAttributes = {
 };
 
 /**
+ * The motion's time, one per window: every sky in it shows the same moment, so
+ * one taking over from another, or redrawn for a new appearance, carries on
+ * where it was. It runs while any of them moves, and holds while none does.
+ */
+interface GrainClock {
+    seconds: number;
+    /** The frame it last moved on; absent until one of them moves again. */
+    at: number | undefined;
+    running: number;
+}
+
+const clocks = new WeakMap<Window, GrainClock>();
+
+/**
  * One canvas owns all GPU resources and observers; disposing it releases all of
  * them. Without GPU acceleration the gradient is drawn once and holds still: a
  * software rasterizer spends the whole main thread on it and still stutters.
  */
-export function onboardingGrainRenderer(
-    canvas: HTMLCanvasElement,
-    moving: boolean,
-    clock: { seconds: number },
-) {
+export function onboardingGrainRenderer(canvas: HTMLCanvasElement, moving: boolean) {
     const document = canvas.ownerDocument;
     const view = document.defaultView;
     if (view === null) return;
+    const clock = clocks.get(view) ?? { seconds: 0, at: undefined, running: 0 };
+    clocks.set(view, clock);
     const context = webglContextGet(
         (attributes) => canvas.getContext("webgl", attributes),
         contextAttributes,
@@ -65,8 +77,8 @@ export function onboardingGrainRenderer(
     let render: (() => void) | undefined;
     let frame: number | undefined;
     let visible = false;
-    if (!animated) clock.seconds = 0;
-    let last: number | undefined;
+    let running = false;
+    let drawn: number | undefined;
 
     const initialize = () => {
         const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource);
@@ -177,7 +189,7 @@ export function onboardingGrainRenderer(
                 fieldHeight = height;
             }
             gl.uniform2f(resolution, width, height);
-            gl.uniform1f(time, clock.seconds);
+            gl.uniform1f(time, animated ? clock.seconds : 0);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
         };
     };
@@ -185,22 +197,35 @@ export function onboardingGrainRenderer(
     const stop = () => {
         if (frame !== undefined) view.cancelAnimationFrame(frame);
         frame = undefined;
-        last = undefined;
+        if (!running) return;
+        running = false;
+        clock.running -= 1;
     };
     const loop = (now: number) => {
         frame = undefined;
-        if (last === undefined) last = now;
+        clock.at ??= now;
         // Match the native 33ms cadence and pause the clock while out of view.
-        if (now - last >= 33) {
-            clock.seconds += ((now - last) / 1000) * SPEED;
-            last = now;
+        // The first sky to see a frame moves the clock; each draws what it says.
+        if (now - clock.at >= 33) {
+            clock.seconds += ((now - clock.at) / 1000) * SPEED;
+            clock.at = now;
+        }
+        if (drawn !== clock.seconds) {
+            drawn = clock.seconds;
             render?.();
         }
         frame = view.requestAnimationFrame(loop);
     };
     const settle = () => {
         if (!animated || !visible || document.hidden || render === undefined) stop();
-        else if (frame === undefined) frame = view.requestAnimationFrame(loop);
+        else if (frame === undefined) {
+            if (!running) {
+                running = true;
+                if (clock.running === 0) clock.at = undefined;
+                clock.running += 1;
+            }
+            frame = view.requestAnimationFrame(loop);
+        }
     };
     const resize = () => {
         const bounds = canvas.getBoundingClientRect();

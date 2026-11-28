@@ -24,7 +24,9 @@ interface OnboardingSkyProps {
  * Where the caption buttons sit top-right, the gradient is mirrored so its
  * dense corners are top-left and bottom-right, clear of them.
  * It draws its first frame before the window first paints, so it never fades
- * in. The same frame, baked with its grain, lies underneath for when WebGL is
+ * in. Every sky in a window shows the same moment of the motion, so one
+ * screen's sky gives way to the next's without a seam, and an appearance
+ * change does not rewind it. The same frame, baked with its grain, lies underneath for when WebGL is
  * unavailable or lost.
  */
 export function OnboardingSky(props: OnboardingSkyProps) {
@@ -44,12 +46,10 @@ export function OnboardingSky(props: OnboardingSkyProps) {
     );
     const captionTrailing = useWindowCaptionTrailing();
     const canvas = useRef<HTMLCanvasElement>(null);
-    // Appearance changes update the palette without rewinding the native motion.
-    const clock = useRef({ seconds: 0 });
     // eslint-disable-next-line happy-react/no-layout-effect -- The committed canvas owns a WebGL program, observers and animation clock, all released together.
     useLayoutEffect(() => {
         if (canvas.current === null) return;
-        return onboardingGrainRenderer(canvas.current, !reducedMotion, clock.current);
+        return onboardingGrainRenderer(canvas.current, !reducedMotion);
     }, [appearance, reducedMotion]);
     return (
         <div
