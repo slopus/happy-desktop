@@ -4,6 +4,7 @@ import type {
     HappyAgentHandbookComparison,
     HappyAgentHandbookDraftSnapshot,
     HappyAgentHandbookDraftStore,
+    HappyAgentHandbookFolderId,
     HappyAgentHandbookHistoryEntry,
     HappyAgentHandbookHistorySnapshot,
     HappyAgentHandbookHistoryStore,
@@ -17,6 +18,8 @@ import type {
 } from "happy-desktop-state";
 import {
     HappyAgentHandbookPage,
+    handbookPath,
+    handbookTreeOf,
     localAgoTime,
     localClockTime,
     localDayTime,
@@ -24,6 +27,8 @@ import {
     type HappyAgentHandbookComparisonView,
     type HappyAgentHandbookEditorContent,
     type HappyAgentHandbookEditorProps,
+    type HappyAgentHandbookFolderDialogProps,
+    type HappyAgentHandbookPageProps,
     type HappyAgentHandbookHistoryPanelProps,
     type HappyAgentHandbookHistoryRow,
     type HappyAgentHandbookMetadataChangeView,
@@ -105,7 +110,7 @@ function metadataValue(value: string | boolean): string {
  */
 export function HappyAgentHandbookSurface(props: {
     readonly handbook: HappyAgentHandbookStore;
-    /** The item the address opens; the first item when none is named. */
+    /** The page the address opens; the home when none is named. */
     readonly itemId?: string;
     readonly clock: HappyAgentClockStore;
     /** Names whose edits these are; without it they are "A person". */
@@ -118,10 +123,28 @@ export function HappyAgentHandbookSurface(props: {
     const snapshot = useSyncExternalStore(handbook.subscribe, handbook.get, handbook.get);
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const team = props.team;
+    const people = (userIds: readonly string[]) => userIds.map((userId) => personOf(team, userId));
     const selected: HappyAgentHandbookItem | undefined =
         props.itemId === undefined
-            ? snapshot.items[0]
+            ? undefined
             : snapshot.items.find((item) => item.id === props.itemId);
+    const folders = snapshot.folders.map((folder) => ({
+        id: folder.id,
+        parentId: folder.parentId,
+        name: folder.name,
+        icon: folder.icon,
+    }));
+    const items = snapshot.items.map((item) => ({
+        id: item.id,
+        title: snapshot.edits.get(item.id)?.title ?? item.title,
+        description: snapshot.edits.get(item.id)?.description ?? item.description,
+        folderId: item.folderId,
+        alwaysInContext: snapshot.edits.get(item.id)?.alwaysInContext ?? item.alwaysInContext,
+        pending: item.pending,
+        revision: item.applied?.revision ?? null,
+        pendingPeople: people(item.pendingUserIds),
+    }));
+    const tree = handbookTreeOf(folders, items);
     const draftStore = selected ? handbook.draft(selected.id) : DRAFT_NONE;
     const draft = useSyncExternalStore(draftStore.subscribe, draftStore.get, draftStore.get);
     const historyStore =
@@ -131,7 +154,6 @@ export function HappyAgentHandbookSurface(props: {
         historyStore.get,
         historyStore.get,
     );
-    const people = (userIds: readonly string[]) => userIds.map((userId) => personOf(team, userId));
     const canEdit = snapshot.access.edit;
     const canApply = snapshot.access.apply;
 
@@ -172,6 +194,9 @@ export function HappyAgentHandbookSurface(props: {
             onHistoryToggle: handbook.historyToggle,
             onApply: () => handbook.reviewOpen([itemId]),
             onDiscard: () => handbook.itemDiscard(itemId),
+            onMove: () => handbook.moveOpen({ kind: "item", itemId }),
+            onHandbookOpen: () => props.onItemOpen(),
+            breadcrumb: handbookPath(tree, selected.folderId),
             onRemove: () =>
                 void handbook.itemRemove(itemId).then((removed) => {
                     if (removed) props.onItemOpen();
@@ -281,32 +306,108 @@ export function HappyAgentHandbookSurface(props: {
         };
     })();
 
+    const folderEdit = snapshot.folderEdit;
+    const folderDialog = ((): HappyAgentHandbookFolderDialogProps | undefined => {
+        if (!folderEdit) return undefined;
+        const target = folderEdit.target;
+        const parentId =
+            target.kind === "create"
+                ? target.parentId
+                : (snapshot.folders.find((folder) => folder.id === target.folderId)?.parentId ??
+                  null);
+        return {
+            mode: target.kind,
+            topLevel: parentId === null,
+            ...(target.kind === "create" && parentId !== null
+                ? { parentPath: handbookPath(tree, parentId).join(" › ") }
+                : {}),
+            name: folderEdit.name,
+            icon: folderEdit.icon,
+            saving: folderEdit.saving,
+            ...(folderEdit.error === undefined ? {} : { error: folderEdit.error.message }),
+            onNameChange: handbook.folderNameUpdate,
+            onIconChange: handbook.folderIconUpdate,
+            onSubmit: handbook.folderSubmit,
+            onClose: handbook.folderEditClose,
+        };
+    })();
+
+    const moving = snapshot.move;
+    const move = ((): HappyAgentHandbookPageProps["move"] => {
+        if (!moving) return undefined;
+        const target = moving.target;
+        const item =
+            target.kind === "item"
+                ? snapshot.items.find((entry) => entry.id === target.itemId)
+                : undefined;
+        const folder =
+            target.kind === "folder"
+                ? snapshot.folders.find((entry) => entry.id === target.folderId)
+                : undefined;
+        const shown = item
+            ? {
+                  target: {
+                      kind: "item" as const,
+                      id: item.id,
+                      title: snapshot.edits.get(item.id)?.title ?? item.title,
+                  },
+                  current: item.folderId,
+              }
+            : folder
+              ? {
+                    target: { kind: "folder" as const, id: folder.id, title: folder.name },
+                    current: folder.parentId,
+                }
+              : undefined;
+        if (!shown) return undefined;
+        return {
+            ...shown,
+            ...(moving.moving === undefined ? {} : { moving: moving.moving }),
+            ...(moving.error === undefined ? {} : { error: moving.error.message }),
+            onMove: (folderId) =>
+                handbook.moveSubmit(folderId as HappyAgentHandbookFolderId | null),
+            onClose: handbook.moveClose,
+        };
+    })();
+
+    const asFolder = (folderId: string) => folderId as HappyAgentHandbookFolderId;
     return (
         <HappyAgentHandbookPage
             canApply={canApply}
             canEdit={canEdit}
             {...(editor ? { editor } : {})}
             {...(snapshot.error === undefined ? {} : { error: snapshot.error.message })}
+            {...(snapshot.failure === undefined ? {} : { failure: snapshot.failure.message })}
+            {...(folderDialog ? { folderDialog } : {})}
+            folders={folders}
             {...(historyPanel ? { history: historyPanel } : {})}
-            items={snapshot.items.map((item) => ({
-                id: item.id,
-                title: snapshot.edits.get(item.id)?.title ?? item.title,
-                alwaysInContext:
-                    snapshot.edits.get(item.id)?.alwaysInContext ?? item.alwaysInContext,
-                pending: item.pending,
-                revision: item.applied?.revision ?? null,
-                pendingPeople: people(item.pendingUserIds),
-            }))}
+            items={items}
+            {...(move ? { move } : {})}
             onApplyAll={() =>
                 handbook.reviewOpen(
                     snapshot.items.filter((item) => item.pending).map((item) => item.id),
                 )
             }
-            onItemCreate={() =>
-                void handbook.itemCreate("Untitled", null).then(props.onItemOpen, () => undefined)
+            onFailureDismiss={handbook.failureDismiss}
+            onFolderCreate={(parentId) =>
+                handbook.folderCreateOpen(parentId === null ? null : asFolder(parentId))
+            }
+            onFolderDelete={(folderId) => handbook.folderDelete(asFolder(folderId))}
+            onFolderEdit={(folderId) => handbook.folderEditOpen(asFolder(folderId))}
+            onFolderMove={(folderId) =>
+                handbook.moveOpen({ kind: "folder", folderId: asFolder(folderId) })
+            }
+            onHome={() => props.onItemOpen()}
+            // A refusal stands in the page's failure banner.
+            onItemCreate={(folderId) =>
+                void handbook
+                    .itemCreate("Untitled", folderId === null ? null : asFolder(folderId))
+                    .then(props.onItemOpen, () => undefined)
             }
             onItemSelect={props.onItemOpen}
+            onSearchChange={handbook.searchUpdate}
             {...(review ? { review } : {})}
+            search={snapshot.search}
             {...(selected ? { selectedId: selected.id } : {})}
             status={snapshot.status}
         />
