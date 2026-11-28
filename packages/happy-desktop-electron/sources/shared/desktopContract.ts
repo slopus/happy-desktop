@@ -129,6 +129,21 @@ export type DesktopCredentialImportResult =
           readonly message: string;
       };
 
+/**
+ * "Connect this Mac" run by the shell: the installer it fetched itself, run
+ * with a join token as the person, never as root. Exiting proves nothing; the
+ * server listing the computer does.
+ */
+export type DesktopComputeJoinState =
+    | { readonly kind: "downloading" }
+    | { readonly kind: "running" }
+    /** The installer's last line of output, cut short, for a failure to say what stopped it. */
+    | { readonly kind: "exited"; readonly code: number; readonly lastLine: string | null }
+    | {
+          readonly kind: "failed";
+          readonly reason: "busy" | "root" | "download" | "launch" | "cancelled";
+      };
+
 /** The accounts API, asked by the shell with the account's token. */
 export interface DesktopHappyCloud {
     serversList(): Promise<DesktopServerSignInResult<readonly HappyCloudServer[]>>;
@@ -187,6 +202,16 @@ export interface DesktopHappyCloud {
         connectionId: string,
         items: readonly DesktopCredentialImportItem[],
     ): Promise<DesktopServerSignInResult<readonly DesktopCredentialImportResult[]>>;
+    /**
+     * Joins this computer to a Happy Cloud server the window is signed in to,
+     * as one of the person's own, with a token the server minted for them.
+     * What happens next arrives through `computeJoinSubscribe`. Absent with
+     * the next two anywhere but macOS and Linux.
+     */
+    computeJoin?(connectionId: string, token: string): Promise<void>;
+    /** Stops the running join's installer. */
+    computeJoinCancel?(): Promise<void>;
+    computeJoinSubscribe?(listener: (state: DesktopComputeJoinState) => void): () => void;
 }
 
 export interface DesktopCloudAuthConfiguration {
@@ -1371,6 +1396,10 @@ export const desktopIpc = {
     happyCloudEmailCodeVerify: "happy:happy-cloud:email-code-verify",
     happyCloudCredentialScan: "happy:happy-cloud:credential-scan",
     happyCloudCredentialImport: "happy:happy-cloud:credential-import",
+    happyCloudComputeJoin: "happy:happy-cloud:compute-join",
+    happyCloudComputeJoinCancel: "happy:happy-cloud:compute-join-cancel",
+    /** Main → renderer: the state of the join this window started. */
+    happyCloudComputeJoinChanged: "happy:happy-cloud:compute-join-changed",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",
