@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import {
     HappyAgentPluginFieldsError,
     type HappyAgentCloudProvidersSnapshot,
+    type HappyAgentOnboardingComputerSnapshot,
     type HappyAgentCloudProvidersStore,
     type HappyAgentOnboardingGate,
     type HappyAgentOnboardingSnapshot,
@@ -15,7 +16,13 @@ import {
     type HappyAgentProfileStore,
 } from "happy-desktop-state";
 import {
+    CloudOnboardingComputerAddDialog,
+    CloudOnboardingComputerExplainerDialog,
     CloudOnboardingPluginDialog,
+    type CloudOnboardingComputerCommand,
+    type CloudOnboardingComputerConnect,
+    type CloudOnboardingComputerOs,
+    type CloudOnboardingComputerRow,
     CloudOnboardingScreen,
     HappyAgentProviderAddDialog,
     type CloudOnboardingInferenceOption,
@@ -32,6 +39,7 @@ const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = 
     adminBot: "Admin bot",
     inference: "AI",
     plugins: "Plugins",
+    computer: "Computer",
     teammates: "Team",
     mobileApp: "Phone",
     paymentMethod: "Payment",
@@ -168,6 +176,133 @@ function pluginRows(
     });
 }
 
+type ComputerGate = Extract<HappyAgentOnboardingGate, { readonly kind: "computer" }>;
+
+/** The system this app runs on, which names "Connect this Mac". */
+function hostOs(): CloudOnboardingComputerOs {
+    const platform = (
+        (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+            ?.platform ?? navigator.platform
+    ).toLowerCase();
+    if (platform.startsWith("mac")) return "mac";
+    if (platform.startsWith("win")) return "windows";
+    return "linux";
+}
+
+/** This machine in a row's words, before the server knows its name. */
+const THIS_COMPUTER: Readonly<Record<CloudOnboardingComputerOs, string>> = {
+    mac: "this Mac",
+    linux: "this machine",
+    windows: "this PC",
+};
+
+/** Where to paste the copied command on this machine. */
+const PASTE_INTO: Readonly<Record<CloudOnboardingComputerOs, string>> = {
+    mac: "Terminal",
+    linux: "a terminal",
+    windows: "PowerShell",
+};
+
+function computerOs(os: string | null): CloudOnboardingComputerRow["os"] {
+    return os === "macos" ? "mac" : os === "linux" || os === "windows" ? os : "other";
+}
+
+function computerRow(entry: ComputerGate["computers"][number]): CloudOnboardingComputerRow {
+    return {
+        id: entry.id,
+        name: entry.name,
+        os: computerOs(entry.os),
+        state:
+            entry.status === "online"
+                ? { kind: entry.runsWork ? "online" : "unsupported" }
+                : entry.status === "enrolling"
+                  ? { kind: "joining" }
+                  : { kind: "offline" },
+    };
+}
+
+/**
+ * The list and the first button, from the gate and "Connect this Mac". The
+ * app cannot run the command here, so the press copies it; the first computer
+ * of the reader's that shows up after it is this one, and takes the row this
+ * machine held, at the end of the list.
+ */
+function computerStep(
+    gate: ComputerGate,
+    local: HappyAgentOnboardingComputerSnapshot,
+    os: CloudOnboardingComputerOs,
+): {
+    readonly connect: CloudOnboardingComputerConnect;
+    readonly computers: readonly CloudOnboardingComputerRow[];
+} {
+    const mine = local.thisComputer;
+    const joinedId = mine.step === "joined" ? mine.computerId : undefined;
+    const joined = gate.computers.find((entry) => entry.id === joinedId);
+    const rows = gate.computers.filter((entry) => entry !== joined).map(computerRow);
+    const here = THIS_COMPUTER[os];
+    switch (mine.step) {
+        case "idle":
+            return { connect: { kind: "idle" }, computers: rows };
+        case "copying":
+        case "waiting":
+            return {
+                connect: { kind: "working" },
+                computers: [
+                    ...rows,
+                    {
+                        id: "this",
+                        name: `Waiting for ${here}`,
+                        os,
+                        state: { kind: "joining" },
+                        ...(mine.step === "waiting"
+                            ? { note: `Copied. Paste in ${PASTE_INTO[os]}.` }
+                            : {}),
+                    },
+                ],
+            };
+        case "joined": {
+            if (!joined) return { connect: { kind: "working" }, computers: rows };
+            const row = computerRow(joined);
+            return {
+                connect: { kind: row.state.kind === "online" ? "connected" : "working" },
+                computers: [
+                    ...rows,
+                    joined.status === "enrolling" ? { ...row, note: "Connecting" } : row,
+                ],
+            };
+        }
+        case "failed":
+            return {
+                connect: { kind: "failed" },
+                computers: [
+                    ...rows,
+                    {
+                        id: "this",
+                        name: here,
+                        os,
+                        state: { kind: "failed", reason: mine.error },
+                    },
+                ],
+            };
+    }
+}
+
+function computerCommand(
+    command: HappyAgentOnboardingComputerSnapshot["command"],
+): CloudOnboardingComputerCommand {
+    switch (command.step) {
+        case "ready":
+            return { kind: "ready", text: command.unix };
+        case "failed":
+            return { kind: "failed", error: command.error };
+        case "none":
+        case "minting":
+            return { kind: "minting" };
+    }
+}
+
+const copyTarget = { copy: (text: string) => navigator.clipboard.writeText(text) };
+
 /**
  * A Happy Cloud server's onboarding: the gate the server puts on screen, drawn
  * by `CloudOnboardingScreen`, with each step's action handed to the store that
@@ -221,6 +356,12 @@ export function AppCloudOnboarding(props: {
         paymentsStore?.subscribe ?? noopSubscribe,
         paymentsStore?.get ?? noSnapshot,
         paymentsStore?.get ?? noSnapshot,
+    );
+    const computerStore = gate.kind === "computer" ? props.store.computer : undefined;
+    const computer = useSyncExternalStore(
+        computerStore?.subscribe ?? noopSubscribe,
+        computerStore?.get ?? noSnapshot,
+        computerStore?.get ?? noSnapshot,
     );
     const { store, profile, profileSnapshot } = props;
     const pending = flow.pending === gate.id;
@@ -388,6 +529,34 @@ export function AppCloudOnboarding(props: {
                     ...(skip ? { skip } : {}),
                     footnote: pluginsFootnote(gate),
                 };
+            case "computer": {
+                const os = hostOs();
+                const local = computer ?? store.computer.get();
+                // A server that does not say who the reader is reads as a member.
+                const reader = gate.owner === true ? "owner" : "member";
+                const owner = flow.owners[0] ?? "an owner";
+                return {
+                    view: {
+                        kind: "computer",
+                        reader,
+                        required: gate.requirement === "required",
+                        shared: gate.shared,
+                        hostOs: os,
+                        ...computerStep(gate, local, os),
+                        onConnect: () => store.computer.thisComputerConnect(copyTarget),
+                        onAdd: () => store.computer.dialogOpen("add"),
+                        onExplain: () => store.computer.dialogOpen("explainer"),
+                    },
+                    action: proceed,
+                    ...(skip ? { skip } : {}),
+                    footnote:
+                        reader === "owner"
+                            ? "Add a computer to continue."
+                            : os === "windows"
+                              ? `No Mac or Linux computer? Ask ${owner}.`
+                              : `Can’t add one? Ask ${owner}.`,
+                };
+            }
             case "teammates": {
                 const invites = props.snapshot.invites;
                 return {
@@ -554,6 +723,19 @@ export function AppCloudOnboarding(props: {
                         await pluginsStore.installationConnect(installationId, methodId, { open });
                         store.pluginSetupClose();
                     }}
+                />
+            ) : null}
+            {computerStore && computer?.dialog === "add" ? (
+                <CloudOnboardingComputerAddDialog
+                    command={computerCommand(computer.command)}
+                    onClose={computerStore.dialogClose}
+                />
+            ) : null}
+            {computerStore && computer?.dialog === "explainer" ? (
+                <CloudOnboardingComputerExplainerDialog
+                    onClose={computerStore.dialogClose}
+                    reader={gate.kind === "computer" && gate.owner === true ? "owner" : "member"}
+                    serverName={props.serverLabel ?? "your server"}
                 />
             ) : null}
             {providersStore && providers?.add ? (
