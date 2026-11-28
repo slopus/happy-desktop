@@ -146,6 +146,7 @@ import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../share
 import { clipboardImagesRead } from "./clipboardImages";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
 import { credentialImportCreate, credentialImportSend } from "./credentialImport";
+import { computeJoinCreate } from "./computeJoin";
 import { happyExternalLinkUrl, happyShareLinkSystemUrl, happyUniversalLinkUrl } from "./happyLink";
 import { linuxDesktopIntegrationInstall } from "./linuxDesktopIntegration";
 
@@ -2185,6 +2186,48 @@ void app
                     });
                 },
             );
+            if (process.platform === "darwin" || process.platform === "linux") {
+                const computeJoin = computeJoinCreate({
+                    fetch: (input, init) =>
+                        net.fetch(input instanceof URL ? input.href : input, init),
+                    env: process.env,
+                    tmp: app.getPath("temp"),
+                    uid: process.getuid?.(),
+                });
+                ipcMain.handle(
+                    desktopIpc.happyCloudComputeJoin,
+                    async (event, connectionId: unknown, token: unknown) => {
+                        desktopDaemonSenderRequire(event.sender);
+                        // The server is one this shell holds a sign-in for,
+                        // at the address that sign-in is bound to.
+                        const credential =
+                            typeof connectionId === "string" &&
+                            happyCloudServerNameOf(connectionId) !== undefined
+                                ? serverSessions.credential(connectionId)
+                                : undefined;
+                        if (!credential || typeof token !== "string")
+                            throw new Error("Happy asked to join a server it isn't signed in to.");
+                        const sender = event.sender;
+                        // Closing the window stops its installer.
+                        sender.once("destroyed", computeJoin.cancel);
+                        try {
+                            await computeJoin.start(
+                                { serverUrl: credential.serverUrl, token },
+                                (state) => {
+                                    if (!sender.isDestroyed())
+                                        sender.send(desktopIpc.happyCloudComputeJoinChanged, state);
+                                },
+                            );
+                        } finally {
+                            sender.off("destroyed", computeJoin.cancel);
+                        }
+                    },
+                );
+                ipcMain.handle(desktopIpc.happyCloudComputeJoinCancel, (event) => {
+                    desktopDaemonSenderRequire(event.sender);
+                    computeJoin.cancel();
+                });
+            }
             ipcMain.handle(desktopIpc.happyCloudServerSignOut, (event, value: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
                 return cloud.serverSignOut(name(value));

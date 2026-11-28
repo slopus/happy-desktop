@@ -57,6 +57,7 @@ import {
     type HappyAgentWorkspaceMemoryPersistence,
     type HappyAgentWorkspaceStore,
     type HappyAgentCredentialImportHost,
+    type HappyAgentOnboardingComputerJoinHost,
     type ServerCompatibility,
     type TerminalColorScheme,
     UserError,
@@ -452,6 +453,8 @@ export function happyAgentConnectionOpen(input: {
     readonly deviceBridges?: boolean;
     /** The shell's credential import, when this is a Happy Cloud server. */
     readonly credentialImportHost?: HappyAgentCredentialImportHost;
+    /** The shell's own "Connect this Mac", when this is a Happy Cloud server and it offers one. */
+    readonly computerJoinHost?: HappyAgentOnboardingComputerJoinHost | undefined;
     /** Drops this Happy Cloud server from the window, after leaving or deleting it. */
     readonly cloudServer?: { readonly name: string; readonly forget: () => Promise<void> };
     /** Whether this is a Happy Cloud server, in the desktop or on the web. */
@@ -561,6 +564,7 @@ export function happyAgentConnectionOpen(input: {
         ...(cloudRequest
             ? {
                   cloudRequest,
+                  ...(input.computerJoinHost ? { computerJoin: input.computerJoinHost } : {}),
                   away: desktopCloudOnboardingAway(input.happyAgentId),
                   onAwayChange: (away) =>
                       desktopCloudOnboardingAwayUpdate(input.happyAgentId, away),

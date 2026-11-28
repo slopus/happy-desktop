@@ -50,7 +50,8 @@ export type CloudOnboardingComputerConnect =
     | { readonly kind: "idle" }
     | { readonly kind: "working" }
     | { readonly kind: "connected" }
-    | { readonly kind: "failed" };
+    /** `copyNext`: the app couldn't run the installer here, so the press copies the command. */
+    | { readonly kind: "failed"; readonly copyNext?: boolean };
 
 export interface CloudOnboardingComputerBodyProps {
     readonly reader: CloudOnboardingComputerReader;
@@ -61,7 +62,7 @@ export interface CloudOnboardingComputerBodyProps {
     readonly connect: CloudOnboardingComputerConnect;
     /** Every computer that joined or is joining, newest last, this one in its place. */
     readonly computers: readonly CloudOnboardingComputerRow[];
-    /** "Connect this Mac", and "Try again" after a failure. */
+    /** "Connect this Mac", and "Try again" or "Copy the command instead" after a failure. */
     onConnect?(): void;
     /** "Add server or sandbox". */
     onAdd?(): void;
@@ -268,7 +269,11 @@ function ConnectThis(props: {
             size="medium"
             width={232}
         >
-            {props.connect.kind === "failed" ? "Try again" : CONNECT_THIS[props.os]}
+            {props.connect.kind !== "failed"
+                ? CONNECT_THIS[props.os]
+                : props.connect.copyNext
+                  ? "Copy the command instead"
+                  : "Try again"}
         </Button>
     );
 }
@@ -276,7 +281,8 @@ function ConnectThis(props: {
 /**
  * One computer. Its state sits at the row's end in one fixed box, so the name
  * never moves as a spinner becomes a check. A failure's reason takes the
- * name's place, cut to fit, with the whole of it in the title.
+ * name's place, cut to fit, with the whole of it in the title; what the
+ * installer said last goes under it in full, and the row grows down for it.
  */
 function ComputerRow(props: { readonly row: CloudOnboardingComputerRow }) {
     const { row } = props;
@@ -287,7 +293,11 @@ function ComputerRow(props: { readonly row: CloudOnboardingComputerRow }) {
             className="happy-computer-step__computer"
             data-happy-desktop-ui="cloud-onboarding-computer"
             data-state={state.kind}
-            title={state.kind === "failed" ? `${row.name}: ${state.reason}` : undefined}
+            title={
+                state.kind === "failed"
+                    ? `${row.name}: ${state.reason}${row.note ? `. ${row.note}` : ""}`
+                    : undefined
+            }
         >
             <span aria-hidden className="happy-computer-step__computer-mark">
                 <Ionicon name={OS_GLYPH[row.os]} size={14} />
@@ -493,7 +503,7 @@ function facts(
         {
             icon: "download-outline",
             lead: "Installs",
-            text: "a runner in your user account. No admin password is needed.",
+            text: "a signed runner in your user account. No admin password is needed. It starts when you log in.",
         },
         {
             icon: "terminal-outline",

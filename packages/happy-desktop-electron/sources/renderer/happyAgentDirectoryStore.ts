@@ -46,6 +46,7 @@ import {
     type HappyAgentSession,
 } from "./happyAgentConnection";
 import type { DesktopRuntimeStore } from "./runtimeStore";
+import { desktopComputerJoinHostCreate } from "./desktopComputerJoinHost";
 import { desktopCredentialImportHostCreate } from "./desktopCredentialImportHost";
 
 export const LOCAL_HAPPY_AGENT_ID = "local";
@@ -957,6 +958,10 @@ export function happyAgentDirectoryStoreCreate(
             ...(bridge.happyCloud && cloudName !== undefined && happyAgent.entry.remoteId
                 ? {
                       credentialImportHost: desktopCredentialImportHostCreate(
+                          bridge.happyCloud,
+                          happyAgent.entry.remoteId,
+                      ),
+                      computerJoinHost: desktopComputerJoinHostCreate(
                           bridge.happyCloud,
                           happyAgent.entry.remoteId,
                       ),

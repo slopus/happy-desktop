@@ -14,6 +14,7 @@ import {
     type DesktopNavigationStep,
     type DesktopPreviewNavigation,
     type DesktopBuildIdentity,
+    type DesktopComputeJoinState,
     type DesktopDebugSnapshot,
     type DesktopDiagnosticsKind,
     type DesktopConfig,
@@ -113,6 +114,32 @@ const bridge: HappyDesktopBridge = {
                           connectionId,
                           items,
                       ),
+                  ...(process.platform === "darwin" || process.platform === "linux"
+                      ? {
+                            computeJoin: (connectionId: string, token: string) =>
+                                ipcRenderer.invoke(
+                                    desktopIpc.happyCloudComputeJoin,
+                                    connectionId,
+                                    token,
+                                ),
+                            computeJoinCancel: () =>
+                                ipcRenderer.invoke(desktopIpc.happyCloudComputeJoinCancel),
+                            computeJoinSubscribe(
+                                listener: (state: DesktopComputeJoinState) => void,
+                            ) {
+                                const receive = (
+                                    _event: Electron.IpcRendererEvent,
+                                    state: DesktopComputeJoinState,
+                                ) => listener(state);
+                                ipcRenderer.on(desktopIpc.happyCloudComputeJoinChanged, receive);
+                                return () =>
+                                    ipcRenderer.removeListener(
+                                        desktopIpc.happyCloudComputeJoinChanged,
+                                        receive,
+                                    );
+                            },
+                        }
+                      : {}),
               },
           }
         : {}),

@@ -16,24 +16,38 @@ export type HappyAgentOnboardingComputerCommand =
           readonly step: "ready";
           /** `curl … | sh`, the same on macOS and Linux. */
           readonly unix: string;
+          /** The token the command carries, for the desktop shell's own installer run. */
+          readonly token: string;
           /** In milliseconds. */
           readonly expiresAt: number;
       }
     | { readonly step: "failed"; readonly error: string };
 
 /**
- * "Connect this Mac". The app cannot run the command on this machine, so the
- * press copies it; the first computer of the reader's that shows up after the
- * press is taken to be this one.
+ * "Connect this Mac". Where the desktop shell runs the installer itself the
+ * press hands it the token; elsewhere the press copies the command. Either
+ * way the first computer of the reader's that shows up after the press is
+ * taken to be this one: the installer finishing proves nothing.
  */
 export type HappyAgentOnboardingThisComputer =
     | { readonly step: "idle" }
     | { readonly step: "copying" }
     /** The command was copied; no new computer of the reader's has shown up yet. */
     | { readonly step: "waiting" }
+    /** The shell is fetching the installer. */
+    | { readonly step: "downloading" }
+    /** The shell's installer runs, or ran; no new computer of the reader's has shown up yet. */
+    | { readonly step: "installing" }
     /** The first computer of the reader's that showed up after the press, by ID. */
     | { readonly step: "joined"; readonly computerId: string }
-    | { readonly step: "failed"; readonly error: string };
+    | {
+          readonly step: "failed";
+          readonly error: string;
+          /** The reason in full: what stopped the shell, or what the installer said last. */
+          readonly detail?: string;
+          /** The next press copies the command instead: the shell couldn't run it. */
+          readonly copyNext?: boolean;
+      };
 
 export type HappyAgentOnboardingComputerDialog = "add" | "explainer";
 
@@ -43,10 +57,46 @@ export interface HappyAgentOnboardingComputerSnapshot {
     readonly thisComputer: HappyAgentOnboardingThisComputer;
 }
 
-/** Where "Connect this Mac" sends the command: today, the clipboard. */
+/** Where "Connect this Mac" sends the command when the shell doesn't run it: the clipboard. */
 export interface HappyAgentOnboardingComputerConnectTarget {
     copy(text: string): Promise<void>;
 }
+
+/** What the desktop shell reports of the installer it runs. */
+export type HappyAgentOnboardingComputerJoinState =
+    | { readonly kind: "downloading" }
+    | { readonly kind: "running" }
+    | { readonly kind: "exited"; readonly code: number; readonly lastLine: string | null }
+    | {
+          readonly kind: "failed";
+          readonly reason: "busy" | "root" | "download" | "launch" | "cancelled";
+      };
+
+/**
+ * The desktop shell's own installer run for this server, on macOS and Linux:
+ * it fetches the installer itself and runs it with the token, as the person.
+ */
+export interface HappyAgentOnboardingComputerJoinHost {
+    /** Starts the installer; rejects when the shell refuses the request outright. */
+    join(token: string): Promise<void>;
+    cancel(): Promise<void>;
+    subscribe(listener: (state: HappyAgentOnboardingComputerJoinState) => void): () => void;
+}
+
+const JOIN_REFUSED: Readonly<
+    Record<
+        Exclude<
+            Extract<HappyAgentOnboardingComputerJoinState, { kind: "failed" }>["reason"],
+            "cancelled"
+        >,
+        string
+    >
+> = {
+    busy: "Happy is already setting up this computer.",
+    root: "Happy runs as root here, so it can't set this up.",
+    download: "Happy couldn't get the installer.",
+    launch: "Happy couldn't run the installer.",
+};
 
 /** The computer gate's own actions, while it is on screen. */
 export interface HappyAgentOnboardingComputerStore {
@@ -69,17 +119,29 @@ type CommandReady = Extract<HappyAgentOnboardingComputerCommand, { readonly step
 
 function commandRead(answer: unknown): CommandReady | undefined {
     if (typeof answer !== "object" || answer === null) return undefined;
-    const { commands, expiresAt } = answer as { commands?: unknown; expiresAt?: unknown };
+    const { commands, expiresAt, token } = answer as {
+        commands?: unknown;
+        expiresAt?: unknown;
+        token?: unknown;
+    };
     const unix =
         typeof commands === "object" && commands !== null
             ? (commands as { unix?: unknown }).unix
             : undefined;
-    if (typeof unix !== "string" || unix === "" || typeof expiresAt !== "number") return undefined;
-    return { step: "ready", unix, expiresAt };
+    if (
+        typeof unix !== "string" ||
+        unix === "" ||
+        typeof token !== "string" ||
+        typeof expiresAt !== "number"
+    )
+        return undefined;
+    return { step: "ready", unix, token, expiresAt };
 }
 
 export function happyAgentOnboardingComputerCreate(deps: {
     readonly request: HappyCloudRequest | undefined;
+    /** The desktop shell's installer run, where it offers one. */
+    readonly join?: HappyAgentOnboardingComputerJoinHost | undefined;
 }): HappyAgentOnboardingComputerOwner {
     let snapshot: HappyAgentOnboardingComputerSnapshot = {
         command: { step: "none" },
@@ -92,6 +154,7 @@ export function happyAgentOnboardingComputerCreate(deps: {
     let known: ReadonlySet<string> | undefined;
     /** The reader's own computers when "Connect this Mac" was pressed. */
     let before: ReadonlySet<string> = new Set();
+    let joinUnsubscribe: (() => void) | undefined;
 
     const set = (change: Partial<HappyAgentOnboardingComputerSnapshot>): void => {
         snapshot = { ...snapshot, ...change };
@@ -102,7 +165,8 @@ export function happyAgentOnboardingComputerCreate(deps: {
     const commandDrop = (reason: "expired" | "spent"): void => {
         if (expiry) clearTimeout(expiry);
         expiry = undefined;
-        const waiting = snapshot.thisComputer.step === "waiting";
+        const step = snapshot.thisComputer.step;
+        const waiting = step === "waiting" || step === "downloading" || step === "installing";
         set({
             command: { step: "none" },
             ...(waiting && reason === "expired"
@@ -144,6 +208,50 @@ export function happyAgentOnboardingComputerCreate(deps: {
         }
     };
 
+    const fail = (error: string, more: { detail?: string; copyNext?: boolean } = {}): void =>
+        set({ thisComputer: { step: "failed", error, ...more } });
+
+    /** The shell's word on its installer, while this machine is being set up through it. */
+    const joinState = (state: HappyAgentOnboardingComputerJoinState): void => {
+        const step = snapshot.thisComputer.step;
+        if (disposed || (step !== "downloading" && step !== "installing")) return;
+        switch (state.kind) {
+            case "downloading":
+                return set({ thisComputer: { step: "downloading" } });
+            case "running":
+                return set({ thisComputer: { step: "installing" } });
+            case "exited":
+                // A clean exit waits for the server to list the computer.
+                if (state.code !== 0)
+                    fail("Setup stopped", state.lastLine ? { detail: state.lastLine } : {});
+                return;
+            case "failed":
+                if (state.reason === "cancelled") return set({ thisComputer: { step: "idle" } });
+                return fail("Setup failed", {
+                    detail: JOIN_REFUSED[state.reason],
+                    copyNext: state.reason !== "busy",
+                });
+        }
+    };
+
+    const joinStart = (host: HappyAgentOnboardingComputerJoinHost): void => {
+        joinUnsubscribe ??= host.subscribe(joinState);
+        set({ thisComputer: { step: "downloading" } });
+        void commandEnsure()
+            .then(async (command) => {
+                if (disposed) return;
+                before = known ?? new Set();
+                try {
+                    await host.join(command.token);
+                } catch {
+                    fail("Setup failed", { detail: JOIN_REFUSED.launch, copyNext: true });
+                }
+            })
+            .catch((error: unknown) => {
+                if (!disposed) fail(happyAgentUserError(error).message);
+            });
+    };
+
     return {
         get: () => snapshot,
         subscribe(listener) {
@@ -163,8 +271,13 @@ export function happyAgentOnboardingComputerCreate(deps: {
             for (const listener of listeners) listener();
         },
         thisComputerConnect(target) {
-            const step = snapshot.thisComputer.step;
-            if (disposed || step === "copying" || step === "waiting") return;
+            const mine = snapshot.thisComputer;
+            if (disposed || (mine.step !== "idle" && mine.step !== "failed")) return;
+            const host = mine.step === "failed" && mine.copyNext ? undefined : deps.join;
+            if (host) {
+                joinStart(host);
+                return;
+            }
             set({ thisComputer: { step: "copying" } });
             void commandEnsure()
                 .then(async (command) => {
@@ -197,7 +310,11 @@ export function happyAgentOnboardingComputerCreate(deps: {
             const arrived = known ? [...own].filter((id) => !known!.has(id)) : [];
             known = own;
             const mine = snapshot.thisComputer;
-            if (mine.step === "waiting") {
+            if (
+                mine.step === "waiting" ||
+                mine.step === "downloading" ||
+                mine.step === "installing"
+            ) {
                 const joined = [...own].find((id) => !before.has(id));
                 if (joined) set({ thisComputer: { step: "joined", computerId: joined } });
             } else if (mine.step === "joined" && !own.has(mine.computerId))
@@ -205,6 +322,10 @@ export function happyAgentOnboardingComputerCreate(deps: {
             if (arrived.length > 0 && snapshot.command.step === "ready") commandDrop("spent");
         },
         [Symbol.dispose]() {
+            // The connection is going away: so does the installer it started.
+            const step = snapshot.thisComputer.step;
+            if (step === "downloading" || step === "installing") void deps.join?.cancel();
+            joinUnsubscribe?.();
             disposed = true;
             if (expiry) clearTimeout(expiry);
             expiry = undefined;

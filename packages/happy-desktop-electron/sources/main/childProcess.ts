@@ -1,10 +1,12 @@
 import {
     execFile,
     execFileSync,
+    spawn,
     type ChildProcess,
     type ExecFileException,
     type ExecFileOptions,
     type ExecFileSyncOptions,
+    type SpawnOptions,
 } from "node:child_process";
 
 /**
@@ -60,4 +62,17 @@ export function execFileHiddenSync(
     options: HiddenOptions<ExecFileSyncOptions>,
 ): string {
     return execFileSync(file, args, { ...options, encoding: "utf8", windowsHide: true });
+}
+
+/**
+ * `spawn` with no console window, for a child that must be stoppable along
+ * with everything it starts: `execFile` drops `detached`, which makes the
+ * child a process group of its own.
+ */
+export function spawnHidden(
+    file: string,
+    args: readonly string[],
+    options: HiddenOptions<SpawnOptions>,
+): ChildProcess {
+    return spawn(file, args, { ...options, windowsHide: true });
 }
