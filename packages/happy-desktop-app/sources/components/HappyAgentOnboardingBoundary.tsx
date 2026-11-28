@@ -36,7 +36,10 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly serverLabel?: string;
     /** The reader created this server in this window and is still in its setup. */
     readonly serverCreated?: boolean;
-    /** What a new member's placeholder is picked by until they choose a photo. */
+    /**
+     * What a new member's placeholder picture is picked by until their first
+     * save gives them a user ID, which picks it from then on.
+     */
     readonly placeholderSeed: string;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
@@ -157,7 +160,7 @@ export function HappyAgentOnboardingBoundary(props: {
                 {...(profile.photoCrop ? { photoCrop: profile.photoCrop } : {})}
                 {...(profile.photoStaged ? { photoUrl: profile.photoStaged.imageUrl } : {})}
                 photoOpening={profile.photoActivity === "opening"}
-                placeholderSeed={props.placeholderSeed}
+                placeholderSeed={profile.userId ?? props.placeholderSeed}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 onCreate={() => void props.profile.profileCreate()}
                 onExternalOpen={props.onExternalOpen}

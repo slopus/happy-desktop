@@ -488,7 +488,8 @@ export function AppCloudOnboarding(props: {
             busy: profileSnapshot.saving,
             loading: profileSnapshot.loading,
             name: profileSnapshot.name,
-            placeholderSeed: props.placeholderSeed,
+            // The person's own pick once their first save has created them.
+            placeholderSeed: profileSnapshot.userId ?? props.placeholderSeed,
             photoOpening: profileSnapshot.photoActivity === "opening",
             ...(profileSnapshot.photoCrop ? { photoCrop: profileSnapshot.photoCrop } : {}),
             ...(profileSnapshot.photoError ? { photoError: profileSnapshot.photoError } : {}),

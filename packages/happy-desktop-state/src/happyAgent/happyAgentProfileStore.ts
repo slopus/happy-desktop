@@ -15,6 +15,8 @@ import type { HappyAgentAvatarImage } from "./happyAgentTypes.js";
 
 /** The one human identity this installation authors work as. */
 export interface HappyAgentProfile {
+    /** Who the profile is on the server: absent until its first save creates them. */
+    readonly userId?: string;
     readonly email: string;
     readonly name: string;
     readonly updatedAt: number;
@@ -71,6 +73,11 @@ export interface HappyAgentProfileSnapshot {
      * once this is true.
      */
     readonly saved: boolean;
+    /**
+     * The stored profile's user, which the app's pictures of this person are
+     * picked by; absent until the first save creates them.
+     */
+    readonly userId?: string;
     readonly photo?: HappyAgentProfilePhoto;
     /**
      * The photo change in flight: a picked picture being opened for cropping,
@@ -205,6 +212,7 @@ export function happyAgentProfileStoreCreate(
             fields.name === current.name &&
             dirty === current.dirty &&
             saved === current.saved &&
+            profile?.userId === current.userId &&
             current.loading === false &&
             current.error === undefined &&
             current.photo === photo
@@ -215,6 +223,7 @@ export function happyAgentProfileStoreCreate(
             ...fields,
             dirty,
             saved,
+            userId: profile?.userId,
             loading: false,
             error: undefined,
             photo,

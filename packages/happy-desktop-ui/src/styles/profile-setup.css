@@ -42,3 +42,37 @@
     color: var(--onboarding-foreground);
     font-weight: 600;
 }
+
+/* Until a photo is chosen: the person's placeholder picture, filling the
+   circle, with their initials centred over it. */
+.happy-profile-setup__picture {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.happy-profile-setup__placeholder {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-profile-setup__initials {
+    position: relative;
+    /* White on the picture, as a coloured avatar draws its initials. */
+    color: var(--button-primary-tint);
+    font-family: var(--happy-font-ui);
+    font-size: 38px;
+    font-synthesis: none;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
+    text-shadow: 0 1px 6px var(--shadow-subtle);
+    -webkit-user-select: none;
+    user-select: none;
+}

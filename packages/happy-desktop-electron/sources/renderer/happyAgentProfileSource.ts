@@ -58,6 +58,7 @@ export function happyAgentProfileSourceCreate(
         if (profile.email === null && profile.name === null && profile.photo === null)
             return undefined;
         return {
+            ...(profile.userId ? { userId: profile.userId } : {}),
             email: profile.email ?? "",
             name: profile.name ?? "",
             updatedAt: profile.updatedAt,

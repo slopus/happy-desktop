@@ -1,4 +1,4 @@
-import { Avatar } from "./Avatar";
+import { AvatarPlaceholder } from "./AvatarPlaceholder";
 import type { ImageCropRegion } from "./imageCrop";
 import { OnboardingHelp } from "./OnboardingHelp";
 import { initialsOf } from "./pages/surfaces/surfacePresentation";
@@ -17,7 +17,10 @@ export interface ProfileSetupScreenProps {
     readonly name: string;
     /** The server this profile is for, as the reader knows it. */
     readonly serverLabel?: string;
-    /** Not drawn here any more: until a photo is chosen the picture is the initials. */
+    /**
+     * The person's ID, which picks the picture they wear until they choose a
+     * photo, as everywhere else in the app.
+     */
     readonly placeholderSeed: string;
     /** The chosen photo, cropped and held on this device until the name is saved. */
     readonly photoUrl?: string;
@@ -51,9 +54,9 @@ const AVATAR_SIDE = 120;
  *
  * The avatar is the photo picker: pressing it, or the line under it, opens a
  * file, then the crop. A picture dropped on either is taken the same way.
- * Until a photo is chosen it wears the person's initials, as the app draws
- * anyone without a photo, following the name as it is typed; they are only
- * drawn, never uploaded. The photo is optional; Continue waits only on a name.
+ * Until a photo is chosen it wears the picture the app gives anyone without
+ * one, picked by `placeholderSeed`, with the person's initials over it as the
+ * name is typed; neither is uploaded. The photo is optional; Continue waits only on a name.
  * Under the field sits one line kept whether or not it says anything, so an
  * error never moves the page.
  */
@@ -118,6 +121,7 @@ export interface ProfileSetupFormProps {
 export function ProfileSetupForm(props: ProfileSetupFormProps) {
     const blocked = props.busy || props.loading === true;
     const hint = props.message ?? props.photoError;
+    const initials = initialsOf(props.name);
     return (
         <div className="happy-profile-setup__form" data-happy-desktop-ui="profile-setup">
             <PicturePicker
@@ -132,18 +136,18 @@ export function ProfileSetupForm(props: ProfileSetupFormProps) {
                 {...(props.photoOpening === undefined ? {} : { opening: props.photoOpening })}
                 {...(props.photoUrl === undefined ? {} : { pictureUrl: props.photoUrl })}
                 placeholder={
-                    <Avatar
-                        className="happy-picture-picker__image"
-                        // With no name yet, the "?" Settings › Profile draws.
-                        initials={initialsOf(props.name) || "?"}
-                        size="lg"
-                        // The lg avatar's 14px initials, scaled to the picture's side.
-                        style={{
-                            width: AVATAR_SIDE,
-                            height: AVATAR_SIDE,
-                            fontSize: Math.round((14 * AVATAR_SIDE) / 44),
-                        }}
-                    />
+                    // The picture the app gives anyone without a photo, with
+                    // the initials over it once the name has a letter.
+                    <span className="happy-picture-picker__image happy-profile-setup__picture">
+                        <AvatarPlaceholder
+                            className="happy-profile-setup__placeholder"
+                            seed={props.placeholderSeed}
+                            side={AVATAR_SIDE}
+                        />
+                        {initials ? (
+                            <span className="happy-profile-setup__initials">{initials}</span>
+                        ) : null}
+                    </span>
                 }
                 shape="circle"
                 side={AVATAR_SIDE}
