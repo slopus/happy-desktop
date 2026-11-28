@@ -99,7 +99,8 @@ export type IconName =
     | "full-screen"
     | "vault"
     | "folder-open"
-    | "book";
+    | "book"
+    | "folder";
 export type IconProps = {
     name: IconName;
     /*
@@ -296,6 +297,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     // The team's handbook: the bound book of how work is done here, distinct
     // from one document (`doc`) and from a tray of files (`vault`).
     book: { set: "ionicons", name: "book-outline" },
+    // A closed folder: a place pages are kept, as a handbook files them, and
+    // moving something into one. Distinct from `folder-open`, which reveals.
+    folder: { set: "ionicons", name: "folder-outline" },
     mobile: { set: "ionicons", name: "phone-portrait-outline" },
     smile: { set: "ionicons", name: "happy-outline" },
     paperclip: { set: "ionicons", name: "attach-outline" },

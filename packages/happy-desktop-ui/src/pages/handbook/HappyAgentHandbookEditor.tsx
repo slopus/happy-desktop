@@ -8,6 +8,7 @@ import {
     type DocumentEditorUser,
 } from "../../DocumentEditor";
 import { EmptyState } from "../../EmptyState";
+import { Icon } from "../../Icon";
 import { MenuButton } from "../../MenuButton";
 import { ScrollArea } from "../../Scrollbar";
 import { Switch } from "../../Switch";
@@ -69,6 +70,12 @@ export interface HappyAgentHandbookEditorProps {
     readonly onApply: () => void;
     readonly onDiscard: () => void;
     readonly onRemove: () => void;
+    /** Where the page is filed, from its category down; empty at the root. */
+    readonly breadcrumb?: readonly string[];
+    /** Back to the handbook's home, from the breadcrumb's first step. */
+    readonly onHandbookOpen?: () => void;
+    /** Opens "Move to…"; offered with `canEdit`. */
+    readonly onMove?: () => void;
 }
 
 const SYNC_LABELS = {
@@ -78,6 +85,7 @@ const SYNC_LABELS = {
 } as const satisfies Record<HappyAgentHandbookDraftSync, string>;
 
 const DISCARD = "discard";
+const MOVE = "move";
 const REMOVE = "remove";
 
 /** "Applied · revision 5", "Not applied yet", with who has unapplied edits. */
@@ -102,6 +110,9 @@ function stateText(props: HappyAgentHandbookEditorProps): string {
 export function HappyAgentHandbookEditor(props: HappyAgentHandbookEditorProps) {
     const content = props.content;
     const menuItems = [
+        ...(props.canEdit && props.onMove !== undefined
+            ? [{ kind: "item" as const, id: MOVE, label: "Move to…", icon: "folder-open" as const }]
+            : []),
         ...(props.canEdit && props.pending && props.revision !== null
             ? [
                   {
@@ -136,6 +147,39 @@ export function HappyAgentHandbookEditor(props: HappyAgentHandbookEditorProps) {
             >
                 <div className="happy-handbook-editor__column">
                     <header className="happy-handbook-editor__header">
+                        {props.breadcrumb === undefined ? null : (
+                            <nav aria-label="Where this page is filed">
+                                <ol
+                                    className="happy-handbook-breadcrumb"
+                                    data-testid="happy-handbook-breadcrumb"
+                                >
+                                    <li>
+                                        {props.onHandbookOpen === undefined ? (
+                                            "Handbook"
+                                        ) : (
+                                            <button
+                                                className="happy-handbook-breadcrumb__home"
+                                                onClick={props.onHandbookOpen}
+                                                type="button"
+                                            >
+                                                Handbook
+                                            </button>
+                                        )}
+                                    </li>
+                                    {props.breadcrumb.map((name, index) => (
+                                        // Two folders on one path may share a name; their place tells them apart.
+                                        <li key={`${String(index)}-${name}`}>
+                                            <Icon
+                                                className="happy-handbook-breadcrumb__separator"
+                                                name="chevron-right"
+                                                size={12}
+                                            />
+                                            {name}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </nav>
+                        )}
                         <div className="happy-handbook-editor__heading">
                             <input
                                 aria-label="Title"
@@ -176,7 +220,8 @@ export function HappyAgentHandbookEditor(props: HappyAgentHandbookEditorProps) {
                                         items={menuItems}
                                         label="More actions"
                                         onSelect={(id) => {
-                                            if (id === DISCARD) props.onDiscard();
+                                            if (id === MOVE) props.onMove?.();
+                                            else if (id === DISCARD) props.onDiscard();
                                             else if (id === REMOVE) props.onRemove();
                                         }}
                                         size="small"
@@ -244,7 +289,7 @@ export function HappyAgentHandbookEditor(props: HappyAgentHandbookEditorProps) {
                             description="It may have been removed from the handbook."
                             icon="doc"
                             size="panel"
-                            title="This item isn’t here"
+                            title="This page isn’t here"
                         />
                     ) : content.kind === "loading" ? (
                         <div className="happy-handbook-editor__reading" />

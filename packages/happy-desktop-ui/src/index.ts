@@ -934,9 +934,28 @@ export {
 } from "./pages/pipelines/HappyAgentPipelinesPage";
 export {
     HappyAgentHandbookPage,
-    type HappyAgentHandbookListRow,
     type HappyAgentHandbookPageProps,
 } from "./pages/handbook/HappyAgentHandbookPage";
+export {
+    HANDBOOK_FOLDER_ICONS,
+    handbookPath,
+    handbookTreeOf,
+    type HandbookTree,
+    type HappyAgentHandbookFolderView,
+    type HappyAgentHandbookListRow,
+} from "./pages/handbook/handbookTree";
+export {
+    HappyAgentHandbookHome,
+    type HappyAgentHandbookHomeProps,
+} from "./pages/handbook/HappyAgentHandbookHome";
+export {
+    HappyAgentHandbookFolderDialog,
+    type HappyAgentHandbookFolderDialogProps,
+} from "./pages/handbook/HappyAgentHandbookFolderDialog";
+export {
+    HappyAgentHandbookMovePicker,
+    type HappyAgentHandbookMovePickerProps,
+} from "./pages/handbook/HappyAgentHandbookMovePicker";
 export {
     HappyAgentHandbookEditor,
     type HappyAgentHandbookDraftSync,

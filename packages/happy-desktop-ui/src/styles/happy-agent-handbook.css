@@ -1,11 +1,12 @@
 /*
- * P-050 Happy Agent handbook: the team's items beside the one being read or
- * written, its history beside that, and the review an apply goes through.
+ * P-050 Happy Agent handbook: its home of category tiles, each with a small
+ * tree of folders and pages; one page with its history beside it; and the
+ * review an apply goes through.
  *
- * The page takes the whole lane as three columns that meet on hairlines: a
- * fixed list, the editor, and the history panel while it is open. The
- * editor's header stands on the document's own column, so the title sits over
- * the first letter of the text. Colors, radii, and type come only from theme
+ * The home is a grid of hairline tiles on a column of its own. A page takes
+ * the lane with its history panel meeting it on a hairline, and the editor's
+ * header stands on the document's own column, so the title sits over the
+ * first letter of the text. Colors, radii, and type come only from theme
  * roles.
  */
 
@@ -38,68 +39,161 @@
     border-top: 1px solid var(--divider);
 }
 
-/* ---- List -------------------------------------------------------------- */
+/* ---- Home -------------------------------------------------------------- */
 
-.happy-handbook__list {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    width: clamp(200px, 24%, 264px);
-    min-height: 0;
-    border-right: 1px solid var(--divider);
-    background: var(--groupped-background);
-}
-
-.happy-handbook__list-top,
-.happy-handbook__list-bottom {
-    display: flex;
-    flex: none;
-    padding: 8px;
-}
-
-/* The rows below keep their own 8px, so the button and the first row sit 8px apart. */
-.happy-handbook__list-top {
-    padding-bottom: 0;
-}
-
-.happy-handbook__list-bottom {
-    border-top: 1px solid var(--divider);
-}
-
-.happy-handbook__list-scroll {
+.happy-handbook__home-scroll {
     flex: 1 1 0%;
+    min-width: 0;
     min-height: 0;
-    width: 100%;
 }
 
-.happy-handbook__list-viewport {
+.happy-handbook__home-viewport {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
 }
 
-.happy-handbook__rows {
+/*
+ * The categories are a two-dimensional grid, so the home keeps a wider column
+ * of its own than the reading measure: three tiles across at the design
+ * window, two or one as the lane narrows. The search spans the same column.
+ */
+.happy-handbook-home {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 8px;
+    gap: 16px;
+    align-self: center;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 1120px;
+    padding: 16px var(--happy-content-gutter) 32px;
 }
 
-.happy-handbook__item {
+.happy-handbook-home__grid {
+    display: grid;
+    /* At most three across: a column is never narrower than a third of the grid. */
+    grid-template-columns: repeat(auto-fill, minmax(max(256px, calc((100% - 24px) / 3)), 1fr));
+    align-items: start;
+    gap: 12px;
+}
+
+/* A hairline tile, not a raised card: the grid reads as one surface. */
+.happy-handbook-tile {
     display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.happy-handbook-tile__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 32px;
+    padding-inline-start: 8px;
+}
+
+.happy-handbook-tile__icon {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-tile__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A category's count wears the header's weight; it hides for the menu as a row's does. */
+.happy-handbook-tile__header .happy-handbook-tile__count {
+    opacity: 1;
+}
+
+.happy-handbook-tile__header:hover .happy-handbook-tree__menu,
+.happy-handbook-tile__header:focus-within .happy-handbook-tree__menu {
+    visibility: visible;
+}
+
+.happy-handbook-tile__header:hover .happy-handbook-tree__count,
+.happy-handbook-tile__header:focus-within .happy-handbook-tree__count {
+    visibility: hidden;
+}
+
+.happy-handbook-tile__empty {
+    margin: 0;
+    padding: 4px 8px 8px 28px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-handbook-tile__more {
+    align-self: flex-start;
+    margin: 0;
+    padding: 4px 8px 4px 28px;
+    border: 0;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    line-height: 16px;
+    cursor: pointer;
+}
+
+.happy-handbook-tile__more:hover {
+    color: var(--text);
+}
+
+/* ---- Tree -------------------------------------------------------------- */
+
+.happy-handbook-tree {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-handbook-tree__node {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
 }
 
-.happy-handbook-row {
+.happy-handbook-tree__row {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 28px;
+    border-radius: 6px;
+}
+
+.happy-handbook-tree__row:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-tree__button {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: 8px;
-    box-sizing: border-box;
+    gap: 6px;
     min-width: 0;
-    height: 32px;
+    height: 100%;
     margin: 0;
-    padding: 0 8px;
+    padding: 0 0 0 4px;
     border: 0;
     border-radius: 6px;
     background: none;
@@ -111,32 +205,37 @@
     cursor: pointer;
 }
 
-.happy-handbook-row:hover {
-    background: var(--surface-pressed);
-}
-
-.happy-handbook-row[data-selected="true"] {
-    background: var(--surface-selected);
-}
-
-.happy-handbook-row:focus-visible,
+.happy-handbook-tree__button:focus-visible,
+.happy-handbook-tile__more:focus-visible,
+.happy-handbook-result:focus-visible,
+.happy-handbook-move__row:focus-visible,
+.happy-handbook-breadcrumb__home:focus-visible,
 .happy-handbook-history__toggle:focus-visible {
     outline: 2px solid var(--text-link);
     outline-offset: -2px;
 }
 
-/* The star's slot is kept on every row, so titles start on one column. */
-.happy-handbook-row__star {
-    display: flex;
+.happy-handbook-tree__chevron,
+.happy-handbook-tree__chevron-lane {
     flex: none;
-    align-items: center;
-    justify-content: center;
     width: 12px;
-    height: 12px;
-    color: var(--text);
+    color: var(--text-secondary);
 }
 
-.happy-handbook-row__title {
+.happy-handbook-tree__chevron {
+    transition: transform 120ms ease;
+}
+
+.happy-handbook-tree__chevron--open {
+    transform: rotate(90deg);
+}
+
+.happy-handbook-tree__glyph {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-tree__label {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -144,14 +243,64 @@
     white-space: nowrap;
 }
 
-.happy-handbook-row__pending {
+.happy-handbook-tree__row[data-kind="folder"] .happy-handbook-tree__label {
+    color: var(--text-secondary);
+}
+
+/*
+ * The count and the folder's menu share one fixed slot: the faint count at
+ * rest, the menu while the row is hovered or focused. Neither moves the name.
+ */
+.happy-handbook-tree__trailing {
+    position: relative;
     display: flex;
     flex: none;
     align-items: center;
+    justify-content: flex-end;
     gap: 6px;
+    min-width: 28px;
+    height: 28px;
+    padding-inline-end: 8px;
+    box-sizing: border-box;
 }
 
-.happy-handbook-row__dot,
+.happy-handbook-tree__count {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+}
+
+.happy-handbook-tree__trailing .happy-handbook-tree__menu {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    visibility: hidden;
+}
+
+.happy-handbook-tree__row:hover .happy-handbook-tree__menu,
+.happy-handbook-tree__row:focus-within .happy-handbook-tree__menu {
+    visibility: visible;
+}
+
+.happy-handbook-tree__row:hover .happy-handbook-tree__count,
+.happy-handbook-tree__row:focus-within .happy-handbook-tree__count {
+    visibility: hidden;
+}
+
+.happy-handbook-tree__star {
+    color: var(--text-secondary);
+}
+
+.happy-handbook-tree__empty {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.happy-handbook-tree__dot,
 .happy-handbook-editor__dot {
     flex: none;
     width: 8px;
@@ -160,27 +309,241 @@
     background: var(--happy-tile-orange);
 }
 
-.happy-handbook-row__revision {
+/* ---- Search results ---------------------------------------------------- */
+
+.happy-handbook-results {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    list-style: none;
+    overflow: hidden;
+}
+
+.happy-handbook-results > li + li {
+    border-top: 1px solid var(--divider);
+}
+
+.happy-handbook-result {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 12px 16px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-handbook-result:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-result__glyph {
     flex: none;
-    min-width: 24px;
+    margin-top: 2px;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-result__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-handbook-result__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+.happy-handbook-result__path,
+.happy-handbook-result__description {
+    overflow: hidden;
     color: var(--text-secondary);
     font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    text-align: end;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.happy-handbook-row__revision[data-new="true"] {
-    color: var(--text-link);
-}
+/* ---- Breadcrumb -------------------------------------------------------- */
 
-.happy-handbook__empty {
+.happy-handbook-breadcrumb {
     display: flex;
-    flex: 1 1 0%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    list-style: none;
+}
+
+.happy-handbook-breadcrumb > li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.happy-handbook-breadcrumb__separator {
+    color: var(--text-secondary);
+}
+
+.happy-handbook-breadcrumb__home {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.happy-handbook-breadcrumb__home:hover {
+    color: var(--text);
+}
+
+/* ---- Folder dialog and Move to… --------------------------------------- */
+
+.happy-handbook-folder-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-handbook-folder-dialog__lead {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-folder-dialog__icons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.happy-handbook-folder-dialog__legend {
+    padding: 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-handbook-icon-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.happy-handbook-icon-grid__option {
+    display: flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.happy-handbook-icon-grid__option:hover {
+    background: var(--surface-pressed);
+    color: var(--text);
+}
+
+.happy-handbook-icon-grid__option[aria-checked="true"] {
+    border-color: var(--text);
+    color: var(--text);
+}
+
+.happy-handbook-icon-grid__option:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 1px;
+}
+
+.happy-handbook-move {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.happy-handbook-move__list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-handbook-move__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 32px;
+    margin: 0;
+    padding-block: 0;
+    padding-inline-end: 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-handbook-move__row:hover:not(:disabled) {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-move__row:disabled {
+    color: var(--text-secondary);
+    cursor: default;
+}
+
+.happy-handbook-move__label {
+    flex: 1 1 auto;
     min-width: 0;
-    min-height: 0;
-    padding: 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-handbook-move__why {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
 }
 
 /* ---- Faces ------------------------------------------------------------- */

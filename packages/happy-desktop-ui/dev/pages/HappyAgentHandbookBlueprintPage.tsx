@@ -1,13 +1,17 @@
 import { useState } from "react";
 import type { DocumentEditorUser } from "../../src/DocumentEditor";
 import type { HappyAgentHandbookPerson } from "../../src/pages/handbook/handbookPresentation";
+import { handbookTreeOf } from "../../src/pages/handbook/handbookTree";
 import type { HappyAgentHandbookEditorProps } from "../../src/pages/handbook/HappyAgentHandbookEditor";
+import { HappyAgentHandbookFolderDialog } from "../../src/pages/handbook/HappyAgentHandbookFolderDialog";
+import { HappyAgentHandbookMovePicker } from "../../src/pages/handbook/HappyAgentHandbookMovePicker";
 import type {
     HappyAgentHandbookHistoryPanelProps,
     HappyAgentHandbookHistoryRow,
 } from "../../src/pages/handbook/HappyAgentHandbookHistoryPanel";
 import {
     HappyAgentHandbookPage,
+    type HappyAgentHandbookFolderView,
     type HappyAgentHandbookListRow,
     type HappyAgentHandbookPageProps,
 } from "../../src/pages/handbook/HappyAgentHandbookPage";
@@ -51,51 +55,230 @@ Deploy to staging first; promote to production after a smoke test.
 - Write the rollback command into the deploy thread before you start.
 `;
 
-const ITEMS: readonly HappyAgentHandbookListRow[] = [
-    {
-        id: "hb_style",
-        title: "Code style",
-        alwaysInContext: true,
-        pending: false,
-        revision: 3,
-        pendingPeople: [],
-    },
-    {
+/** The pages the item specimens open, with the state they show. */
+const SPECIAL: Readonly<
+    Record<
+        string,
+        {
+            readonly id: string;
+            readonly description?: string;
+            readonly alwaysInContext?: boolean;
+            readonly pending?: boolean;
+            readonly revision?: number | null;
+            readonly pendingPeople?: readonly HappyAgentHandbookPerson[];
+        }
+    >
+> = {
+    Deploys: {
         id: "hb_deploys",
-        title: "Deploys",
-        alwaysInContext: false,
+        description: "How and when we ship each service",
         pending: true,
         revision: 5,
         pendingPeople: [KIRILL, STEVE],
     },
-    {
-        id: "hb_oncall",
-        title: "On-call",
-        alwaysInContext: false,
-        pending: false,
-        revision: 2,
-        pendingPeople: [],
-    },
-    {
+    "Code style": { id: "hb_style", alwaysInContext: true, revision: 3 },
+    "On-call": { id: "hb_oncall", revision: 2 },
+    "Release notes": {
         id: "hb_release",
-        title: "Release notes",
-        alwaysInContext: false,
+        description: "What changed, for people rather than for the code",
         pending: true,
         revision: null,
         pendingPeople: [ANA],
     },
+    "Kickoff call": {
+        id: "hb_kickoff",
+        description: "The first meeting with a new customer: agenda and owners",
+    },
+    "First 30 days": {
+        id: "hb_first-30",
+        description: "Milestones a new customer should reach in their first month of onboarding",
+        pending: true,
+        revision: 2,
+        pendingPeople: [ANA],
+    },
+};
+
+/** A category, its folders, and their pages, as a team like Octavius's files them. */
+type Shelf = readonly [name: string, icon: string, folders: readonly Folder[]];
+type Folder = readonly [name: string, pages: readonly string[], subfolders?: readonly Folder[]];
+
+const SHELVES: readonly Shelf[] = [
+    [
+        "Sales",
+        "trending-up-outline",
+        [
+            ["Enablement", ["Discovery calls", "Demo script"]],
+            ["Forecast", ["Weekly commit", "Pipeline hygiene"]],
+            ["Process", ["Deal desk", "Pricing approvals", "Handoff to success"]],
+        ],
+    ],
+    [
+        "Marketing",
+        "megaphone-outline",
+        [
+            ["Operations", ["Campaign briefs", "Lead routing"]],
+            ["Programs", ["Webinars", "Customer stories"]],
+            ["Strategy", ["Positioning", "Messaging", "Launch tiers"]],
+        ],
+    ],
+    [
+        "Engineering",
+        "code-slash-outline",
+        [
+            ["Architecture", ["Service map", "Data ownership"]],
+            ["Delivery", ["Code review", "Code style"]],
+            ["Reliability", ["Deploys", "On-call"]],
+            ["Security", ["Secrets"]],
+        ],
+    ],
+    [
+        "Customer Success and Support",
+        "headset-outline",
+        [
+            [
+                "Customer Success",
+                [],
+                [
+                    ["Adoption", ["Health scores", "Usage reviews"]],
+                    ["Onboarding", ["Kickoff call", "First 30 days"]],
+                    ["Renewals", ["Renewal playbook", "Churn risk"]],
+                    ["Support", ["Escalations"]],
+                ],
+            ],
+        ],
+    ],
+    [
+        "Operations",
+        "settings-outline",
+        [
+            ["Business Operations", ["Planning cadence", "Vendor reviews"]],
+            ["Knowledge Management", ["Where things live", "Writing guide"]],
+            ["Revops", ["CRM fields", "Territories", "Comp plans"]],
+            ["Risk Management", ["Incident reviews"]],
+        ],
+    ],
+    [
+        "Finance",
+        "wallet-outline",
+        [
+            ["Controls", ["Spend approvals", "Expense policy"]],
+            ["Planning", ["Budget cycle", "Headcount plan"]],
+            ["Reporting", ["Month-end close"]],
+            ["Revenue Recognition", ["Contracts", "Usage billing"]],
+        ],
+    ],
+    [
+        "People and HR",
+        "people-outline",
+        [
+            ["Compensation", ["Pay bands"]],
+            ["Development", ["Career ladders", "Feedback"]],
+            ["Talent", ["Interview loops", "Offers"]],
+            ["Workplace", ["Remote work", "Travel"]],
+        ],
+    ],
+    [
+        "Product and Design",
+        "color-palette-outline",
+        [
+            ["Analytics", ["Event naming"]],
+            ["Delivery", ["Specs", "Release notes", "Betas"]],
+            ["Discovery", ["Interviews", "Research repository"]],
+            ["Strategy", ["Roadmap", "Principles"]],
+        ],
+    ],
+    [
+        "General",
+        "grid-outline",
+        [
+            ["Communication", ["Meetings", "Async updates"]],
+            ["Company", ["Mission", "Values", "Glossary"]],
+            ["Governance", ["Decision records", "Policies"]],
+        ],
+    ],
 ];
+
+const slug = (value: string): string => value.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-");
+
+/** The fixture's folders and pages, with Deploys, Code style and Release notes in their places. */
+const LIBRARY = ((): {
+    folders: HappyAgentHandbookFolderView[];
+    items: HappyAgentHandbookListRow[];
+} => {
+    const folders: HappyAgentHandbookFolderView[] = [];
+    const items: HappyAgentHandbookListRow[] = [];
+    const file = (folder: Folder, parentId: string, path: string): void => {
+        const id = `hf_${slug(path)}`;
+        folders.push({ id, parentId, name: folder[0], icon: null });
+        for (const title of folder[1]) {
+            const special = SPECIAL[title];
+            items.push({
+                id: special?.id ?? `hb_${slug(`${path}-${title}`)}`,
+                title,
+                description: special?.description ?? "",
+                folderId: id,
+                alwaysInContext: special?.alwaysInContext ?? false,
+                pending: special?.pending ?? false,
+                revision: special?.revision === undefined ? 1 : special.revision,
+                pendingPeople: special?.pendingPeople ?? [],
+            });
+        }
+        for (const child of folder[2] ?? []) file(child, id, `${path}-${child[0]}`);
+    };
+    for (const [name, icon, children] of SHELVES) {
+        const id = `hf_${slug(name)}`;
+        folders.push({ id, parentId: null, name, icon });
+        for (const child of children) file(child, id, `${name}-${child[0]}`);
+    }
+    items.push({
+        id: "hb_instructions",
+        title: "Instructions",
+        description: "What every agent on the team was told before the handbook",
+        folderId: null,
+        alwaysInContext: true,
+        pending: false,
+        revision: 1,
+        pendingPeople: [],
+    });
+    return { folders, items };
+})();
+
+const RELIABILITY = "hf_engineering-reliability";
+const TREE = handbookTreeOf(LIBRARY.folders, LIBRARY.items);
 
 const PAGE: HappyAgentHandbookPageProps = {
     status: "ready",
-    items: ITEMS,
+    folders: LIBRARY.folders,
+    items: LIBRARY.items,
     selectedId: "hb_deploys",
     canEdit: true,
     canApply: true,
+    search: "",
+    defaultExpandedIds: ["hf_customer-success-and-support-customer-success"],
+    onSearchChange: noop,
     onItemSelect: noop,
+    onHome: noop,
     onItemCreate: noop,
+    onFolderCreate: noop,
+    onFolderEdit: noop,
+    onFolderMove: noop,
+    onFolderDelete: noop,
     onApplyAll: noop,
 };
+
+/** The home, with its search typed into for real. */
+function Home(props: Partial<HappyAgentHandbookPageProps>) {
+    const [search, setSearch] = useState(props.search ?? "");
+    return (
+        <HappyAgentHandbookPage
+            {...PAGE}
+            selectedId={undefined}
+            {...props}
+            onSearchChange={setSearch}
+            search={search}
+        />
+    );
+}
 
 function editorFor(
     window: DocumentWindow,
@@ -121,6 +304,9 @@ function editorFor(
         onApply: noop,
         onDiscard: noop,
         onRemove: noop,
+        onMove: noop,
+        onHandbookOpen: noop,
+        breadcrumb: ["Engineering", "Reliability"],
         ...change,
     };
 }
@@ -232,7 +418,7 @@ function SeveralEditors() {
     return (
         <>
             <FullScreenSpecimen
-                detail="Steve and Kirill write in the same draft at once, each with their own caret; every change merges as it arrives and is saved as it is typed. The list marks the item unapplied, with whose edits."
+                detail="Steve and Kirill write in the same draft at once, each with their own caret; every change merges as it arrives and is saved as it is typed. The page says it is unapplied, with whose edits, under where it is filed."
                 label="Several editors, Steve's window"
                 number="02"
                 screen="02-several-editors-steve-1280x792"
@@ -290,7 +476,7 @@ function ReadOnly() {
     const window = useDocumentAlone(DRAFT_DEPLOYS, STEVE_WRITING);
     return (
         <FullScreenSpecimen
-            detail="A member without handbook.edit or handbook.apply reads everything, the drafts included, but nothing is editable and there is no New item, Apply, Apply all or Remove."
+            detail="A member without handbook.edit or handbook.apply reads everything, the drafts included, but nothing is editable and there is no New page, New folder, Move, Apply, Apply all or Remove."
             label="Read only"
             number="06"
             screen="06-read-only-1280x792"
@@ -362,24 +548,121 @@ function SettingsLink() {
     );
 }
 
+function HomeSpecimens() {
+    return (
+        <>
+            <FullScreenSpecimen
+                detail="Nine categories as tiles, three across: each with its icon, name and page count, then a small tree of its folders with their counts. Customer Success is open in place to its own folders; Instructions, filed nowhere, closes the grid in an unnamed tile. Hover a folder for its menu."
+                label="Home"
+                number="09"
+                screen="09-home-1280x792"
+                window={WINDOW}
+            >
+                <Home />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The home at Happy's smallest window: the grid drops to the columns that fit."
+                label="Home, smallest window"
+                number="09b"
+                screen="09b-home-760x670"
+                window={MINIMUM}
+            >
+                <Home />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Searching filters pages by title, description and folder path, here “onboard”: Onboarding's pages, found by their folder, each with its path and description."
+                label="Search"
+                number="10"
+                screen="10-search-1280x792"
+                window={WINDOW}
+            >
+                <Home search="onboard" />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Move to… for a page: every folder as a tree under the categories' icons, with where it is now marked. Moving files it at once; nothing is applied and agents are not told."
+                label="Move to…"
+                number="11"
+                screen="11-move-1280x792"
+                window={WINDOW}
+            >
+                <HappyAgentHandbookMovePicker
+                    current={RELIABILITY}
+                    onClose={noop}
+                    onMove={noop}
+                    target={{ kind: "item", id: "hb_deploys", title: "Deploys" }}
+                    tree={TREE}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Moving the Engineering category: it cannot go inside itself, and its two levels rule out folders already three deep, such as Customer Success's. It is on its way into General."
+                label="Move a folder"
+                number="11b"
+                screen="11b-move-folder-1280x792"
+                window={WINDOW}
+            >
+                <HappyAgentHandbookMovePicker
+                    current={null}
+                    moving="hf_general"
+                    onClose={noop}
+                    onMove={noop}
+                    target={{ kind: "folder", id: "hf_engineering", title: "Engineering" }}
+                    tree={TREE}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A new category names itself and picks its icon from the house set."
+                label="New category"
+                number="12"
+                screen="12-new-category-1280x792"
+                window={WINDOW}
+            >
+                <HappyAgentHandbookFolderDialog
+                    icon="shield-checkmark-outline"
+                    mode="create"
+                    name="Legal"
+                    onClose={noop}
+                    onIconChange={noop}
+                    onNameChange={noop}
+                    onSubmit={noop}
+                    saving={false}
+                    topLevel
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A refused write says why on the page until it is dismissed: here, deleting a folder that still holds pages."
+                label="Refused"
+                number="13"
+                screen="13-refused-1280x792"
+                window={WINDOW}
+            >
+                <Home
+                    failure="Only an empty folder can be deleted. Move its pages and folders out first; removed pages still count."
+                    onFailureDismiss={noop}
+                />
+            </FullScreenSpecimen>
+        </>
+    );
+}
+
 export function HappyAgentHandbookBlueprintPage() {
     return (
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The team's handbook: items people write together, applied when they're ready, with a review that holds what was read and a history of every change."
+            summary="The team's handbook: pages filed in folders by team, written together, applied when they're ready, with a review that holds what was read and a history of every change."
             title="Handbook"
             width={WINDOW.width + 64}
         >
             <FullScreenSpecimen
-                detail="A team with nothing written yet. Someone who may edit is offered a first item."
+                detail="A team with nothing written yet. Someone who may edit is offered a first page or a first category."
                 label="Empty"
                 number="01"
                 screen="01-empty-1280x792"
                 window={WINDOW}
             >
-                <HappyAgentHandbookPage {...PAGE} items={[]} selectedId={undefined} />
+                <Home folders={[]} items={[]} />
             </FullScreenSpecimen>
+            <HomeSpecimens />
             <SeveralEditors />
             <Pending />
             <FullScreenSpecimen
