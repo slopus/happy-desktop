@@ -2334,11 +2334,23 @@ function unreadOf(agents: readonly Agent[]): ProjectGroup["unread"] {
     };
 }
 
-function workspacePath(workspace: Workspace | undefined): string {
+export function workspacePath(workspace: Workspace | undefined): string {
     return workspace === undefined ? "" : computePath(workspace.compute);
 }
 
-function computePath(compute: Project["compute"]): string {
+/**
+ * Where Happy Cloud keeps a bot's or task's folder, which the protocol package
+ * does not name yet: on no machine this client can reach, so it has no path.
+ */
+interface HappyCloudSandboxCompute {
+    readonly type: "sandbox";
+}
+
+/**
+ * A folder on another machine, which includes a type this client does not
+ * know yet, has no local path rather than failing the session.
+ */
+function computePath(compute: Project["compute"] | HappyCloudSandboxCompute): string {
     switch (compute.type) {
         case "host":
             return compute.path;
@@ -2346,6 +2358,9 @@ function computePath(compute: Project["compute"]): string {
             return `/docker/${compute.image}`;
         case "runner":
             return compute.path ?? "";
+        case "sandbox":
+        default:
+            return "";
     }
 }
 
