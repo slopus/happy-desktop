@@ -131,11 +131,12 @@ const screens: readonly Screen[] = [
             skip: { onSelect: noop },
             view: {
                 kind: "inference",
-                options: [
-                    { id: "chatgpt", connected: false, onSelect: noop },
-                    { id: "claude", connected: true },
-                    { id: "grok", connected: false, onSelect: noop },
-                    { id: "custom", connected: false, onSelect: noop },
+                rows: [
+                    { id: "chatgpt", accounts: 0, onOpen: noop },
+                    { id: "claude", accounts: 1, onOpen: noop },
+                    { id: "xai", accounts: 0, onOpen: noop },
+                    { id: "bedrock", accounts: 0, onOpen: noop },
+                    { id: "custom", accounts: 0, onOpen: noop },
                 ],
             },
         },
