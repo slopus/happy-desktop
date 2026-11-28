@@ -12,7 +12,7 @@ import type {
     HappyAgentCloudTarget,
 } from "./happyAgentCloudProviders.js";
 import {
-    happyAgentCloudConnectionEditable,
+    happyAgentCloudConnectionNamed,
     happyAgentCloudCredentialReplaceable,
 } from "./happyAgentCloudProviders.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
@@ -31,11 +31,30 @@ export function happyAgentCloudProviderAddTeamOnly(flow: HappyAgentCloudProvider
     return flow.kind === "apiKey" && flow.vendor === "bedrock";
 }
 
+/** Where what the add dialog adds is kept: a listed connection, or a new one by this name. */
+export type HappyAgentCloudProviderAddDestination =
+    | { readonly kind: "existing"; readonly connectionId: string }
+    | { readonly kind: "new"; readonly name: string };
+
+/** One connection the add dialog offers to keep what it adds in. */
+export interface HappyAgentCloudProviderAddOption {
+    readonly connectionId: string;
+    readonly name: string;
+}
+
 /** The add dialog, while it is open. */
 export interface HappyAgentCloudProviderAdd {
     readonly flow: HappyAgentCloudProviderAddFlow;
-    /** Where what is added is kept. */
+    /**
+     * Once a flow is chosen: `details` names what is added and says where it
+     * goes, then `credential` takes the key or runs the sign-in.
+     */
+    readonly step: "details" | "credential";
+    /** Whose it is: the team's, or the reader's own. */
     readonly to: HappyAgentCloudScope;
+    /** The name typed for what is added; empty keeps the one it is given by default. */
+    readonly label: string;
+    readonly destination: HappyAgentCloudProviderAddDestination;
     /**
      * - `idle`: waiting on the person.
      * - `busy`: a request is out.
@@ -56,30 +75,28 @@ export interface HappyAgentCloudProviderAdd {
     readonly error?: { readonly title: string; readonly message: string };
 }
 
-/** The edit dialog of one of the team's connections, while it is open. */
-export interface HappyAgentCloudProviderEdit {
-    readonly connectionId: string;
-    /** `busy` while the changes are out. */
-    readonly phase: "idle" | "busy";
-    /** Why saving stopped; what was saved before it stays saved. */
-    readonly error?: { readonly title: string; readonly message: string };
-}
+/** What one provider's sheet shows: its credentials, one of them to edit, or its name. */
+export type HappyAgentCloudProviderDetailView =
+    | { readonly kind: "credentials" }
+    | { readonly kind: "credential"; readonly credentialId: string }
+    | { readonly kind: "rename" };
 
-/** What the edit dialog saves: a new name, and per credential a new label or key. */
-export interface HappyAgentCloudProviderEditChanges {
-    readonly name?: string;
-    readonly credentials?: readonly {
-        readonly id: string;
-        readonly label?: string;
-        /** A key that replaces this one: it is added, then the old one is removed. */
-        readonly secret?: string;
-    }[];
+/** One provider's sheet, while it is open. */
+export interface HappyAgentCloudProviderDetail {
+    readonly connectionId: string;
+    readonly view: HappyAgentCloudProviderDetailView;
+    /** `busy` while a change made in the sheet is out. */
+    readonly phase: "idle" | "busy";
+    /** Why the last change made in the sheet stopped. */
+    readonly error?: { readonly title: string; readonly message: string };
 }
 
 export interface HappyAgentCloudProvidersSnapshot {
     /** True until the first answer, so "nothing added" is never claimed early. */
     readonly loading: boolean;
     readonly connections: readonly HappyAgentCloudConnection[];
+    /** Whose providers the list shows; the team's until the reader picks their own. */
+    readonly listScope: HappyAgentCloudScope;
     /** Whether the reader may add to their own account. */
     readonly privateAllowed: boolean;
     /** Whether the reader may add for the whole team. */
@@ -91,7 +108,7 @@ export interface HappyAgentCloudProvidersSnapshot {
     /** Credentials whose change the server hasn't answered. */
     readonly credentialsSaving: ReadonlySet<string>;
     readonly add?: HappyAgentCloudProviderAdd;
-    readonly edit?: HappyAgentCloudProviderEdit;
+    readonly detail?: HappyAgentCloudProviderDetail;
     /** Why the list could not be read. */
     readonly error?: UserError;
     /** Why the last change to a credential was refused. */
@@ -99,24 +116,39 @@ export interface HappyAgentCloudProvidersSnapshot {
 }
 
 /**
- * Settings › AI providers on Happy Cloud: what conversations run on — Happy
- * (free), the team's, and the reader's own — and adding to them by API key,
- * setup token or subscription sign-in. Follows `config.updated` while watched.
+ * Settings › AI providers on Happy Cloud: the providers the team and the
+ * reader added, each opened on its own to see and edit its credentials one by
+ * one, and adding to them by API key, setup token or subscription sign-in.
+ * Follows `config.updated` while watched.
  */
 export interface HappyAgentCloudProvidersStore {
     get(): HappyAgentCloudProvidersSnapshot;
     subscribe(listener: () => void): () => void;
-    /** Opens the add dialog, on one flow when a link names it. */
+    listScopeUpdate(scope: HappyAgentCloudScope): void;
+    /**
+     * Opens the add dialog: on the choices, or on one flow's credential when
+     * a link names it, with what it adds kept in `connectionId` where that
+     * connection can take it.
+     */
     addOpen(options?: {
         readonly flow?: HappyAgentCloudProviderAddFlow;
         readonly to?: HappyAgentCloudScope;
+        readonly connectionId?: string;
     }): void;
+    /** Picks a flow, which then asks for a name and where it goes. */
     addFlowSelect(flow: HappyAgentCloudProviderAddFlow): void;
-    /** Back to the choices; a sign-in waiting on the vendor is cancelled. */
+    /** Back one step; a sign-in waiting on the vendor is cancelled. */
     addBack(): void;
     /** Closes the dialog; a sign-in waiting on the vendor is cancelled. */
     addClose(): void;
-    addDestinationUpdate(to: HappyAgentCloudScope): void;
+    addScopeUpdate(to: HappyAgentCloudScope): void;
+    addLabelUpdate(label: string): void;
+    addDestinationSelect(connectionId: string): void;
+    /** Keeps what is added in a new provider, named with `addDestinationNameUpdate`. */
+    addDestinationNewSelect(): void;
+    addDestinationNameUpdate(name: string): void;
+    /** From the name and destination on to the credential. */
+    addDetailsSubmit(): void;
     /**
      * Adds the API key of the open key flow. A Bedrock key may name the
      * region the team's Bedrock keys route to, which is saved first.
@@ -135,12 +167,20 @@ export interface HappyAgentCloudProvidersStore {
     /** Sends the code Claude's page showed. */
     signInCodeSubmit(code: string): void;
     credentialEnabledUpdate(connectionId: string, credentialId: string, enabled: boolean): void;
+    /** Removes a credential; from its own edit view, the sheet goes back to the list once it is gone. */
     credentialRemove(connectionId: string, credentialId: string): void;
-    /** Opens the edit dialog of one of the team's connections. */
-    editOpen(connectionId: string): void;
-    editClose(): void;
-    /** Saves what changed in turn, stopping at the first refusal. */
-    editSave(changes: HappyAgentCloudProviderEditChanges): void;
+    /** Opens one provider's sheet on its credentials. */
+    detailOpen(connectionId: string): void;
+    detailClose(): void;
+    /** From editing back to the provider's credentials. */
+    detailBack(): void;
+    /** Opens one credential to rename, rekey or remove, where the reader may change it. */
+    credentialEditOpen(credentialId: string): void;
+    /** Saves the open credential's name and, for a key or token, one typed to replace it. */
+    credentialSave(changes: { readonly label: string; readonly secret?: string }): void;
+    /** Opens the name of a named provider the reader may change. */
+    connectionRenameOpen(): void;
+    connectionNameSave(name: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -162,6 +202,73 @@ const KEY_VENDOR_NAMES: Readonly<Record<HappyAgentCloudKeyVendor, string>> = {
     bedrock: "Amazon Bedrock",
 };
 
+/** The team's own connection a flow's credential lands in by default: its vendor's. */
+function teamConnectionOf(flow: HappyAgentCloudProviderAddFlow): string | undefined {
+    switch (flow.kind) {
+        case "choose":
+            return undefined;
+        case "apiKey":
+            return flow.vendor;
+        case "chatgpt":
+            return "codex";
+        case "claude":
+            return "claude-code";
+    }
+}
+
+function teamConnectionName(flow: HappyAgentCloudProviderAddFlow): string {
+    if (flow.kind === "apiKey") return KEY_VENDOR_NAMES[flow.vendor];
+    return flow.kind === "chatgpt" ? "ChatGPT" : "Claude";
+}
+
+/**
+ * Where a flow's credential may be kept for `to`, the default first: the
+ * team's connection for its vendor, or the reader's own account, then the
+ * named providers of the same scope. Bedrock keys run only in the team's.
+ */
+export function happyAgentCloudProviderAddOptions(
+    connections: readonly HappyAgentCloudConnection[],
+    flow: HappyAgentCloudProviderAddFlow,
+    to: HappyAgentCloudScope,
+): readonly HappyAgentCloudProviderAddOption[] {
+    const team = teamConnectionOf(flow);
+    if (team === undefined) return [];
+    const listed = (id: string) => connections.find((connection) => connection.id === id);
+    const first: HappyAgentCloudProviderAddOption =
+        to === "team"
+            ? { connectionId: team, name: listed(team)?.name ?? teamConnectionName(flow) }
+            : { connectionId: "private", name: "My account" };
+    if (happyAgentCloudProviderAddTeamOnly(flow)) return [first];
+    return [
+        first,
+        ...connections
+            .filter(
+                (connection) =>
+                    connection.scope === to && happyAgentCloudConnectionNamed(connection),
+            )
+            .map((connection) => ({ connectionId: connection.id, name: connection.name })),
+    ];
+}
+
+/** Whether a flow's credential may go in a new provider: all but Bedrock's. */
+export function happyAgentCloudProviderAddNewAllowed(
+    flow: HappyAgentCloudProviderAddFlow,
+): boolean {
+    return flow.kind !== "choose" && !happyAgentCloudProviderAddTeamOnly(flow);
+}
+
+/**
+ * The name a credential is given when none is typed. A sign-in has none of
+ * its own: the server names it after the account it signed in.
+ */
+export function happyAgentCloudProviderAddLabelDefault(
+    flow: HappyAgentCloudProviderAddFlow,
+): string | undefined {
+    if (flow.kind === "apiKey") return `${KEY_VENDOR_NAMES[flow.vendor]} API key`;
+    if (flow.kind === "claude" && flow.setupToken) return "Claude (setup token)";
+    return undefined;
+}
+
 function signInCliOf(flow: HappyAgentCloudProviderAddFlow): HappyAgentCloudSignInCli | undefined {
     if (flow.kind === "chatgpt") return "codex";
     if (flow.kind === "claude" && !flow.setupToken) return "claude";
@@ -174,6 +281,7 @@ export function happyAgentCloudProvidersStoreCreate(
     const store = createStore<HappyAgentCloudProvidersSnapshot>()(() => ({
         loading: true,
         connections: [],
+        listScope: "team",
         privateAllowed: true,
         teamAllowed: false,
         signIns: NO_SIGN_INS,
@@ -190,8 +298,25 @@ export function happyAgentCloudProvidersStoreCreate(
     /** Only the newest list read may land. */
     let generation = 0;
     let signInTimer: ReturnType<typeof setTimeout> | undefined;
-    /** The sign-in this dialog started, and the one key its retries reuse. */
-    let signIn: { readonly cli: HappyAgentCloudSignInCli; readonly mutationId: string } | undefined;
+    /**
+     * The sign-in this dialog started, the one key its retries reuse, where
+     * it is kept, and the name to give what it stores.
+     */
+    let signIn:
+        | {
+              readonly cli: HappyAgentCloudSignInCli;
+              readonly mutationId: string;
+              readonly connectionId: string;
+              readonly label: string;
+          }
+        | undefined;
+    /**
+     * The provider this dialog created for what it adds, so a retry after a
+     * refused key goes into it rather than creating another.
+     */
+    let created:
+        | { readonly name: string; readonly to: HappyAgentCloudScope; readonly id: string }
+        | undefined;
 
     const addSet = (add: HappyAgentCloudProviderAdd | undefined): void => {
         if (add) {
@@ -240,6 +365,7 @@ export function happyAgentCloudProvidersStoreCreate(
                     },
                     true,
                 );
+                detailReconcile();
             },
             (error: unknown) => {
                 if (disposed || ticket !== generation) return;
@@ -262,10 +388,7 @@ export function happyAgentCloudProvidersStoreCreate(
                     false,
                 );
                 const add = store.getState().add;
-                if (add) {
-                    const flow = flowOffered(add.flow);
-                    addUpdate({ flow, to: destinationOf(add.to, flow) });
-                }
+                if (add) addRetarget(add, flowOffered(add.flow), add.to);
             },
             () => undefined,
         );
@@ -298,12 +421,12 @@ export function happyAgentCloudProvidersStoreCreate(
         const add = store.getState().add;
         if (add) {
             const flow = flowOffered(add.flow);
-            if (flow !== add.flow) addUpdate({ flow, to: destinationOf(add.to, flow) });
+            if (flow !== add.flow) addRetarget(add, flow, add.to);
         }
     };
 
-    /** The destination asked for, where the reader may add to it and the flow may be kept. */
-    const destinationOf = (
+    /** The scope asked for, where the reader may add to it and the flow may be kept. */
+    const scopeOf = (
         to: HappyAgentCloudScope | undefined,
         flow: HappyAgentCloudProviderAddFlow | undefined,
     ): HappyAgentCloudScope => {
@@ -327,6 +450,38 @@ export function happyAgentCloudProvidersStoreCreate(
             return { kind: "choose" };
         }
         return flow;
+    };
+
+    /**
+     * Where a flow's credential goes for `to`: the destination asked for while
+     * it can take it, and the default one otherwise.
+     */
+    const destinationOf = (
+        asked: HappyAgentCloudProviderAddDestination | undefined,
+        flow: HappyAgentCloudProviderAddFlow,
+        to: HappyAgentCloudScope,
+    ): HappyAgentCloudProviderAddDestination => {
+        const options = happyAgentCloudProviderAddOptions(store.getState().connections, flow, to);
+        if (asked?.kind === "new" && happyAgentCloudProviderAddNewAllowed(flow)) return asked;
+        if (
+            asked?.kind === "existing" &&
+            (flow.kind === "choose" ||
+                options.some((option) => option.connectionId === asked.connectionId))
+        )
+            return asked;
+        return { kind: "existing", connectionId: options[0]?.connectionId ?? "private" };
+    };
+
+    /** Puts the open dialog on `flow` and `to`, keeping its destination where it still fits. */
+    const addRetarget = (
+        add: HappyAgentCloudProviderAdd,
+        flow: HappyAgentCloudProviderAddFlow,
+        asked: HappyAgentCloudScope,
+    ): void => {
+        const to = scopeOf(asked, flow);
+        const destination = destinationOf(add.destination, flow, to);
+        if (flow === add.flow && to === add.to && destination === add.destination) return;
+        addSet({ ...add, flow, to, destination });
     };
 
     const followStart = (): void => {
@@ -365,7 +520,8 @@ export function happyAgentCloudProvidersStoreCreate(
         operation: HappyAgentCloudSignIn | null,
     ) => {
         const add = store.getState().add;
-        if (!add || signIn?.cli !== cli) return;
+        const started = signIn;
+        if (!add || started?.cli !== cli) return;
         if (operation === null || operation.status === "cancelled") {
             signIn = undefined;
             addSet(addFresh(add));
@@ -373,8 +529,26 @@ export function happyAgentCloudProvidersStoreCreate(
         }
         if (operation.status === "succeeded") {
             signIn = undefined;
-            addSet({ ...addFresh(add), phase: "done", done: `${signInWord(cli)} connected` });
-            listRead();
+            const connected = `${signInWord(cli)} connected`;
+            const label = started.label;
+            if (label === "" || operation.credentialId === null) {
+                addSet({ ...addFresh(add), phase: "done", done: connected });
+                listRead();
+                return;
+            }
+            // A sign-in is stored under the account's name; the one typed replaces it.
+            void deps.api
+                .credentialLabelUpdate(started.connectionId, operation.credentialId, label)
+                .then(
+                    () => connected,
+                    () => `${connected}, but its name wasn't saved`,
+                )
+                .then((done) => {
+                    if (disposed) return;
+                    const open = store.getState().add;
+                    if (open) addSet({ ...addFresh(open), phase: "done", done });
+                    listRead();
+                });
             return;
         }
         if (operation.status === "failed") {
@@ -435,62 +609,22 @@ export function happyAgentCloudProvidersStoreCreate(
             void deps.api.signInCancel(abandoned.cli, crypto.randomUUID()).catch(() => undefined);
     };
 
-    const editSet = (edit: HappyAgentCloudProviderEdit | undefined): void => {
-        if (edit) {
-            store.setState({ edit }, false);
-            return;
-        }
-        const { edit: _closed, ...rest } = store.getState();
-        store.setState(rest, true);
-    };
-
-    /** The requests an edit makes, in order: the name, then each credential. */
-    const editSteps = (
-        connection: HappyAgentCloudConnection,
-        changes: HappyAgentCloudProviderEditChanges,
-    ): (() => Promise<unknown>)[] => {
-        const steps: (() => Promise<unknown>)[] = [];
-        const name = changes.name?.trim();
-        if (name && name !== connection.name)
-            steps.push(() => deps.api.connectionRename(connection.id, name));
-        for (const change of changes.credentials ?? []) {
-            const credential = connection.credentials?.find((entry) => entry.id === change.id);
-            if (!credential) continue;
-            const label = change.label?.trim() || credential.label;
-            const secret = change.secret?.trim();
-            const relabel = () =>
-                label === credential.label
-                    ? Promise.resolve()
-                    : deps.api.credentialLabelUpdate(connection.id, credential.id, label);
-            if (secret && happyAgentCloudCredentialReplaceable(credential)) {
-                let same = false;
-                steps.push(async () => {
-                    // The new key keeps the old one's settings: whether it is on, and when it is used.
-                    const added = await deps.api.credentialAdd(connection.id, {
-                        vendor: credential.vendor,
-                        kind: credential.kind,
-                        secret,
-                        label,
-                        enabled: credential.enabled,
-                        ...(credential.usage === undefined ? {} : { usage: credential.usage }),
-                    });
-                    // The same key typed again is this credential: keep it. A duplicate of
-                    // another one, such as a retry after a failed remove, still replaces it;
-                    // where the server doesn't say which, the old key is kept, never lost.
-                    same =
-                        added.duplicate &&
-                        (added.credentialId === undefined || added.credentialId === credential.id);
-                });
-                steps.push(() =>
-                    same ? relabel() : deps.api.credentialRemove(connection.id, credential.id),
-                );
-            } else if (label !== credential.label) steps.push(relabel);
-        }
-        return steps;
-    };
-
     const addFailed = (title: string, error: unknown): void => {
         addUpdate({ phase: "idle", error: { title, message: happyAgentUserError(error).message } });
+    };
+
+    /**
+     * The ID of the connection the dialog keeps what it adds in, creating the
+     * new provider it names the first time it is needed.
+     */
+    const destinationResolve = async (add: HappyAgentCloudProviderAdd): Promise<string> => {
+        const destination = add.destination;
+        if (destination.kind === "existing") return destination.connectionId;
+        const name = destination.name.trim();
+        if (created && created.name === name && created.to === add.to) return created.id;
+        const { id } = await deps.api.connectionCreate(name, add.to);
+        created = { name, to: add.to, id };
+        return id;
     };
 
     /** Sends one credential the person typed to where the dialog keeps it. */
@@ -501,23 +635,32 @@ export function happyAgentCloudProvidersStoreCreate(
         },
         secret: string,
         label: string,
-        teamId: string,
         done: string,
         failed: string,
         before?: () => Promise<void>,
     ): void => {
         const add = store.getState().add;
-        if (disposed || !add || add.phase === "busy" || secret.trim() === "") return;
+        if (
+            disposed ||
+            !add ||
+            add.step !== "credential" ||
+            add.phase === "busy" ||
+            secret.trim() === ""
+        )
+            return;
         const { error: _cleared, ...rest } = add;
         addSet({ ...rest, phase: "busy" });
-        void (before ?? (() => Promise.resolve()))()
-            .then(() =>
-                deps.api.credentialAdd(add.to === "team" ? teamId : "private", {
+        let creating = add.destination.kind === "new";
+        void destinationResolve(add)
+            .then(async (connectionId) => {
+                creating = false;
+                await (before ?? (() => Promise.resolve()))();
+                return deps.api.credentialAdd(connectionId, {
                     ...input,
                     secret: secret.trim(),
-                    label,
-                }),
-            )
+                    label: add.label.trim() || label,
+                });
+            })
             .then(
                 ({ duplicate }) => {
                     if (disposed || store.getState().add === undefined) return;
@@ -525,7 +668,8 @@ export function happyAgentCloudProvidersStoreCreate(
                     listRead();
                 },
                 (error: unknown) => {
-                    if (!disposed) addFailed(failed, error);
+                    if (!disposed)
+                        addFailed(creating ? "Couldn't create the provider" : failed, error);
                 },
             );
     };
@@ -562,6 +706,97 @@ export function happyAgentCloudProvidersStoreCreate(
         );
     };
 
+    const detailSet = (detail: HappyAgentCloudProviderDetail | undefined): void => {
+        if (detail) {
+            store.setState({ detail }, false);
+            return;
+        }
+        const { detail: _closed, ...rest } = store.getState();
+        store.setState(rest, true);
+    };
+
+    /** The open sheet's connection, while it is listed. */
+    const detailConnection = (): HappyAgentCloudConnection | undefined => {
+        const { detail, connections } = store.getState();
+        return detail
+            ? connections.find((connection) => connection.id === detail.connectionId)
+            : undefined;
+    };
+
+    /** Whether the reader may change a connection's credentials and name. */
+    const manageable = (connection: HappyAgentCloudConnection): boolean => {
+        const { teamAllowed, privateAllowed } = store.getState();
+        return (
+            connection.source === "tenant" &&
+            connection.credentials !== undefined &&
+            (connection.scope === "team" ? teamAllowed : privateAllowed)
+        );
+    };
+
+    /**
+     * Keeps the open sheet on what is still listed: a credential removed
+     * elsewhere takes its edit view back to the list.
+     */
+    const detailReconcile = (): void => {
+        const detail = store.getState().detail;
+        if (!detail || detail.phase === "busy" || detail.view.kind !== "credential") return;
+        const credentialId = detail.view.credentialId;
+        const listed = detailConnection()?.credentials?.some(
+            (credential) => credential.id === credentialId,
+        );
+        if (!listed)
+            detailSet({
+                connectionId: detail.connectionId,
+                view: { kind: "credentials" },
+                phase: "idle",
+            });
+    };
+
+    /** Runs a sheet's change in turn, then shows its credentials; a refusal stays on the view. */
+    const detailRun = (
+        steps: readonly (() => Promise<unknown>)[],
+        failed: (saved: number) => string,
+    ): void => {
+        const detail = store.getState().detail;
+        if (disposed || !detail || detail.phase === "busy") return;
+        const { error: _cleared, ...rest } = detail;
+        detailSet({ ...rest, phase: "busy" });
+        let saved = 0;
+        void steps
+            .reduce<Promise<unknown>>(
+                (done, step) =>
+                    done.then(step).then(() => {
+                        saved += 1;
+                    }),
+                Promise.resolve(),
+            )
+            .then(
+                () => {
+                    if (disposed || store.getState().detail?.connectionId !== detail.connectionId)
+                        return;
+                    detailSet({
+                        connectionId: detail.connectionId,
+                        view: { kind: "credentials" },
+                        phase: "idle",
+                    });
+                    if (steps.length > 0) listRead();
+                },
+                (error: unknown) => {
+                    if (disposed || store.getState().detail?.connectionId !== detail.connectionId)
+                        return;
+                    detailSet({
+                        ...rest,
+                        phase: "idle",
+                        error: {
+                            title: failed(saved),
+                            message: happyAgentUserError(error).message,
+                        },
+                    });
+                    listRead();
+                },
+            );
+    };
+
     const actions: HappyAgentCloudProvidersStore = {
         get: () => store.getState(),
         subscribe(listener) {
@@ -585,31 +820,108 @@ export function happyAgentCloudProvidersStoreCreate(
                 }
             };
         },
+        listScopeUpdate(scope) {
+            if (disposed || store.getState().listScope === scope) return;
+            store.setState({ listScope: scope }, false);
+        },
         addOpen(options) {
             if (disposed) return;
             signInAbandon();
+            created = undefined;
+            if (store.getState().detail?.phase !== "busy") detailSet(undefined);
             const flow = flowOffered(options?.flow ?? { kind: "choose" });
-            addSet({ flow, to: destinationOf(options?.to, flow), phase: "idle" });
+            const to = scopeOf(options?.to, flow);
+            addSet({
+                flow,
+                // A link names the flow to finish: straight to its credential, kept where it says.
+                step: "credential",
+                to,
+                label: "",
+                destination: destinationOf(
+                    options?.connectionId === undefined
+                        ? undefined
+                        : { kind: "existing", connectionId: options.connectionId },
+                    flow,
+                    to,
+                ),
+                phase: "idle",
+            });
         },
         addFlowSelect(flow) {
             const add = store.getState().add;
             if (disposed || !add || add.phase === "busy") return;
             signInAbandon();
             const offered = flowOffered(flow);
-            addSet({ ...addFresh(add), flow: offered, to: destinationOf(add.to, offered) });
+            const to = scopeOf(add.to, offered);
+            addSet({
+                ...addFresh(add),
+                flow: offered,
+                step: "details",
+                to,
+                label: "",
+                destination: destinationOf(add.destination, offered, to),
+            });
         },
         addBack() {
-            actions.addFlowSelect({ kind: "choose" });
+            const add = store.getState().add;
+            if (disposed || !add || add.phase === "busy") return;
+            signInAbandon();
+            if (add.flow.kind !== "choose" && add.step === "credential") {
+                addSet({ ...addFresh(add), step: "details" });
+                return;
+            }
+            addSet({ ...addFresh(add), flow: { kind: "choose" }, label: "" });
         },
         addClose() {
             if (disposed || !store.getState().add) return;
             signInAbandon();
+            created = undefined;
             addSet(undefined);
         },
-        addDestinationUpdate(to) {
+        addScopeUpdate(to) {
             const add = store.getState().add;
             if (disposed || !add || add.phase !== "idle") return;
-            addUpdate({ to: destinationOf(to, add.flow) });
+            const scope = scopeOf(to, add.flow);
+            if (scope === add.to) return;
+            addSet({
+                ...add,
+                to: scope,
+                // A provider of the other scope cannot take it; a new one is named for this one.
+                destination: destinationOf(
+                    add.destination.kind === "new" ? add.destination : undefined,
+                    add.flow,
+                    scope,
+                ),
+            });
+        },
+        addLabelUpdate(label) {
+            const add = store.getState().add;
+            if (disposed || !add || add.phase !== "idle") return;
+            addSet({ ...add, label });
+        },
+        addDestinationSelect(connectionId) {
+            const add = store.getState().add;
+            if (disposed || !add || add.phase !== "idle") return;
+            const destination = destinationOf({ kind: "existing", connectionId }, add.flow, add.to);
+            addSet({ ...add, destination });
+        },
+        addDestinationNewSelect() {
+            const add = store.getState().add;
+            if (disposed || !add || add.phase !== "idle" || add.destination.kind === "new") return;
+            if (!happyAgentCloudProviderAddNewAllowed(add.flow)) return;
+            addSet({ ...add, destination: { kind: "new", name: "" } });
+        },
+        addDestinationNameUpdate(name) {
+            const add = store.getState().add;
+            if (disposed || !add || add.phase !== "idle" || add.destination.kind !== "new") return;
+            addSet({ ...add, destination: { kind: "new", name } });
+        },
+        addDetailsSubmit() {
+            const add = store.getState().add;
+            if (disposed || !add || add.flow.kind === "choose" || add.step !== "details") return;
+            if (add.phase !== "idle") return;
+            if (add.destination.kind === "new" && add.destination.name.trim() === "") return;
+            addSet({ ...addFresh(add), step: "credential" });
         },
         apiKeySubmit(secret, region) {
             const flow = store.getState().add?.flow;
@@ -619,7 +931,6 @@ export function happyAgentCloudProvidersStoreCreate(
                 { vendor: flow.vendor, kind: "api_key" },
                 secret,
                 `${KEY_VENDOR_NAMES[flow.vendor]} API key`,
-                flow.vendor,
                 "API key added",
                 "Couldn't add the key",
                 routed ? () => deps.api.bedrockRegionSave(routed) : undefined,
@@ -636,7 +947,6 @@ export function happyAgentCloudProvidersStoreCreate(
                 { vendor: "bedrock", kind: "aws_keys" },
                 JSON.stringify({ accessKeyId, secretAccessKey, ...(region ? { region } : {}) }),
                 "AWS access keys",
-                "bedrock",
                 "Access keys added",
                 "Couldn't add the keys",
             );
@@ -648,7 +958,6 @@ export function happyAgentCloudProvidersStoreCreate(
                 { vendor: "claude-code", kind: "oauth_token" },
                 token,
                 "Claude (setup token)",
-                "claude-code",
                 "Claude connected",
                 "Couldn't add the token",
             );
@@ -656,25 +965,41 @@ export function happyAgentCloudProvidersStoreCreate(
         signInStart() {
             const add = store.getState().add;
             const cli = add ? signInCliOf(add.flow) : undefined;
-            if (disposed || !add || !cli || add.phase === "busy" || add.phase === "waiting") return;
+            if (disposed || !add || !cli || add.step !== "credential") return;
+            if (add.phase === "busy" || add.phase === "waiting") return;
             signInTimerCancel();
-            signIn = { cli, mutationId: crypto.randomUUID() };
-            const started = signIn;
-            const target: HappyAgentCloudTarget =
-                add.to === "team"
-                    ? { providerId: cli === "codex" ? "codex" : "claude-code" }
-                    : { scope: "private" };
+            const mutationId = crypto.randomUUID();
             addSet({ ...addFresh(add), phase: "busy" });
-            void deps.api.signInStart(cli, target, started.mutationId).then(
-                (operation) => {
-                    if (!disposed && signIn === started) signInSettle(cli, operation);
-                },
-                (error: unknown) => {
-                    if (disposed || signIn !== started) return;
-                    signIn = undefined;
-                    addFailed("Sign-in failed", error);
-                },
-            );
+            let creating = add.destination.kind === "new";
+            let started: typeof signIn;
+            void destinationResolve(add)
+                .then((connectionId) => {
+                    creating = false;
+                    if (disposed || store.getState().add === undefined) return undefined;
+                    started = { cli, mutationId, connectionId, label: add.label.trim() };
+                    signIn = started;
+                    const target: HappyAgentCloudTarget =
+                        connectionId === "private"
+                            ? { scope: "private" }
+                            : { providerId: connectionId };
+                    return deps.api.signInStart(cli, target, mutationId);
+                })
+                .then(
+                    (operation) => {
+                        if (!disposed && started && signIn === started)
+                            signInSettle(cli, operation ?? null);
+                    },
+                    (error: unknown) => {
+                        if (disposed) return;
+                        if (creating) {
+                            addFailed("Couldn't create the provider", error);
+                            return;
+                        }
+                        if (signIn !== started) return;
+                        signIn = undefined;
+                        addFailed("Sign-in failed", error);
+                    },
+                );
         },
         signInCodeSubmit(code) {
             const add = store.getState().add;
@@ -707,58 +1032,115 @@ export function happyAgentCloudProvidersStoreCreate(
             );
         },
         credentialRemove(connectionId, credentialId) {
+            const detail = store.getState().detail;
+            if (
+                detail?.connectionId === connectionId &&
+                detail.view.kind === "credential" &&
+                detail.view.credentialId === credentialId
+            ) {
+                detailRun(
+                    [() => deps.api.credentialRemove(connectionId, credentialId)],
+                    () => "Not removed",
+                );
+                return;
+            }
             change(credentialId, () => deps.api.credentialRemove(connectionId, credentialId));
         },
-        editOpen(connectionId) {
-            const connection = store
+        detailOpen(connectionId) {
+            const listed = store
                 .getState()
-                .connections.find((candidate) => candidate.id === connectionId);
-            if (disposed || !store.getState().teamAllowed || !connection) return;
-            if (!happyAgentCloudConnectionEditable(connection)) return;
-            editSet({ connectionId, phase: "idle" });
+                .connections.some((connection) => connection.id === connectionId);
+            if (disposed || !listed || store.getState().detail?.phase === "busy") return;
+            detailSet({ connectionId, view: { kind: "credentials" }, phase: "idle" });
         },
-        editClose() {
-            const edit = store.getState().edit;
-            if (disposed || !edit || edit.phase === "busy") return;
-            editSet(undefined);
+        detailClose() {
+            const detail = store.getState().detail;
+            if (disposed || !detail || detail.phase === "busy") return;
+            detailSet(undefined);
         },
-        editSave(changes) {
-            const { edit, connections } = store.getState();
-            if (disposed || !edit || edit.phase === "busy") return;
-            const connection = connections.find((candidate) => candidate.id === edit.connectionId);
-            if (!connection) return;
-            const steps = editSteps(connection, changes);
-            editSet({ connectionId: edit.connectionId, phase: "busy" });
-            let saved = 0;
-            void steps
-                .reduce<Promise<unknown>>(
-                    (done, step) =>
-                        done.then(step).then(() => {
-                            saved += 1;
-                        }),
-                    Promise.resolve(),
-                )
-                .then(
-                    () => {
-                        if (disposed || store.getState().edit?.connectionId !== connection.id)
-                            return;
-                        editSet(undefined);
-                        if (steps.length > 0) listRead();
-                    },
-                    (error: unknown) => {
-                        if (disposed || store.getState().edit?.connectionId !== connection.id)
-                            return;
-                        editSet({
-                            connectionId: connection.id,
-                            phase: "idle",
-                            error: {
-                                title: saved > 0 ? "Partly saved" : "Not saved",
-                                message: happyAgentUserError(error).message,
-                            },
-                        });
-                        listRead();
-                    },
+        detailBack() {
+            const detail = store.getState().detail;
+            if (disposed || !detail || detail.phase === "busy") return;
+            detailSet({
+                connectionId: detail.connectionId,
+                view: { kind: "credentials" },
+                phase: "idle",
+            });
+        },
+        credentialEditOpen(credentialId) {
+            const detail = store.getState().detail;
+            const connection = detailConnection();
+            if (disposed || !detail || detail.phase === "busy" || !connection) return;
+            if (!manageable(connection)) return;
+            if (!connection.credentials?.some((credential) => credential.id === credentialId))
+                return;
+            detailSet({
+                connectionId: detail.connectionId,
+                view: { kind: "credential", credentialId },
+                phase: "idle",
+            });
+        },
+        credentialSave(changes) {
+            const detail = store.getState().detail;
+            const connection = detailConnection();
+            if (!detail || detail.view.kind !== "credential" || !connection) return;
+            const credentialId = detail.view.credentialId;
+            const credential = connection.credentials?.find((entry) => entry.id === credentialId);
+            if (!credential) return;
+            const label = changes.label.trim() || credential.label;
+            const secret = changes.secret?.trim();
+            const relabel = () =>
+                label === credential.label
+                    ? Promise.resolve()
+                    : deps.api.credentialLabelUpdate(connection.id, credential.id, label);
+            const steps: (() => Promise<unknown>)[] = [];
+            if (secret && happyAgentCloudCredentialReplaceable(credential)) {
+                let same = false;
+                steps.push(async () => {
+                    // The new key keeps the old one's settings: whether it is on, and when it is used.
+                    const added = await deps.api.credentialAdd(connection.id, {
+                        vendor: credential.vendor,
+                        kind: credential.kind,
+                        secret,
+                        label,
+                        enabled: credential.enabled,
+                        ...(credential.usage === undefined ? {} : { usage: credential.usage }),
+                    });
+                    // The same key typed again is this credential: keep it. A duplicate of
+                    // another one, such as a retry after a failed remove, still replaces it;
+                    // where the server doesn't say which, the old key is kept, never lost.
+                    same =
+                        added.duplicate &&
+                        (added.credentialId === undefined || added.credentialId === credential.id);
+                });
+                steps.push(() =>
+                    same ? relabel() : deps.api.credentialRemove(connection.id, credential.id),
                 );
+            } else if (label !== credential.label) steps.push(relabel);
+            detailRun(steps, (saved) => (saved > 0 ? "Partly saved" : "Not saved"));
+        },
+        connectionRenameOpen() {
+            const detail = store.getState().detail;
+            const connection = detailConnection();
+            if (disposed || !detail || detail.phase === "busy" || !connection) return;
+            if (!manageable(connection) || !happyAgentCloudConnectionNamed(connection)) return;
+            detailSet({
+                connectionId: detail.connectionId,
+                view: { kind: "rename" },
+                phase: "idle",
+            });
+        },
+        connectionNameSave(name) {
+            const detail = store.getState().detail;
+            const connection = detailConnection();
+            if (!detail || detail.view.kind !== "rename" || !connection) return;
+            const trimmed = name.trim();
+            detailRun(
+                trimmed === "" || trimmed === connection.name
+                    ? []
+                    : [() => deps.api.connectionRename(connection.id, trimmed)],
+                () => "Not renamed",
+            );
         },
         [Symbol.dispose]() {
             if (disposed) return;
@@ -774,6 +1156,7 @@ export function happyAgentCloudProvidersStoreCreate(
 const INERT_SNAPSHOT: HappyAgentCloudProvidersSnapshot = {
     loading: false,
     connections: [],
+    listScope: "team",
     privateAllowed: false,
     teamAllowed: false,
     signIns: NO_SIGN_INS,
@@ -785,11 +1168,17 @@ const INERT_SNAPSHOT: HappyAgentCloudProvidersSnapshot = {
 export const happyAgentCloudProvidersStoreNoop: HappyAgentCloudProvidersStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
+    listScopeUpdate: () => undefined,
     addOpen: () => undefined,
     addFlowSelect: () => undefined,
     addBack: () => undefined,
     addClose: () => undefined,
-    addDestinationUpdate: () => undefined,
+    addScopeUpdate: () => undefined,
+    addLabelUpdate: () => undefined,
+    addDestinationSelect: () => undefined,
+    addDestinationNewSelect: () => undefined,
+    addDestinationNameUpdate: () => undefined,
+    addDetailsSubmit: () => undefined,
     apiKeySubmit: () => undefined,
     awsKeysSubmit: () => undefined,
     setupTokenSubmit: () => undefined,
@@ -797,8 +1186,12 @@ export const happyAgentCloudProvidersStoreNoop: HappyAgentCloudProvidersStore = 
     signInCodeSubmit: () => undefined,
     credentialEnabledUpdate: () => undefined,
     credentialRemove: () => undefined,
-    editOpen: () => undefined,
-    editClose: () => undefined,
-    editSave: () => undefined,
+    detailOpen: () => undefined,
+    detailClose: () => undefined,
+    detailBack: () => undefined,
+    credentialEditOpen: () => undefined,
+    credentialSave: () => undefined,
+    connectionRenameOpen: () => undefined,
+    connectionNameSave: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

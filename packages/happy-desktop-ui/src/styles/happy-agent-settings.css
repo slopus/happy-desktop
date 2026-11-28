@@ -1009,99 +1009,66 @@
     gap: 16px;
 }
 
+/* Whose providers on the leading edge, adding one on the trailing edge. */
 .happy-agent-ai-providers__actions {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
 }
 
-/* Each list is a titled group: its title over the card, on the rows' words. */
-.happy-agent-ai-providers__group {
+.happy-agent-ai-provider-sheet {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
 }
 
-.happy-agent-ai-providers__group-title {
-    margin: 0;
-    padding-inline: 16px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 16px;
-}
-
-.happy-agent-ai-providers__empty {
-    padding: 12px 0;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 18px;
-}
-
-.happy-agent-ai-providers__connection {
-    display: flex;
-    flex-direction: column;
-    border-bottom: 1px solid var(--divider);
-}
-
-/* A connection that can't serve the reader now reads greyed, its keys too. */
-.happy-agent-ai-providers__connection[data-enabled="false"] .happy-agent-ai-providers__text {
-    opacity: 0.55;
-}
-
-.happy-agent-ai-providers__connection-head,
-.happy-agent-ai-providers__credential {
-    box-sizing: border-box;
+.happy-agent-ai-provider-sheet__heading {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    min-height: 48px;
-    padding: 8px 0;
+    min-height: 28px;
 }
 
-/* Credentials sit under their connection, indented past the lock glyph. */
-.happy-agent-ai-providers__credential {
-    padding-left: 12px;
-    color: var(--text-secondary);
-}
-
-.happy-agent-ai-providers__text {
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.happy-agent-ai-providers__name {
-    overflow: hidden;
-    color: var(--text);
-    font-size: 13px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-agent-ai-providers__meta {
-    overflow: hidden;
+.happy-agent-ai-provider-sheet__meta,
+.happy-agent-ai-provider-sheet__note {
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-/* One key in the edit dialog: what it is, then its label and a replacement. */
-.happy-agent-provider-edit__credential {
+.happy-agent-ai-provider-sheet__note {
+    padding-block: 12px;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-ai-provider-sheet__credentials {
     display: flex;
     flex-direction: column;
-    gap: 8px;
 }
 
-.happy-agent-provider-edit__credential-title {
+/* A token the reader may not change reads as a row but takes no hover. */
+.happy-agent-ai-provider-sheet__static {
+    cursor: default;
+}
+
+.happy-agent-ai-provider-sheet__static:hover {
+    background: transparent;
+}
+
+.happy-agent-ai-provider-sheet__switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+}
+
+.happy-agent-ai-provider-sheet__switch-text {
+    flex: 1 1 0%;
     color: var(--text);
     font-size: 13px;
-    font-weight: 600;
     line-height: 18px;
 }
 
@@ -1216,6 +1183,87 @@
 
 .happy-agent-provider-add__done .happy-icon {
     color: var(--status-connected);
+}
+
+.happy-agent-provider-add__destinations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* The rows' fill reaches past the text column, so their rings line up with it. */
+.happy-agent-provider-add__options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-inline: -8px;
+}
+
+.happy-agent-provider-add__option {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-provider-add__option:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-agent-provider-add__option:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 0;
+}
+
+.happy-agent-provider-add__option:disabled {
+    cursor: default;
+}
+
+/* The radio's ring is the same box chosen or not; only its dot is filled in. */
+.happy-agent-provider-add__radio {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+}
+
+.happy-agent-provider-add__radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: transparent;
+}
+
+.happy-agent-provider-add__option[aria-checked="true"] .happy-agent-provider-add__radio {
+    border-color: var(--radio-active);
+}
+
+.happy-agent-provider-add__option[aria-checked="true"] .happy-agent-provider-add__radio::after {
+    background: var(--radio-active);
+}
+
+.happy-agent-provider-add__option-name {
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---- Nodes ------------------------------------------------------------- */

@@ -1,121 +1,101 @@
 import { Banner } from "../../Banner";
-import type { BadgeVariant } from "../../Badge";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
+import { IconTile, type IconTileProps } from "../../IconTile";
+import { SegmentedControl } from "../../SegmentedControl";
 import { Spinner } from "../../Spinner";
-import { Switch } from "../../Switch";
+import {
+    HappyAgentAiProviderSheet,
+    type HappyAgentAiProviderSheetProps,
+} from "./HappyAgentAiProviderSheet";
 import {
     HappyAgentProviderAddDialog,
     type HappyAgentProviderAddDialogProps,
 } from "./HappyAgentProviderAddDialog";
-import {
-    HappyAgentProviderEditDialog,
-    type HappyAgentProviderEditDialogProps,
-} from "./HappyAgentProviderEditDialog";
 import { HappyAgentSettingsGroup, HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
-import { HappyAgentSettingsStatus } from "./HappyAgentSettingsStatus";
 
-/** Where one credential stands, as the server reports it. */
-export type HappyAgentAiProviderCredentialState = "ready" | "cooling" | "invalid" | "disabled";
+/** Whose providers the list shows: the team's, or the reader's own. */
+export type HappyAgentAiProvidersScope = "team" | "private";
 
-/** One key or sign-in behind a connection. Never the secret. */
-export interface HappyAgentAiProviderCredentialRow {
-    readonly id: string;
-    readonly label: string;
-    /** What it is, already worded, such as "Anthropic · API key". */
-    readonly meta: string;
-    readonly enabled: boolean;
-    readonly state: HappyAgentAiProviderCredentialState;
-    /** When a cooling credential is tried again, already formatted. */
-    readonly coolingUntil?: string;
-    /** A change asked for and not answered yet. */
-    readonly saving?: boolean;
-}
-
-/** One thing a conversation can run on. */
-export interface HappyAgentAiProviderConnectionRow {
+/** One provider someone added: what conversations can run on. */
+export interface HappyAgentAiProviderRow {
     readonly id: string;
     readonly name: string;
-    /** Which list it is in: what Happy includes, the team's, or the reader's own. */
-    readonly group: "included" | "team" | "private";
-    /** What it serves, already worded, such as "OpenAI · 3 models". */
+    /** Its vendor's mark, or a house glyph for a provider of several vendors. */
+    readonly tile: IconTileProps;
+    /** How many tokens it holds and whether it serves, already worded: "2 tokens". */
     readonly meta: string;
-    /** Whether it can serve the reader now; one that can't is shown greyed. */
-    readonly enabled: boolean;
-    /** Its credentials, where the reader may see them. */
-    readonly credentials?: readonly HappyAgentAiProviderCredentialRow[];
-    /** Whether it can be renamed and rekeyed: one the team added, for those who manage it. */
-    readonly editable?: boolean;
+    /** The dot by `meta`: serving, a token needing attention, or nothing serving. */
+    readonly tone: "ok" | "warning" | "danger" | "off";
 }
 
 export interface HappyAgentAiProvidersProps {
-    readonly connections: readonly HappyAgentAiProviderConnectionRow[];
+    readonly scope: HappyAgentAiProvidersScope;
+    /** The providers of `scope`, only those someone added. */
+    readonly providers: readonly HappyAgentAiProviderRow[];
     /** True until the first answer. */
     readonly loading?: boolean;
     /** Why the list could not be read. */
     readonly error?: string;
-    /** Why the last change to a credential was refused. */
+    /** Why the last change to a token was refused. */
     readonly saveError?: string;
-    /** Whether the team list's credentials may be changed by the reader. */
-    readonly teamManageable: boolean;
     /** The add dialog, while it is open. */
     readonly add?: HappyAgentProviderAddDialogProps;
-    /** The edit dialog, while it is open. */
-    readonly edit?: HappyAgentProviderEditDialogProps;
-    onAdd: () => void;
-    onEdit?: (connectionId: string) => void;
-    onCredentialEnabledChange: (
-        connectionId: string,
-        credentialId: string,
-        enabled: boolean,
-    ) => void;
-    onCredentialRemove: (connectionId: string, credentialId: string) => void;
+    /** One provider's sheet, while it is open. */
+    readonly detail?: HappyAgentAiProviderSheetProps;
+    onScopeChange: (scope: HappyAgentAiProvidersScope) => void;
+    onProviderOpen: (providerId: string) => void;
+    /** Opens the add dialog; absent where the reader may add nothing. */
+    onAdd?: () => void;
 }
 
-const GROUPS: readonly {
-    readonly id: HappyAgentAiProviderConnectionRow["group"];
-    readonly title: string;
-}[] = [
-    { id: "included", title: "Included" },
-    { id: "team", title: "Team" },
-    { id: "private", title: "My account" },
-];
-
-const STATE_LABELS: Record<HappyAgentAiProviderCredentialState, string | undefined> = {
-    ready: undefined,
-    cooling: "Resting",
-    invalid: "Needs attention",
-    disabled: "Off",
+const EMPTY_TITLES: Record<HappyAgentAiProvidersScope, string> = {
+    team: "No team providers yet",
+    private: "No personal providers yet",
 };
 
-const STATE_VARIANTS: Record<HappyAgentAiProviderCredentialState, BadgeVariant> = {
-    ready: "success",
-    cooling: "warning",
-    invalid: "danger",
-    disabled: "neutral",
+const EMPTY_DESCRIPTIONS: Record<HappyAgentAiProvidersScope, string> = {
+    team: "Add an API key or a subscription for everyone on the team to run on.",
+    private: "Add your own API key or subscription to run on your own account.",
 };
 
 /**
- * Settings › Inference on Happy Cloud: what conversations run on, in three
- * lists — what Happy includes, the team's, and the reader's own — with the
- * keys and sign-ins behind each, and the way to add more.
+ * Settings › Inference on Happy Cloud: a short list of the providers the
+ * team or the reader added, one row each with its vendor's mark and how many
+ * tokens it holds, the team's first. A row opens the provider's own sheet;
+ * nothing is edited in the list.
  */
 export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
     return (
         <HappyAgentSettingsSection
-            description="What your conversations run on. Add your own key or subscription to use your own account."
+            description="What your conversations run on. Open a provider to see its tokens."
             rows="cards"
-            title="Inference"
+            title="Providers"
         >
             <Box
                 className="happy-agent-ai-providers"
                 data-happy-desktop-ui="happy-agent-ai-providers"
             >
                 <Box className="happy-agent-ai-providers__actions">
-                    <Button icon="plus" onClick={props.onAdd} size="small" variant="secondary">
-                        Add…
-                    </Button>
+                    <SegmentedControl
+                        aria-label="Whose providers"
+                        onChange={(scope) =>
+                            props.onScopeChange(scope === "private" ? "private" : "team")
+                        }
+                        segments={[
+                            { value: "team", label: "Team" },
+                            { value: "private", label: "Personal" },
+                        ]}
+                        size="small"
+                        value={props.scope}
+                    />
+                    {props.onAdd ? (
+                        <Button icon="plus" onClick={props.onAdd} size="small" variant="secondary">
+                            Add provider
+                        </Button>
+                    ) : null}
                 </Box>
                 {props.saveError ? (
                     <Banner tone="danger" title="Not changed">
@@ -123,7 +103,7 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
                     </Banner>
                 ) : null}
                 {props.error ? (
-                    <Banner tone="danger" title="Inference unavailable">
+                    <Banner tone="danger" title="Providers unavailable">
                         {props.error}
                     </Banner>
                 ) : props.loading ? (
@@ -131,143 +111,64 @@ export function HappyAgentAiProviders(props: HappyAgentAiProvidersProps) {
                         <Spinner size={16} />
                         <span>Reading the providers…</span>
                     </Box>
+                ) : props.providers.length === 0 ? (
+                    <EmptyState
+                        description={EMPTY_DESCRIPTIONS[props.scope]}
+                        icon="spark"
+                        size="inline"
+                        title={EMPTY_TITLES[props.scope]}
+                        {...(props.onAdd
+                            ? {
+                                  action: {
+                                      label: "Add provider",
+                                      icon: "plus",
+                                      onClick: props.onAdd,
+                                  },
+                              }
+                            : {})}
+                    />
                 ) : (
-                    GROUPS.map((group) => {
-                        const rows = props.connections.filter((row) => row.group === group.id);
-                        if (group.id === "included" && rows.length === 0) return null;
-                        return (
+                    <HappyAgentSettingsGroup>
+                        {props.providers.map((row) => (
                             <Box
-                                className="happy-agent-ai-providers__group"
-                                data-group={group.id}
-                                data-happy-desktop-ui="happy-agent-ai-providers-group"
-                                key={group.id}
+                                className="happy-agent-provider-list__item"
+                                data-happy-desktop-ui="happy-agent-ai-provider"
+                                key={row.id}
                             >
-                                <h3 className="happy-agent-ai-providers__group-title">
-                                    {group.title}
-                                </h3>
-                                <HappyAgentSettingsGroup>
-                                    {rows.length === 0 ? (
-                                        <span className="happy-agent-ai-providers__empty">
-                                            Nothing added yet
+                                <button
+                                    aria-label={`${row.name}, ${row.meta}`}
+                                    className="happy-agent-provider-list__row"
+                                    onClick={() => props.onProviderOpen(row.id)}
+                                    type="button"
+                                >
+                                    <IconTile {...row.tile} />
+                                    <span className="happy-agent-provider-list__text">
+                                        <span className="happy-agent-provider-list__name">
+                                            {row.name}
                                         </span>
-                                    ) : (
-                                        rows.map((row) => (
-                                            <HappyAgentAiProviderConnection
-                                                key={row.id}
-                                                manageable={
-                                                    group.id !== "team" || props.teamManageable
-                                                }
-                                                row={row}
-                                                {...(props.onEdit ? { onEdit: props.onEdit } : {})}
-                                                onCredentialEnabledChange={
-                                                    props.onCredentialEnabledChange
-                                                }
-                                                onCredentialRemove={props.onCredentialRemove}
+                                        <span
+                                            className="happy-agent-provider-list__line"
+                                            data-tone={row.tone}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className="happy-agent-provider-list__dot"
+                                                data-tone={row.tone}
                                             />
-                                        ))
-                                    )}
-                                </HappyAgentSettingsGroup>
+                                            <span className="happy-agent-provider-list__line-text">
+                                                {row.meta}
+                                            </span>
+                                        </span>
+                                    </span>
+                                    <Icon name="chevron-right" size={14} />
+                                </button>
                             </Box>
-                        );
-                    })
+                        ))}
+                    </HappyAgentSettingsGroup>
                 )}
             </Box>
             {props.add ? <HappyAgentProviderAddDialog {...props.add} /> : null}
-            {props.edit ? <HappyAgentProviderEditDialog {...props.edit} /> : null}
+            {props.detail ? <HappyAgentAiProviderSheet {...props.detail} /> : null}
         </HappyAgentSettingsSection>
-    );
-}
-
-function HappyAgentAiProviderConnection(props: {
-    readonly row: HappyAgentAiProviderConnectionRow;
-    readonly manageable: boolean;
-    onEdit?: (connectionId: string) => void;
-    onCredentialEnabledChange: (
-        connectionId: string,
-        credentialId: string,
-        enabled: boolean,
-    ) => void;
-    onCredentialRemove: (connectionId: string, credentialId: string) => void;
-}) {
-    const row = props.row;
-    return (
-        <Box
-            className="happy-agent-ai-providers__connection"
-            data-enabled={row.enabled ? "true" : "false"}
-            data-happy-desktop-ui="happy-agent-ai-provider"
-        >
-            <Box className="happy-agent-ai-providers__connection-head">
-                <Box className="happy-agent-ai-providers__text">
-                    <span className="happy-agent-ai-providers__name">{row.name}</span>
-                    <span className="happy-agent-ai-providers__meta">{row.meta}</span>
-                </Box>
-                {row.enabled ? null : <HappyAgentSettingsStatus label="Off" variant="neutral" />}
-                {props.manageable && row.editable && props.onEdit ? (
-                    <Button
-                        aria-label={`Edit ${row.name}`}
-                        icon="edit"
-                        iconOnly
-                        onClick={() => props.onEdit?.(row.id)}
-                        size="small"
-                        variant="ghost"
-                    />
-                ) : null}
-            </Box>
-            {row.credentials?.map((credential) => {
-                const label = STATE_LABELS[credential.state];
-                return (
-                    <Box
-                        className="happy-agent-ai-providers__credential"
-                        data-happy-desktop-ui="happy-agent-ai-provider-credential"
-                        data-state={credential.state}
-                        key={credential.id}
-                    >
-                        <Icon name="lock" size={14} />
-                        <Box className="happy-agent-ai-providers__text">
-                            <span className="happy-agent-ai-providers__name">
-                                {credential.label}
-                            </span>
-                            <span className="happy-agent-ai-providers__meta">
-                                {credential.state === "cooling" && credential.coolingUntil
-                                    ? `${credential.meta} · Tried again at ${credential.coolingUntil}`
-                                    : credential.meta}
-                            </span>
-                        </Box>
-                        {label ? (
-                            <HappyAgentSettingsStatus
-                                label={label}
-                                variant={STATE_VARIANTS[credential.state]}
-                            />
-                        ) : null}
-                        {credential.saving ? <Spinner size={16} /> : null}
-                        {props.manageable ? (
-                            <>
-                                <Switch
-                                    aria-label={`${credential.label} on`}
-                                    checked={credential.enabled}
-                                    disabled={credential.saving}
-                                    onChange={(enabled) =>
-                                        props.onCredentialEnabledChange(
-                                            row.id,
-                                            credential.id,
-                                            enabled,
-                                        )
-                                    }
-                                />
-                                <Button
-                                    aria-label={`Remove ${credential.label}`}
-                                    disabled={credential.saving}
-                                    icon="trash"
-                                    iconOnly
-                                    onClick={() => props.onCredentialRemove(row.id, credential.id)}
-                                    size="small"
-                                    variant="ghost"
-                                />
-                            </>
-                        ) : null}
-                    </Box>
-                );
-            })}
-        </Box>
     );
 }

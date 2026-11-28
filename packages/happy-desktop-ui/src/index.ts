@@ -1366,23 +1366,25 @@ export {
 } from "./pages/settings/HappyAgentCredentialImport";
 export {
     HappyAgentAiProviders,
-    type HappyAgentAiProviderConnectionRow,
-    type HappyAgentAiProviderCredentialRow,
-    type HappyAgentAiProviderCredentialState,
+    type HappyAgentAiProviderRow,
     type HappyAgentAiProvidersProps,
+    type HappyAgentAiProvidersScope,
 } from "./pages/settings/HappyAgentAiProviders";
 export {
+    HappyAgentAiProviderSheet,
+    type HappyAgentAiProviderCredentialRow,
+    type HappyAgentAiProviderCredentialState,
+    type HappyAgentAiProviderSheetProps,
+    type HappyAgentAiProviderSheetView,
+} from "./pages/settings/HappyAgentAiProviderSheet";
+export {
     HappyAgentProviderAddDialog,
+    type HappyAgentProviderAddDestination,
+    type HappyAgentProviderAddDestinationOption,
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderAddFlow,
     type HappyAgentProviderKeyVendor,
 } from "./pages/settings/HappyAgentProviderAddDialog";
-export {
-    HappyAgentProviderEditDialog,
-    type HappyAgentProviderEditChanges,
-    type HappyAgentProviderEditCredential,
-    type HappyAgentProviderEditDialogProps,
-} from "./pages/settings/HappyAgentProviderEditDialog";
 export {
     HappyAgentFileTierSettings,
     type HappyAgentFileTierMoveDirection,
