@@ -1,9 +1,31 @@
 import { useContext, useState, type MouseEvent, type ReactNode } from "react";
 import { ContextMenu } from "./ContextMenu";
-import { FileRevealContext } from "./LinkContextMenu";
+import { FileRevealContext, type FileReveal } from "./LinkContextMenu";
+import type { MenuItem } from "./Menu";
 
 const REVEAL = "reveal";
 const PATH_COPY = "path-copy";
+const REVEAL_ITEM: MenuItem = {
+    kind: "item",
+    id: REVEAL,
+    label: "Show in Finder",
+    icon: "folder-open",
+};
+const PATH_COPY_ITEM: MenuItem = { kind: "item", id: PATH_COPY, label: "Copy path", icon: "copy" };
+
+/**
+ * The rows a file's menu ends with: Show in Finder where a host can reveal
+ * files, and Copy path.
+ */
+export function fileRevealMenuItems(reveal: FileReveal | undefined): MenuItem[] {
+    return reveal === undefined ? [PATH_COPY_ITEM] : [REVEAL_ITEM, PATH_COPY_ITEM];
+}
+
+/** Carries out a row of `fileRevealMenuItems` for `path`; any other row is not its own. */
+export function fileRevealMenuSelect(reveal: FileReveal | undefined, path: string, id: string) {
+    if (id === REVEAL) reveal?.path(path);
+    else if (id === PATH_COPY) void navigator.clipboard.writeText(path).catch(() => undefined);
+}
 
 /**
  * The context menu a file's name carries wherever it is drawn as a heading:
@@ -30,16 +52,11 @@ export function useFileRevealMenu(path: string | undefined): {
             menuAt === undefined ? null : (
                 <ContextMenu
                     data-testid="file-reveal-menu"
-                    items={[
-                        { kind: "item", id: REVEAL, label: "Show in Finder", icon: "folder-open" },
-                        { kind: "item", id: PATH_COPY, label: "Copy path", icon: "copy" },
-                    ]}
+                    items={fileRevealMenuItems(reveal)}
                     onClose={() => setMenuAt(undefined)}
                     onSelect={(id) => {
                         setMenuAt(undefined);
-                        if (id === REVEAL) reveal.path(path);
-                        else if (id === PATH_COPY)
-                            void navigator.clipboard.writeText(path).catch(() => undefined);
+                        fileRevealMenuSelect(reveal, path, id);
                     }}
                     x={menuAt.x}
                     y={menuAt.y}

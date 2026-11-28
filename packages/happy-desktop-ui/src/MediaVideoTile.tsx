@@ -3,6 +3,7 @@ import {
     useState,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { mediaVideoFrameRecord } from "./mediaVideoFrames";
@@ -23,6 +24,8 @@ export type MediaVideoTileProps = {
     height?: number;
     /** Opens the recording in Happy's full viewer. Absent leaves no expand control. */
     onOpen?: () => void;
+    /** Asks for the recording's own menu, as a right-click anywhere on it does. */
+    onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
 };
 
 /**
@@ -205,6 +208,7 @@ export function MediaVideoTile(props: MediaVideoTileProps) {
             data-happy-desktop-ui="media-video-tile"
             data-playback={playback.phase}
             data-testid={props["data-testid"]}
+            onContextMenu={props.onContextMenu}
             onPointerMove={() => {
                 if (playing) chromeWake();
             }}
