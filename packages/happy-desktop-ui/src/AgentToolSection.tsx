@@ -1,6 +1,6 @@
 import { createContext, useState, type CSSProperties, type ReactNode } from "react";
 import type { ConversationToolCall } from "happy-desktop-state";
-import { AgentActivityRow, agentActivityKindName } from "./AgentActivityRow";
+import { AgentActivityRow, AgentActivityTime, agentActivityKindName } from "./AgentActivityRow";
 import { ArrivingText } from "./ArrivingText";
 import type {
     ConversationToolSection,
@@ -13,6 +13,10 @@ import type { MessageReferences } from "./messageReferences";
 export type AgentToolSectionProps = {
     /** The run of calls, whether it is still going, and how long it took. */
     section: ConversationToolSection;
+    /** The surface clock, for how long a running call has run. */
+    now?: number;
+    /** When the run's last call started, shown on hover. */
+    time?: string;
     /** Opens the shown call's complete body in an owner-provided detail surface. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /** What the Happy references a call names read as. */
@@ -104,6 +108,13 @@ export function AgentToolSection(props: AgentToolSectionProps) {
         section.durationMs === undefined || section.durationMs < 1_000
             ? undefined
             : ` · ${elapsedTimeFormat(section.durationMs)}`;
+    const runningAt = section.live
+        ? section.members
+              .filter((m) => m.activity.kind === "tool" && m.activity.tool.status === "running")
+              .at(-1)?.occurredAt
+        : undefined;
+    const runningMs =
+        runningAt === undefined || props.now === undefined ? 0 : props.now - runningAt;
     const onToolSelect = props.onToolSelect;
     const call = (entry: ConversationToolSectionEntry, state: "current" | "leaving") => (
         <div
@@ -127,6 +138,11 @@ export function AgentToolSection(props: AgentToolSectionProps) {
                 singleLine={entry.activity.kind === "tool"}
                 treatment="focused"
             />
+            {state === "current" && runningMs >= 1_000 ? (
+                <span className="happy-tool-section__duration">
+                    {`· ${elapsedTimeFormat(runningMs)}`}
+                </span>
+            ) : null}
         </div>
     );
     const items: ReactNode[] = [];
@@ -174,6 +190,7 @@ export function AgentToolSection(props: AgentToolSectionProps) {
         >
             <div className="happy-tool-section__line" data-happy-desktop-ui="tool-section-line">
                 {items}
+                <AgentActivityTime time={props.time} />
             </div>
         </div>
     );

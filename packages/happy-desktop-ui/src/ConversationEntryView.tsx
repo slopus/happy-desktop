@@ -318,6 +318,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 {...(props.onToolSelect ? { onToolSelect: props.onToolSelect } : {})}
                 {...(props.references ? { references: props.references } : {})}
                 section={props.toolSection}
+                time={eventTime(props.toolSection.members.at(-1)?.occurredAt)}
+                {...(props.now === undefined ? {} : { now: props.now })}
             />
         ) : (
             <AgentActivityRow

@@ -1370,7 +1370,12 @@ export function ConversationView(props: ConversationViewProps) {
                                     )}
                                     questionLine={questionLine(entry)}
                                     onDelegationSelect={props.onDelegationSelect}
-                                    now={conversationEntryReadsNow(entry) ? props.now : undefined}
+                                    now={
+                                        conversationEntryReadsNow(entry) ||
+                                        toolSections.sections.get(entryKey(entry))?.live
+                                            ? props.now
+                                            : undefined
+                                    }
                                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                     {...(props.onFileLinkOpen
                                         ? { onFileLinkOpen: props.onFileLinkOpen }

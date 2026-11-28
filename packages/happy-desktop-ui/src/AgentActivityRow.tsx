@@ -153,7 +153,7 @@ function useExpansion(
     ] as const;
 }
 
-function AgentActivityTime(props: { time?: string }) {
+export function AgentActivityTime(props: { time?: string }) {
     return props.time ? (
         <span className="happy-agent-activity__time" data-happy-desktop-ui="agent-activity-time">
             {props.time}

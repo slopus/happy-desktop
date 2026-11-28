@@ -168,6 +168,10 @@
     white-space: pre;
 }
 
+.happy-tool-section .happy-tool-section__line > .happy-agent-activity__time {
+    top: 2px;
+}
+
 /* Arriving, the kinds' characters are the run itself, so the same ellipsis
    takes the ones that do not fit: as one inline-block, the whole summary
    would be cut as a single box. */

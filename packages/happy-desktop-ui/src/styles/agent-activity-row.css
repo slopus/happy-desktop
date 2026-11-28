@@ -230,7 +230,9 @@
 }
 
 .happy-agent-activity-row:hover .happy-agent-activity__time,
-.happy-agent-activity-row:focus-within .happy-agent-activity__time {
+.happy-agent-activity-row:focus-within .happy-agent-activity__time,
+.happy-tool-section:hover .happy-tool-section__line > .happy-agent-activity__time,
+.happy-tool-section:focus-within .happy-tool-section__line > .happy-agent-activity__time {
     opacity: 1;
 }
 
@@ -561,7 +563,8 @@
  */
 .happy-agent-activity-row[data-treatment="focused"][data-kind="tool"] .happy-agent-activity__time,
 .happy-agent-activity-row[data-treatment="focused"][data-kind="agentMessage"]
-    .happy-agent-activity__time {
+    .happy-agent-activity__time,
+.happy-tool-section__line > .happy-agent-activity__time {
     position: absolute;
     top: 0;
     right: 0;
