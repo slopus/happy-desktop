@@ -1378,7 +1378,7 @@ export {
     type HappyAgentAiProviderSheetProps,
 } from "./pages/settings/HappyAgentAiProviderSheet";
 export {
-    HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS,
+    HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS,
     HappyAgentProviderAddDialog,
     HappyAgentProviderAddPanel,
     type HappyAgentProviderAddDestination,
@@ -1389,6 +1389,17 @@ export {
     type HappyAgentProviderAddPanelProps,
     type HappyAgentProviderKeyVendor,
 } from "./pages/settings/HappyAgentProviderAddDialog";
+export {
+    HappyAgentProviderAuthSelect,
+    HappyAgentProviderConnectionEditor,
+    HappyAgentProviderHeadersEditor,
+    type HappyAgentProviderAuth,
+    type HappyAgentProviderConnection,
+    type HappyAgentProviderConnectionChange,
+    type HappyAgentProviderEndpointVendor,
+    type HappyAgentProviderHeader,
+    type HappyAgentProviderHeaderRow,
+} from "./pages/settings/HappyAgentProviderConnectionFields";
 export {
     HappyAgentFileTierSettings,
     type HappyAgentFileTierMoveDirection,

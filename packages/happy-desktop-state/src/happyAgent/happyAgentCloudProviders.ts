@@ -28,6 +28,35 @@ export interface HappyAgentCloudCredential {
     readonly usage?: unknown;
     /** The endpoint it sends requests to, such as a proxy; the vendor's own API when absent. */
     readonly baseUrl?: string;
+    /** How it signs its requests to `baseUrl`; the vendor's own way when absent. */
+    readonly auth?: HappyAgentCloudCredentialAuth;
+    /** The headers it adds to every request to `baseUrl`, by name only: their values never come back. */
+    readonly headerNames?: readonly string[];
+}
+
+/**
+ * How an API key signs requests to an endpoint of its own: as its vendor
+ * does (`default`), as `Authorization: Bearer`, as `x-api-key`, or not at
+ * all, for a proxy that takes no key.
+ */
+export type HappyAgentCloudCredentialAuth = "default" | "bearer" | "x-api-key" | "none";
+
+/** One header an API key adds to every request to its endpoint. The value is a secret. */
+export interface HappyAgentCloudHeader {
+    readonly name: string;
+    readonly value: string;
+}
+
+/**
+ * A change to where and how an API key connects. `baseUrl: null` sends it
+ * to the vendor's own API again; `headers` replaces the whole set, and the
+ * stored ones are kept when it is absent; `secret` replaces the key in place.
+ */
+export interface HappyAgentCloudConnectionChange {
+    readonly baseUrl?: string | null;
+    readonly auth?: HappyAgentCloudCredentialAuth;
+    readonly headers?: readonly HappyAgentCloudHeader[];
+    readonly secret?: string;
 }
 
 /**
@@ -76,11 +105,15 @@ export interface HappyAgentCloudCredentialInput {
     readonly kind: "api_key" | "aws_keys" | "oauth_token";
     /**
      * AWS keys travel as the JSON text of `{ accessKeyId, secretAccessKey, region? }`.
-     * Empty only for an API key with its own `baseUrl` that takes none.
+     * Empty only for an API key whose `auth` is `none`.
      */
     readonly secret: string;
     /** An API key's own endpoint; the vendor's own API when absent. */
     readonly baseUrl?: string;
+    /** How it signs requests to `baseUrl`; only with one. `none` sends an empty `secret`. */
+    readonly auth?: HappyAgentCloudCredentialAuth;
+    /** Headers added to every request to `baseUrl`; only with one. */
+    readonly headers?: readonly HappyAgentCloudHeader[];
     readonly label: string;
     /** Settings to start with, as when a key is replaced; the server's defaults when absent. */
     readonly enabled?: boolean;
@@ -134,11 +167,11 @@ export interface HappyAgentCloudProvidersApi {
     /** Creates a named connection for the team or the reader; answers its ID. */
     connectionCreate(name: string, scope: HappyAgentCloudScope): Promise<{ readonly id: string }>;
     credentialLabelUpdate(connectionId: string, credentialId: string, label: string): Promise<void>;
-    /** Points an API key at its own endpoint, or back at the vendor's own API with `null`. */
-    credentialEndpointUpdate(
+    /** Changes where and how an API key connects, or replaces its key in place. */
+    credentialConnectionUpdate(
         connectionId: string,
         credentialId: string,
-        baseUrl: string | null,
+        change: HappyAgentCloudConnectionChange,
     ): Promise<void>;
     /**
      * Sets the region the team's Bedrock keys route to. It is team
@@ -214,7 +247,20 @@ function credentialRead(value: unknown): HappyAgentCloudCredential | undefined {
         ...(typeof entry.baseUrl === "string" && entry.baseUrl !== ""
             ? { baseUrl: entry.baseUrl }
             : {}),
+        ...(typeof entry.auth === "string" && AUTHS.has(entry.auth)
+            ? { auth: entry.auth as HappyAgentCloudCredentialAuth }
+            : {}),
+        ...(Array.isArray(entry.headerNames) && entry.headerNames.length > 0
+            ? { headerNames: stringsOf(entry.headerNames) }
+            : {}),
     };
+}
+
+const AUTHS: ReadonlySet<string> = new Set(["default", "bearer", "x-api-key", "none"]);
+
+/** Headers as the server takes them: one value per name. */
+function headersOf(headers: readonly HappyAgentCloudHeader[]): Record<string, string> {
+    return Object.fromEntries(headers.map((header) => [header.name, header.value]));
 }
 
 function connectionRead(value: unknown): HappyAgentCloudConnection | undefined {
@@ -333,6 +379,8 @@ export function happyAgentCloudProvidersApiCreate(
                     kind: input.kind,
                     secret: input.secret,
                     ...(input.baseUrl === undefined ? {} : { baseUrl: input.baseUrl }),
+                    ...(input.auth === undefined ? {} : { auth: input.auth }),
+                    ...(input.headers === undefined ? {} : { headers: headersOf(input.headers) }),
                     label: input.label,
                     ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
                     ...(input.usage === undefined ? {} : { usage: input.usage }),
@@ -377,11 +425,16 @@ export function happyAgentCloudProvidersApiCreate(
                 { label },
             );
         },
-        credentialEndpointUpdate: async (connectionId, credentialId, baseUrl) => {
+        credentialConnectionUpdate: async (connectionId, credentialId, change) => {
             await request(
                 "PATCH",
                 `${credentials(connectionId)}/${encodeURIComponent(credentialId)}`,
-                { baseUrl },
+                {
+                    ...(change.baseUrl === undefined ? {} : { baseUrl: change.baseUrl }),
+                    ...(change.auth === undefined ? {} : { auth: change.auth }),
+                    ...(change.headers === undefined ? {} : { headers: headersOf(change.headers) }),
+                    ...(change.secret === undefined ? {} : { secret: change.secret }),
+                },
             );
         },
         bedrockRegionSave: async (region) => {

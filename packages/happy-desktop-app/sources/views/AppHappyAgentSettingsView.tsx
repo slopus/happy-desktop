@@ -116,7 +116,7 @@ import {
     type HappyAgentCustomProviderDialogProps,
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
-    HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS,
+    HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS,
     HappyAgentAiProviders,
     type HappyAgentAiProviderCredentialRow,
     type HappyAgentAiProviderRow,
@@ -2691,19 +2691,22 @@ function cloudProviderRows(
 }
 
 /**
- * Where an API key sends its requests, for its row: its own endpoint or the
- * vendor's, where this server lets a key name one.
+ * Where and how an API key connects, for its row: its own endpoint or the
+ * vendor's, its auth and its headers' names, where this server lets a key
+ * name an endpoint.
  */
-function cloudCredentialEndpoint(
+function cloudCredentialConnection(
     snapshot: HappyAgentCloudProvidersSnapshot,
     credential: HappyAgentCloudCredential,
-): Pick<HappyAgentAiProviderCredentialRow, "endpoint"> {
+): Pick<HappyAgentAiProviderCredentialRow, "connection"> {
     const vendor = happyAgentCloudCredentialEndpointVendor(credential);
     if (!snapshot.endpoints || !vendor) return {};
     return {
-        endpoint: {
+        connection: {
+            vendor: HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS[vendor],
             ...(credential.baseUrl === undefined ? {} : { url: credential.baseUrl }),
-            official: HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS[vendor],
+            auth: credential.auth ?? "default",
+            headerNames: credential.headerNames ?? [],
         },
     };
 }
@@ -2750,7 +2753,7 @@ function providerDetailProps(
                       ...(happyAgentCloudCredentialReplaceable(credential)
                           ? { replaceWith: credential.kind === "api_key" ? "key" : "token" }
                           : {}),
-                      ...cloudCredentialEndpoint(snapshot, credential),
+                      ...cloudCredentialConnection(snapshot, credential),
                       ...(credential.kind === "oauth" &&
                       ((credential.vendor === "codex" && snapshot.signIns.has("codex")) ||
                           (credential.vendor === "claude-code" && snapshot.signIns.has("claude")))
@@ -2786,8 +2789,8 @@ function providerDetailProps(
         onActionCancel: () => store.detailActionCancel(),
         onCredentialLabelSave: (label) => store.credentialLabelSave(label),
         onCredentialSecretSave: (secret) => store.credentialSecretSave(secret),
-        onCredentialEndpointOpen: (credentialId) => store.credentialEndpointOpen(credentialId),
-        onCredentialEndpointSave: (baseUrl) => store.credentialEndpointSave(baseUrl),
+        onCredentialConnectionOpen: (credentialId) => store.credentialConnectionOpen(credentialId),
+        onCredentialConnectionSave: (change) => store.credentialConnectionSave(change),
         onCredentialRemove: (credentialId) => store.credentialRemove(connection.id, credentialId),
         ...(editable ? { onAdd: () => store.credentialAddOpen() } : {}),
         ...(editable && happyAgentCloudConnectionNamed(connection)
@@ -2816,10 +2819,12 @@ function providerAddFormProps(
         teamRoutingEditable: snapshot.teamAllowed,
         endpoints: snapshot.endpoints,
         endpoint: add.endpoint,
+        auth: add.auth,
         onFlowSelect: (flow) => store.addFlowSelect(flow),
         onLabelChange: (label) => store.addLabelUpdate(label),
         onEndpointChange: (endpoint) => store.addEndpointUpdate(endpoint),
-        onApiKeySubmit: (secret, region) => store.apiKeySubmit(secret, region),
+        onAuthChange: (auth) => store.addAuthUpdate(auth),
+        onApiKeySubmit: (secret, options) => store.apiKeySubmit(secret, options),
         onAwsKeysSubmit: (input) => store.awsKeysSubmit(input),
         onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),
         onSignInStart: () => store.signInStart(),

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
+    HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS,
     HappyAgentAiProviders,
     HappyAgentSettingsShell,
     type HappyAgentAiProviderCredentialRow,
@@ -10,9 +11,12 @@ import {
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderAddFlow,
     type HappyAgentProviderAddFormProps,
+    type HappyAgentProviderAuth,
     type HappyAgentSettingsCategory,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
+
+const ANTHROPIC = HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS.anthropic;
 
 /** The component plan this page documents. */
 export const componentNumber = "P-050";
@@ -60,7 +64,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: true,
                 state: "ready",
                 replaceWith: "key",
-                endpoint: { official: "https://api.anthropic.com" },
+                connection: { vendor: ANTHROPIC, auth: "default", headerNames: [] },
             },
             {
                 id: "c2",
@@ -70,9 +74,11 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 state: "cooling",
                 coolingUntil: "3:40 PM",
                 replaceWith: "key",
-                endpoint: {
+                connection: {
+                    vendor: ANTHROPIC,
                     url: "https://llm-gateway.acme.dev/anthropic",
-                    official: "https://api.anthropic.com",
+                    auth: "bearer",
+                    headerNames: ["x-acme-team"],
                 },
             },
         ],
@@ -116,7 +122,11 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: true,
                 state: "invalid",
                 replaceWith: "key",
-                endpoint: { official: "https://api.openai.com/v1" },
+                connection: {
+                    vendor: HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS.openai,
+                    auth: "default",
+                    headerNames: [],
+                },
             },
         ],
     },
@@ -146,7 +156,11 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: false,
                 state: "disabled",
                 replaceWith: "key",
-                endpoint: { official: "https://api.x.ai/v1" },
+                connection: {
+                    vendor: HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS.grok,
+                    auth: "default",
+                    headerNames: [],
+                },
             },
         ],
     },
@@ -198,6 +212,7 @@ type AiProvidersForm = Pick<
 > & {
     readonly label?: string;
     readonly endpoint?: string;
+    readonly auth?: HappyAgentProviderAuth;
 };
 
 /** The add dialog a specimen opens on. */
@@ -228,7 +243,9 @@ function formProps(
         teamRoutingEditable: true,
         endpoints: true,
         endpoint: form.endpoint ?? "",
+        auth: form.auth ?? "default",
         onEndpointChange: (endpoint) => set({ ...form, endpoint }),
+        onAuthChange: (auth) => set({ ...form, auth }),
         onFlowSelect: (flow) => set({ flow, phase: "idle" }),
         onLabelChange: (label) => set({ ...form, label }),
         onApiKeySubmit: noop,
@@ -389,9 +406,9 @@ function AiProvidersSpecimen(props: {
                                   onActionCancel: () => actionSet(undefined),
                                   onCredentialLabelSave: () => actionSet(undefined),
                                   onCredentialSecretSave: () => actionSet(undefined),
-                                  onCredentialEndpointOpen: (credentialId) =>
-                                      actionSet({ kind: "endpoint", credentialId }),
-                                  onCredentialEndpointSave: () => actionSet(undefined),
+                                  onCredentialConnectionOpen: (credentialId) =>
+                                      actionSet({ kind: "connection", credentialId }),
+                                  onCredentialConnectionSave: () => actionSet(undefined),
                                   onCredentialRemove: () => actionSet(undefined),
                                   onAdd: () =>
                                       detailSet({
@@ -632,21 +649,21 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="Each key has its own endpoint: one on Anthropic itself, one through a gateway"
-                label="A key's endpoint"
-                step="17-endpoint"
+                detail="Each key has its own connection: one on Anthropic itself, one through a gateway with its own auth and headers, whose values never come back"
+                label="A key's connection"
+                step="17-connection"
             >
                 {() => (
                     <AiProvidersSpecimen
                         detail={{
                             id: "anthropic",
-                            action: { kind: "endpoint", credentialId: "c2" },
+                            action: { kind: "connection", credentialId: "c2" },
                         }}
                     />
                 )}
             </Screens>
             <Screens
-                detail="A key sent to a proxy of its own: with an endpoint, the key may be left empty"
+                detail="API key or custom endpoint: a proxy, how the token signs there, and headers of its own"
                 label="Add: through a proxy"
                 step="18-add-proxy"
             >
@@ -657,7 +674,19 @@ export function CloudProvidersFlowPage() {
                             phase: "idle",
                             label: "Gateway",
                             endpoint: "https://llm-gateway.acme.dev/anthropic",
+                            auth: "bearer",
                         }}
+                    />
+                )}
+            </Screens>
+            <Screens
+                detail="Claude: the subscription through a setup token, or the API and any endpoint that speaks it"
+                label="Add: Claude subscription"
+                step="19-add-claude"
+            >
+                {() => (
+                    <AiProvidersSpecimen
+                        add={{ flow: { kind: "claude", setupToken: true }, phase: "idle" }}
                     />
                 )}
             </Screens>
