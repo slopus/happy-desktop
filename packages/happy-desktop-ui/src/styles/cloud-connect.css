@@ -148,10 +148,21 @@
     align-self: center;
 }
 
+/* Who is signed in, with the way to another account right under it. */
+.happy-cloud-connect__account {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Many servers scroll here, in the bar every scrollport keeps, while who is
+   signed in and the way to a new server stay where they are. */
 .happy-cloud-connect__servers {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    max-height: max(152px, calc(100vh - 460px));
+    overflow-y: auto;
 }
 
 .happy-cloud-connect__server {

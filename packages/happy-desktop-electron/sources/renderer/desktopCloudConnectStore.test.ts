@@ -168,7 +168,7 @@ it("offers email sign-in only where the shell has it", async () => {
     expect(store.get()).toEqual({ kind: "email", email: "" });
 });
 
-it("sends a code, signs in with it, and lists the servers", async () => {
+it("sends a code, signs in with it, and lists the servers under that address", async () => {
     vi.useFakeTimers();
     const cloud = emailCloudCreate(async () => ({ ok: true }));
     const store = await emailStoreCreate(cloud);
@@ -188,7 +188,9 @@ it("sends a code, signs in with it, and lists the servers", async () => {
     store.emailCodeUpdate(" 123456 ");
     store.emailCodeVerify();
     expect(cloud.emailCodeVerify).toHaveBeenCalledWith("steve@example.com", "123456");
-    await vi.waitFor(() => expect(store.get()).toEqual(NO_SERVERS));
+    await vi.waitFor(() =>
+        expect(store.get()).toEqual({ ...NO_SERVERS, account: { email: "steve@example.com" } }),
+    );
 });
 
 it("offers Resend after a minute, and Change email keeps the address", async () => {

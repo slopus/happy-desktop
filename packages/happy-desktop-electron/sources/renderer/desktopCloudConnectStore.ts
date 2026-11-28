@@ -177,6 +177,9 @@ export function desktopCloudConnectStoreCreate(input: {
     let availabilityTimer: ReturnType<typeof setTimeout> | undefined;
     // Leaving the account for the welcome; the next sign-in starts after it.
     let signedOut: Promise<void> | undefined;
+    // The address the account signed in with, where this window was given it:
+    // only email-code sign-in is. The shell does not say who signed in otherwise.
+    let accountEmail: string | undefined;
 
     // Every screen opened from the start page says so, so it keeps the page's place.
     const set = (next: CloudConnectView | undefined): void => {
@@ -209,6 +212,7 @@ export function desktopCloudConnectStoreCreate(input: {
         kind: "servers",
         servers: { status: "ready", servers: servers.map(serverView) },
         joins,
+        ...(accountEmail === undefined ? {} : { account: { email: accountEmail } }),
         ...(error === undefined ? {} : { error }),
     });
     const imagesRead = (asked: number): void => {
@@ -238,6 +242,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 kind: "servers",
                 servers: { status: "error", message: answer.message },
                 joins,
+                ...(accountEmail === undefined ? {} : { account: { email: accountEmail } }),
             });
             return "done";
         }
@@ -256,6 +261,7 @@ export function desktopCloudConnectStoreCreate(input: {
             return false;
         }
         attemptId = begun.value.attemptId;
+        accountEmail = undefined;
         set({ kind: "signingIn" });
         const finished = await bridge.serverSignInFinish(begun.value.attemptId);
         attemptId = undefined;
@@ -621,6 +627,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 images.clear();
                 servers = [];
                 joins = new Map();
+                accountEmail = undefined;
                 const leaving = cloud
                     .accountSignOut()
                     .catch(() => undefined)
@@ -706,6 +713,7 @@ export function desktopCloudConnectStoreCreate(input: {
                         set(welcome({ login, password: "", error: answer.message }));
                         return;
                     }
+                    accountEmail = undefined;
                     if ((await list(asked)) === "signInRequired" && current(asked))
                         set(welcome({ login, password: "", error: "Signing in didn't work." }));
                 })
@@ -757,6 +765,7 @@ export function desktopCloudConnectStoreCreate(input: {
                         return;
                     }
                     countdownStop();
+                    accountEmail = email;
                     if ((await list(asked)) === "signInRequired" && current(asked))
                         emailSet({
                             kind: "emailCode",

@@ -40,6 +40,12 @@ export type CloudConnectAvailability =
     | "reserved"
     | "invalid";
 
+/** The Happy Cloud account signed in, as far as this window knows it. */
+export interface CloudConnectAccount {
+    readonly email: string;
+    readonly name?: string;
+}
+
 /** Where joining one of the account's servers stands: on its row's button. */
 export type CloudConnectJoin = "joining" | "joined";
 
@@ -112,6 +118,8 @@ export type CloudConnectView = (
            * joined at once; Continue appears once one is in.
            */
           readonly joins: ReadonlyMap<string, CloudConnectJoin>;
+          /** Who is signed in, when this window knows; absent, the page does not say. */
+          readonly account?: CloudConnectAccount;
           readonly error?: string;
       }
     | {
@@ -730,15 +738,12 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     copy={
                                         view.servers.status === "ready" &&
                                         view.servers.servers.length === 0
-                                            ? "Your account isn’t on a server yet. Create your own, or open an invite link."
+                                            ? "Your account isn’t on a server yet. Create your own."
                                             : "Open a server, join one your account is on, or create your own."
                                     }
-                                    placement="top"
-                                    secondary={{
-                                        label: "Use another account",
-                                        onSelect: props.onBack,
-                                        ...(joins.includes("joining") ? { disabled: true } : {}),
-                                    }}
+                                    // Who is signed in, the servers and the way to a
+                                    // new one are one group, centred in the window.
+                                    placement="centered"
                                     {...(view.servers.status === "loading"
                                         ? { status: { busy: true, label: "Loading your servers…" } }
                                         : view.servers.status === "error"
@@ -749,6 +754,43 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     title="Your servers"
                                 >
                                     <div className="happy-cloud-connect__column">
+                                        <div className="happy-cloud-connect__account">
+                                            {view.account ? (
+                                                <div
+                                                    className="happy-cloud-connect__server"
+                                                    data-happy-desktop-ui="cloud-connect-account"
+                                                >
+                                                    <Avatar
+                                                        initials={(
+                                                            view.account.name ?? view.account.email
+                                                        )
+                                                            .slice(0, 1)
+                                                            .toUpperCase()}
+                                                        size="lg"
+                                                    />
+                                                    <span className="happy-cloud-connect__server-text">
+                                                        <span className="happy-cloud-connect__server-name">
+                                                            {view.account.name ??
+                                                                view.account.email}
+                                                        </span>
+                                                        <span className="happy-cloud-connect__server-detail">
+                                                            {view.account.name
+                                                                ? view.account.email
+                                                                : "Signed in to Happy Cloud"}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                            <div className="happy-cloud-connect__links">
+                                                <Button
+                                                    disabled={joins.includes("joining")}
+                                                    onClick={props.onBack}
+                                                    variant="ghost"
+                                                >
+                                                    Use another account
+                                                </Button>
+                                            </div>
+                                        </div>
                                         {view.servers.status === "ready" ? (
                                             <div className="happy-cloud-connect__servers">
                                                 {view.servers.servers.map((server, index) => {
@@ -852,7 +894,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     copy={
                                         view.back
                                             ? "Name your team’s new server. You can change it later."
-                                            : "Name your team’s first server, or open an invite link."
+                                            : "Name your team’s first server."
                                     }
                                     help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
                                     placement="top"
