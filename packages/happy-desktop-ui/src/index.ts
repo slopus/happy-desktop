@@ -704,6 +704,7 @@ export {
     type CloudConnectServer,
     type CloudConnectView,
 } from "./CloudConnectScreen";
+export { CloudInviteScreen, type CloudInviteScreenProps } from "./CloudInviteScreen";
 export {
     HappyLinkNoticeDialog,
     type HappyLinkNoticeDialogProps,

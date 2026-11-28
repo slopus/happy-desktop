@@ -131,7 +131,7 @@ import {
 import { HappyAgentBrowser } from "./happyAgentBrowser";
 import { guestFitHeight, guestFitScript } from "../shared/guestFitScript";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
-import { customThemeEmpty } from "happy-desktop-state";
+import { customThemeEmpty, happyCloudInviteTokenValid } from "happy-desktop-state";
 import { DesktopDebugController } from "./desktopDebugController";
 import { desktopMainInspectorStart } from "./desktopInspector";
 import { desktopDiagnosticsRequestValidate, desktopDiagnosticsWrite } from "./desktopDiagnostics";
@@ -2147,6 +2147,21 @@ void app
                     return cloud.emailCodeVerify(email(value), code);
                 },
             );
+            // An invitation's token is its whole secret: checked for shape,
+            // handed to Happy Cloud, and never written anywhere.
+            const inviteToken = (value: unknown): string => {
+                if (typeof value !== "string" || !happyCloudInviteTokenValid(value))
+                    throw new Error("Happy asked about an invalid invitation.");
+                return value;
+            };
+            ipcMain.handle(desktopIpc.happyCloudInvitePreview, (event, value: unknown) => {
+                desktopDaemonSenderRequire(event.sender);
+                return cloud.invitePreview(inviteToken(value));
+            });
+            ipcMain.handle(desktopIpc.happyCloudInviteAccept, (event, value: unknown) => {
+                desktopDaemonSenderRequire(event.sender);
+                return cloud.inviteAccept(inviteToken(value));
+            });
             ipcMain.handle(desktopIpc.happyCloudCredentialScan, (event, options: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
                 return credentialImport.scan({

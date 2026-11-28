@@ -1702,7 +1702,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 detail="A link invite just made: the link in a field to copy, shown this once"
                 inviteNotice={{
                     type: "link",
-                    link: "https://join.happybases.com/#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    link: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6GoV5iNy_-Xt",
                     detail: "Member · Expires in 7 days",
                 }}
                 label="Happy Agent settings — members, link"
@@ -1807,7 +1807,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 detail="At the smallest window, 720×640: the invite row keeps every control whole"
                 inviteNotice={{
                     type: "link",
-                    link: "https://join.happybases.com/#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6",
+                    link: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6GoV5iNy_-Xt",
                     detail: "Member · Expires in 7 days",
                 }}
                 label="Happy Agent settings — members, small window"

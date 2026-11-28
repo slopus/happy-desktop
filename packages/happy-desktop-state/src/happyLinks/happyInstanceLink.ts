@@ -1,4 +1,5 @@
 import { formatHappyUrl, parseHappyUrl, type HappyLink } from "@slopus/happy-agent-client";
+import { happyCloudInviteLinkParse, type HappyCloudInviteLink } from "./happyCloudInviteLink.js";
 import { happyShareLinkParse } from "./happyShareLink.js";
 
 /*
@@ -23,20 +24,30 @@ export type HappyExternalLink =
      * only shows the list, and joining is still the person's press.
      */
     | { readonly kind: "cloudServers" }
+    /**
+     * `happy://cloud/join#<token>` or `https://happybases.com/join#<token>`: an
+     * invitation to a Happy Cloud server, which the window shows and only the
+     * person's press accepts. Any page can open such a link, so opening one
+     * never joins anything by itself.
+     */
+    | { readonly kind: "cloudInvite"; readonly invite: HappyCloudInviteLink }
     /** No instance, or anything Happy for desktop does not open from outside. */
     | { readonly kind: "unsupported" };
 
-/** The one link to the Happy Cloud servers; nothing else under `happy://cloud` is. */
+/** The link to the Happy Cloud servers; with an invite's, all there is under `happy://cloud`. */
 export const HAPPY_CLOUD_SERVERS_URL = "happy://cloud/servers";
 
 /**
  * Reads a `happy://` URL, or a link.happy.page share link that carries one,
  * that reached the window from the system or a page. Only an instance link
  * can be opened on a server; a link with no instance never is, so it can never
- * be opened on the wrong server. The Cloud servers link names no server.
+ * be opened on the wrong server. The Cloud servers link and an invite name no
+ * server of this app's.
  */
 export function happyExternalLinkParse(url: string): HappyExternalLink {
     if (url === HAPPY_CLOUD_SERVERS_URL) return { kind: "cloudServers" };
+    const invite = happyCloudInviteLinkParse(url);
+    if (invite !== undefined) return { kind: "cloudInvite", invite };
     const parsed = parseHappyUrl(happyShareLinkParse(url)?.url ?? url);
     if (parsed?.instanceId === undefined) return { kind: "unsupported" };
     const { instanceId, ...link } = parsed;

@@ -103,6 +103,10 @@ const bridge: HappyDesktopBridge = {
                       ipcRenderer.invoke(desktopIpc.happyCloudEmailCodeStart, email),
                   emailCodeVerify: (email: string, code: string) =>
                       ipcRenderer.invoke(desktopIpc.happyCloudEmailCodeVerify, email, code),
+                  invitePreview: (token: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudInvitePreview, token),
+                  inviteAccept: (token: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudInviteAccept, token),
                   credentialScan: (options?: { readonly shell?: boolean }) =>
                       ipcRenderer.invoke(desktopIpc.happyCloudCredentialScan, options),
                   credentialImport: (

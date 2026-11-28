@@ -115,7 +115,8 @@ const AVAILABILITY_DELAY_MS = 300;
  * or creates, the shell has the accounts service issue server tokens,
  * lists it, and hands its connection ID to `connect`,
  * which selects it once the shell reports it signed in. An invite is
- * accepted in the browser from its link; its server then appears here.
+ * accepted from its link, in the app (`desktopCloudInviteStore`) or, without
+ * the app, in the browser; accepted there, its server then appears here.
  */
 export function desktopCloudConnectStoreCreate(input: {
     readonly cloud: DesktopHappyCloud;
