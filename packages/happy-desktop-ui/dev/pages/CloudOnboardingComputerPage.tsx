@@ -202,7 +202,11 @@ function scrollListToEnd(element: HTMLDivElement | null) {
     if (list) list.scrollTop = list.scrollHeight;
 }
 
-function Step(props: { readonly mode: ThemeMode; readonly state: State }) {
+function Step(props: {
+    readonly mode: ThemeMode;
+    readonly state: State;
+    readonly chrome: Chrome | undefined;
+}) {
     const { state } = props;
     const done = state.done === true;
     const screen: CloudOnboardingScreenProps = {
@@ -229,7 +233,7 @@ function Step(props: { readonly mode: ThemeMode; readonly state: State }) {
         exit: { onSelect: noop },
     };
     return (
-        <Window chrome={state.hostOs === "windows" ? "windows" : "mac"}>
+        <Window chrome={props.chrome}>
             <SetupCover>
                 <div ref={state.end ? scrollListToEnd : undefined} style={{ display: "contents" }}>
                     <CloudOnboardingScreen {...screen} />
@@ -318,6 +322,8 @@ interface Shot {
     readonly id: string;
     readonly label: string;
     readonly state?: State;
+    /** The window's own controls, as its mockup draws them; Mac's unless said. */
+    readonly chrome?: Chrome;
     readonly render?: (mode: ThemeMode) => ReactNode;
     /** Also shot in light. */
     readonly light?: boolean;
@@ -461,11 +467,13 @@ const shots: readonly Shot[] = [
         id: "m11-next-windows-optional",
         label: "Member · on Windows, optional",
         state: { ...MEMBER, hostOs: "windows" },
+        chrome: "windows",
     },
     {
         id: "m12-next-windows-required",
         label: "Member · on Windows, required",
         state: { ...MEMBER, hostOs: "windows", required: true },
+        chrome: "windows",
     },
     {
         id: "m17-next-left-required",
@@ -584,9 +592,9 @@ const selected = captures().filter((capture) => only === null || capture.name.in
 /*
  * Where the caption buttons sit is read from the window itself, one answer for
  * the whole page, so the page answers as Windows would only when `?only=`
- * picks Windows screens alone (`?only=windows`).
+ * picks screens drawn in a Windows window alone (`?only=next-windows`).
  */
-if (selected.length > 0 && selected.every((capture) => capture.shot.state?.hostOs === "windows"))
+if (selected.length > 0 && selected.every((capture) => capture.shot.chrome === "windows"))
     Object.defineProperty(navigator, "windowControlsOverlay", {
         configurable: true,
         value: {
@@ -619,7 +627,11 @@ export function CloudOnboardingComputerPage() {
                             {capture.shot.render ? (
                                 capture.shot.render(capture.mode)
                             ) : capture.shot.state ? (
-                                <Step mode={capture.mode} state={capture.shot.state} />
+                                <Step
+                                    chrome={capture.shot.chrome}
+                                    mode={capture.mode}
+                                    state={capture.shot.state}
+                                />
                             ) : null}
                         </ThemeScope>
                     </FullScreenSpecimen>
