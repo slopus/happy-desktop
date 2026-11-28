@@ -25,6 +25,21 @@ export interface HappyAgentOnboardingPluginGateEntry {
     readonly active: boolean;
 }
 
+/** Where a computer on the computer gate stands; a revoked one is left out. */
+export type HappyAgentOnboardingComputerStatus = "enrolling" | "online" | "offline" | "draining";
+
+/** A computer the reader's agents could use: one of their own, or one of the team's. */
+export interface HappyAgentOnboardingComputer {
+    readonly id: string;
+    readonly name: string;
+    readonly access: "private" | "shared";
+    readonly status: HappyAgentOnboardingComputerStatus;
+    /** `macos`, `linux` or `windows`, as the computer reported it; null before it did. */
+    readonly os: string | null;
+    /** False where the server cannot run agents' work, as on Windows. */
+    readonly runsWork: boolean;
+}
+
 /** One step of a Happy Cloud server's onboarding, as the server decides it. */
 export type HappyAgentOnboardingGate = HappyAgentOnboardingGateCommon &
     (
@@ -62,6 +77,20 @@ export type HappyAgentOnboardingGate = HappyAgentOnboardingGateCommon &
               /** Plugin IDs that must have an active installation. */
               readonly required: readonly string[];
               readonly plugins: readonly HappyAgentOnboardingPluginGateEntry[];
+          }
+        | {
+              readonly kind: "computer";
+              /** One of the reader's own computers is online and runs work. */
+              readonly own: boolean;
+              /** One of the team's shared computers is online and runs work. */
+              readonly shared: boolean;
+              /** The reader's own computers and the team's shared ones. */
+              readonly computers: readonly HappyAgentOnboardingComputer[];
+              /**
+               * Whether the reader is an owner, who has nobody to ask; absent
+               * from a server that does not say.
+               */
+              readonly owner: boolean | undefined;
           }
         | { readonly kind: "teammates"; readonly invited: boolean; readonly members: number }
         | {
@@ -107,6 +136,13 @@ const STATUSES: readonly HappyAgentOnboardingGateStatus[] = [
     "open",
     "skipped",
     "unavailable",
+];
+
+const COMPUTER_STATUSES: readonly HappyAgentOnboardingComputerStatus[] = [
+    "enrolling",
+    "online",
+    "offline",
+    "draining",
 ];
 
 function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | undefined {
@@ -185,6 +221,34 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
                           ]
                         : [];
                 }),
+            };
+        case "computer":
+            return {
+                ...common,
+                kind: "computer",
+                own: data.own === true,
+                shared: data.shared === true,
+                computers: (Array.isArray(data.computers) ? data.computers : []).flatMap(
+                    (entry) => {
+                        const computer = recordOf(entry);
+                        const computerId = textOf(computer?.id);
+                        const status = COMPUTER_STATUSES.find(
+                            (value) => value === computer?.status,
+                        );
+                        if (!computer || computerId === "" || !status) return [];
+                        return [
+                            {
+                                id: computerId,
+                                name: textOf(computer.name) || computerId.slice(0, 8),
+                                access: computer.access === "shared" ? "shared" : "private",
+                                status,
+                                os: textOf(computer.os) || null,
+                                runsWork: computer.runsWork !== false,
+                            } satisfies HappyAgentOnboardingComputer,
+                        ];
+                    },
+                ),
+                owner: typeof data.owner === "boolean" ? data.owner : undefined,
             };
         case "teammates":
             return {
