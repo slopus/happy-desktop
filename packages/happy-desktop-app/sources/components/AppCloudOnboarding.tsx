@@ -134,16 +134,12 @@ function providerFlow(
     return { kind: "apiKey", vendor };
 }
 
-/** The provider and way an open flow is, or nothing for the store's chooser. */
-function flowProvider(flow: HappyAgentCloudProviderAddFlow):
-    | {
-          readonly provider: CloudOnboardingProviderDialogProvider;
-          readonly way: CloudOnboardingProviderWay;
-      }
-    | undefined {
+/** The provider and way an open flow is. */
+function flowProvider(flow: HappyAgentCloudProviderAddFlow): {
+    readonly provider: CloudOnboardingProviderDialogProvider;
+    readonly way: CloudOnboardingProviderWay;
+} {
     switch (flow.kind) {
-        case "choose":
-            return undefined;
         case "chatgpt":
             return { provider: "chatgpt", way: "plan" };
         case "claude":
@@ -784,7 +780,12 @@ export function AppCloudOnboarding(props: {
                                       add.to,
                                   )
                               }
-                              onApiKeySubmit={providersStore.apiKeySubmit}
+                              onApiKeySubmit={(secret, region) =>
+                                  providersStore.apiKeySubmit(
+                                      secret,
+                                      region ? { region } : undefined,
+                                  )
+                              }
                               onAwsKeysSubmit={providersStore.awsKeysSubmit}
                               onClose={providersStore.addClose}
                               onSaveToChange={(to) =>
