@@ -2,23 +2,16 @@
  * The computer step of a Happy Cloud server's onboarding, and its two dialogs
  * (CloudOnboardingComputer.tsx).
  *
- * One ink variable, so the same parts read on the onboarding sky and inside a
- * dialog's surface. A window shorter than 760px is compact: the cards drop
+ * One ink, the onboarding foreground, so the same parts read on the
+ * onboarding sky and, with the dialog's surface setting it to its text,
+ * inside a dialog. A window shorter than 760px is compact: the cards drop
  * their second lines and the list holds one row instead of two. The step body
  * is measured on the setup page and the dialogs on their overlay, both the
  * window's size.
  */
 
-.happy-computer-step,
 .happy-computer-step-dialog .happy-modal__dialog {
-    --cs-ink: var(--onboarding-foreground);
-    --cs-quiet: color-mix(in srgb, var(--cs-ink) 72%, transparent);
-    --cs-fill: color-mix(in srgb, var(--cs-ink) 6%, transparent);
-    --cs-edge: color-mix(in srgb, var(--cs-ink) 12%, transparent);
-}
-
-.happy-computer-step-dialog .happy-modal__dialog {
-    --cs-ink: var(--text);
+    --onboarding-foreground: var(--text);
 }
 
 /*
@@ -35,7 +28,7 @@
     box-sizing: border-box;
     width: 100%;
     max-width: 640px;
-    color: var(--cs-ink);
+    color: var(--onboarding-foreground);
     font-family: var(--happy-font-ui);
 }
 
@@ -57,8 +50,8 @@
     min-width: 0;
     padding: 12px 14px;
     border-radius: 10px;
-    background: var(--cs-fill);
-    box-shadow: inset 0 0 0 1px var(--cs-edge);
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
 }
 
 /* In the dialog the ends are frames, not cards: no fill, a 1px divider. The
@@ -94,8 +87,8 @@
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    background: color-mix(in srgb, var(--cs-ink) 10%, transparent);
-    color: var(--cs-ink);
+    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+    color: var(--onboarding-foreground);
 }
 
 .happy-computer-step__title {
@@ -109,7 +102,7 @@
 }
 
 .happy-computer-step__detail {
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-size: 12px;
     line-height: 16px;
 }
@@ -127,7 +120,7 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    color: color-mix(in srgb, var(--cs-ink) 78%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
     font-size: 12px;
     line-height: 16px;
 }
@@ -139,7 +132,7 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
 }
 
 .happy-computer-step__bullet {
@@ -164,7 +157,7 @@
     display: flex;
     align-items: center;
     height: 16px;
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-size: 11px;
     font-weight: 600;
     line-height: 16px;
@@ -175,7 +168,7 @@
     flex: 1 1 0;
     min-width: 8px;
     height: 0;
-    border-top: 1px solid var(--cs-quiet);
+    border-top: 1px solid color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
 }
 
 .happy-computer-step__wire-label {
@@ -198,7 +191,7 @@
 
 .happy-computer-step__example {
     overflow: hidden;
-    color: color-mix(in srgb, var(--cs-ink) 78%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
     font-family: var(--happy-font-mono);
     font-size: 11px;
     line-height: 16px;
@@ -247,8 +240,8 @@
     width: 232px;
     height: 36px;
     border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--cs-edge);
-    color: var(--cs-quiet);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-size: 14px;
     font-weight: 600;
     line-height: 20px;
@@ -256,7 +249,7 @@
 }
 
 .happy-computer-step__connect[data-state="connected"] {
-    color: var(--cs-ink);
+    color: var(--onboarding-foreground);
 }
 
 .happy-computer-step__connect[data-state="connected"] .happy-icon {
@@ -308,7 +301,7 @@
     box-sizing: border-box;
     height: var(--cs-row);
     margin: var(--cs-fade) 0;
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-size: 12px;
     line-height: 16px;
     text-align: center;
@@ -332,8 +325,8 @@
     height: var(--cs-row);
     padding: 0 10px;
     border-radius: 8px;
-    background: var(--cs-fill);
-    color: var(--cs-ink);
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    color: var(--onboarding-foreground);
     font-size: 12px;
     line-height: 16px;
 }
@@ -341,7 +334,7 @@
 .happy-computer-step__computer-mark {
     display: flex;
     flex: none;
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
 }
 
 .happy-computer-step__computer-text {
@@ -364,7 +357,7 @@
 
 /* A second line shares the row's 32px with the name: 15 and 13. */
 .happy-computer-step__computer-note {
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-size: 11px;
     line-height: 13px;
 }
@@ -404,7 +397,7 @@
     align-items: center;
     justify-content: flex-end;
     width: 48px;
-    color: var(--cs-quiet);
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
     font-size: 11px;
     white-space: nowrap;
 }
@@ -564,8 +557,8 @@
     height: 20px;
     padding: 0 8px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--cs-ink) 10%, transparent);
-    color: var(--cs-ink);
+    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+    color: var(--onboarding-foreground);
     font-size: 11px;
     font-weight: 600;
     line-height: 20px;
@@ -578,7 +571,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    color: var(--cs-ink);
+    color: var(--onboarding-foreground);
 }
 
 .happy-computer-step__facts {
@@ -594,7 +587,7 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    color: color-mix(in srgb, var(--cs-ink) 78%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
     font-size: 13px;
     line-height: 20px;
 }
@@ -606,10 +599,10 @@
     justify-content: center;
     width: 16px;
     height: 20px;
-    color: var(--cs-ink);
+    color: var(--onboarding-foreground);
 }
 
 .happy-computer-step__fact b {
-    color: var(--cs-ink);
+    color: var(--onboarding-foreground);
     font-weight: 600;
 }
