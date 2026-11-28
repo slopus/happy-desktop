@@ -157,7 +157,6 @@ export function desktopCloudConnectStoreCreate(input: {
         testSignIn?: Extract<CloudConnectView, { kind: "welcome" }>["testSignIn"],
     ): CloudConnectView => ({
         kind: "welcome",
-        ...(fromStart ? { start: true } : {}),
         ...(emailSignIn ? { emailSignIn: true } : {}),
         ...(testSignIn ? { testSignIn } : {}),
     });
@@ -179,8 +178,9 @@ export function desktopCloudConnectStoreCreate(input: {
     // Leaving the account for the welcome; the next sign-in starts after it.
     let signedOut: Promise<void> | undefined;
 
+    // Every screen opened from the start page says so, so it keeps the page's place.
     const set = (next: CloudConnectView | undefined): void => {
-        view = next;
+        view = next && fromStart ? { ...next, start: true } : next;
         for (const listener of listeners) listener();
     };
     const current = (asked: number): boolean => asked === generation && view !== undefined;
@@ -209,7 +209,6 @@ export function desktopCloudConnectStoreCreate(input: {
         kind: "servers",
         servers: { status: "ready", servers: servers.map(serverView) },
         joins,
-        ...(fromStart ? { start: true as const } : {}),
         ...(error === undefined ? {} : { error }),
     });
     const imagesRead = (asked: number): void => {
@@ -239,7 +238,6 @@ export function desktopCloudConnectStoreCreate(input: {
                 kind: "servers",
                 servers: { status: "error", message: answer.message },
                 joins,
-                ...(fromStart ? { start: true as const } : {}),
             });
             return "done";
         }
@@ -591,7 +589,6 @@ export function desktopCloudConnectStoreCreate(input: {
                 name: "",
                 availability: "idle",
                 back: servers.length > 0,
-                ...(fromStart ? { start: true as const } : {}),
             });
         },
         back() {

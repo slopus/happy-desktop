@@ -57,6 +57,29 @@
     pointer-events: none;
 }
 
+/*
+ * Opened from the start page, the screen shares its sky, which already shows
+ * the same moment (OnboardingSky): it takes the page's place by dissolving,
+ * so only the words change, and leaves the same way.
+ */
+.happy-cloud-connect__window[data-start] {
+    animation: happy-cloud-connect-dissolve 180ms ease backwards;
+}
+
+.happy-cloud-connect__window[data-start][data-closing] {
+    animation: happy-cloud-connect-dissolve-out 180ms ease both;
+}
+
+@keyframes happy-cloud-connect-dissolve-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
 @keyframes happy-cloud-connect-rise {
     from {
         transform: translate3d(0, 100%, 0);

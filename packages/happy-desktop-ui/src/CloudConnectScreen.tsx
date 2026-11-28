@@ -46,12 +46,12 @@ export type CloudConnectJoin = "joining" | "joined";
 /** Another Happy Agent of the reader's own, which the Chief of Staff sets up. */
 export type CloudConnectAgentAudience = "personal" | "team";
 
-export type CloudConnectView =
-    /**
-     * What to add: a Happy Agent of their own, one their small team shares,
-     * or Happy Cloud. The first two are drafted to the Chief of Staff.
-     */
-    | {
+export type CloudConnectView = (
+/**
+ * What to add: a Happy Agent of their own, one their small team shares,
+ * or Happy Cloud. The first two are drafted to the Chief of Staff.
+ */
+| {
           readonly kind: "choose";
           /** Whose request is being written into the Chief of Staff's draft. */
           readonly asking?: CloudConnectAgentAudience;
@@ -61,11 +61,6 @@ export type CloudConnectView =
       }
     | {
           readonly kind: "welcome";
-          /**
-           * Opened straight from the start page: Back returns to it, and
-           * there is no close button.
-           */
-          readonly start?: true;
           /** The shell can sign in by a code sent to the person's email: offered under the deck. */
           readonly emailSignIn?: true;
           /**
@@ -117,8 +112,6 @@ export type CloudConnectView =
            * joined at once; Continue appears once one is in.
            */
           readonly joins: ReadonlyMap<string, CloudConnectJoin>;
-          /** Opened from the start page: nothing is behind it, so there is no close button. */
-          readonly start?: true;
           readonly error?: string;
       }
     | {
@@ -127,14 +120,20 @@ export type CloudConnectView =
           readonly availability: CloudConnectAvailability;
           /** The account already has servers; otherwise this is its first. Back lists them either way. */
           readonly back: boolean;
-          /** Opened from the start page: nothing is behind it, so there is no close button. */
-          readonly start?: true;
           readonly busy?: boolean;
           readonly error?: string;
       }
     /** Signing in to the chosen server; once in, the screen is gone. */
     | { readonly kind: "connecting"; readonly server: CloudConnectServer }
-    | { readonly kind: "failed"; readonly message: string };
+    | { readonly kind: "failed"; readonly message: string }
+) & {
+    /**
+     * Opened from the start page, whose sky it shares: it takes the page's
+     * place where it stands instead of rising over it, Back on its first
+     * screen returns to it, and there is no close button.
+     */
+    readonly start?: true;
+};
 
 export interface CloudConnectScreenProps {
     readonly appearance: ThemeMode;
@@ -415,6 +414,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
             data-appearance={props.appearance}
             data-backdrop="sky"
             data-closing={closing ? "" : undefined}
+            data-start={view.start ? "" : undefined}
             data-happy-desktop-ui="cloud-connect-screen"
             onAnimationEnd={(event) => {
                 // Only the sheet's own motion; the pages inside dissolve too.
@@ -953,8 +953,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                             );
                     }
                 })()}
-                {(view.kind === "welcome" || view.kind === "servers" || view.kind === "create") &&
-                view.start ? null : (
+                {view.start ? null : (
                     <Button
                         aria-label="Close"
                         className="happy-cloud-connect__close"
