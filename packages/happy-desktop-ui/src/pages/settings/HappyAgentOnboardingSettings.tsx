@@ -80,7 +80,7 @@ export function HappyAgentOnboardingSettings(props: HappyAgentOnboardingSettings
                 </Box>
             ) : null}
             <HappyAgentSettingsSection
-                description="What each person does when they first join. Optional steps can be skipped; required ones come first."
+                description="What each person is asked when they first join. Optional can be skipped. Required holds their work here until it is done. Anyone who already finished setup, you included, is not asked again."
                 title="New people"
             >
                 {props.steps.map((step) => (
