@@ -18,6 +18,8 @@ export type HappyAgentOnboardingComputerCommand =
           readonly unix: string;
           /** The token the command carries, for the desktop shell's own installer run. */
           readonly token: string;
+          /** The server's own address as it answered, `https://<host>`, when it said. */
+          readonly clusterUrl?: string;
           /** In milliseconds. */
           readonly expiresAt: number;
       }
@@ -119,10 +121,11 @@ type CommandReady = Extract<HappyAgentOnboardingComputerCommand, { readonly step
 
 function commandRead(answer: unknown): CommandReady | undefined {
     if (typeof answer !== "object" || answer === null) return undefined;
-    const { commands, expiresAt, token } = answer as {
+    const { commands, expiresAt, token, clusterUrl } = answer as {
         commands?: unknown;
         expiresAt?: unknown;
         token?: unknown;
+        clusterUrl?: unknown;
     };
     const unix =
         typeof commands === "object" && commands !== null
@@ -135,7 +138,31 @@ function commandRead(answer: unknown): CommandReady | undefined {
         typeof expiresAt !== "number"
     )
         return undefined;
-    return { step: "ready", unix, token, expiresAt };
+    return {
+        step: "ready",
+        unix,
+        token,
+        expiresAt,
+        ...(typeof clusterUrl === "string" ? { clusterUrl } : {}),
+    };
+}
+
+/** The shell's installer; twin of `COMPUTE_JOIN_INSTALLER` in happy-desktop-electron main/computeJoin.ts. */
+const SHELL_INSTALLER = "https://get.happy.engineering/install.sh";
+
+/**
+ * Whether the server's own command is exactly the install the shell runs:
+ * that installer, no sudo, and only the join address and token the answer
+ * names. Settings › Compute has the person run the server's command; the
+ * shell may stand in for it only when the two are the same thing.
+ */
+function commandStandard(command: CommandReady): boolean {
+    if (command.clusterUrl === undefined) return false;
+    const joinUrl = `${command.clusterUrl}/v0/supervisors/join`;
+    return (
+        command.unix ===
+        `curl -fsSL ${SHELL_INSTALLER} | HAPPY_JOIN_URL='${joinUrl}' HAPPY_JOIN_TOKEN='${command.token}' sh`
+    );
 }
 
 export function happyAgentOnboardingComputerCreate(deps: {
@@ -234,22 +261,18 @@ export function happyAgentOnboardingComputerCreate(deps: {
         }
     };
 
-    const joinStart = (host: HappyAgentOnboardingComputerJoinHost): void => {
+    const joinStart = async (
+        host: HappyAgentOnboardingComputerJoinHost,
+        command: CommandReady,
+    ): Promise<void> => {
         joinUnsubscribe ??= host.subscribe(joinState);
+        before = known ?? new Set();
         set({ thisComputer: { step: "downloading" } });
-        void commandEnsure()
-            .then(async (command) => {
-                if (disposed) return;
-                before = known ?? new Set();
-                try {
-                    await host.join(command.token);
-                } catch {
-                    fail("Setup failed", { detail: JOIN_REFUSED.launch, copyNext: true });
-                }
-            })
-            .catch((error: unknown) => {
-                if (!disposed) fail(happyAgentUserError(error).message);
-            });
+        try {
+            await host.join(command.token);
+        } catch {
+            fail("Setup failed", { detail: JOIN_REFUSED.launch, copyNext: true });
+        }
     };
 
     return {
@@ -274,13 +297,13 @@ export function happyAgentOnboardingComputerCreate(deps: {
             const mine = snapshot.thisComputer;
             if (disposed || (mine.step !== "idle" && mine.step !== "failed")) return;
             const host = mine.step === "failed" && mine.copyNext ? undefined : deps.join;
-            if (host) {
-                joinStart(host);
-                return;
-            }
             set({ thisComputer: { step: "copying" } });
+            // Minted first, so the row says nothing of a download before the
+            // command shows the shell's install is the server's own.
             void commandEnsure()
                 .then(async (command) => {
+                    if (disposed) return;
+                    if (host && commandStandard(command)) return joinStart(host, command);
                     try {
                         await target.copy(command.unix);
                     } catch {
