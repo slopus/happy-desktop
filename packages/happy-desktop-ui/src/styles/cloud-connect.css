@@ -156,12 +156,14 @@
 }
 
 /* Many servers scroll here, in the bar every scrollport keeps, while who is
-   signed in and the way to a new server stay where they are. */
+   signed in and the way to a new server stay where they are. The room is the
+   page's own height (the setup page is the size container), less what the
+   group and the footer take around the list. */
 .happy-cloud-connect__servers {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: max(152px, calc(100vh - 460px));
+    max-height: max(152px, calc(100cqh - 460px));
     overflow-y: auto;
 }
 
