@@ -184,7 +184,7 @@ function Diagram(props: {
                             ? [
                                   "Agents think here",
                                   "Keeps your AI keys",
-                                  `Everyone on ${props.serverName} can read commands and output`,
+                                  "Teammates can read commands in shared work",
                               ]
                             : [
                                   "Agents think here",
@@ -207,7 +207,7 @@ function Diagram(props: {
                         "Checkout and push code",
                         "Run shell commands",
                         "Read / write your local files",
-                        "Secured with auto review",
+                        "Reviewed in Auto mode",
                     ]}
                 />
             </Node>
@@ -493,22 +493,22 @@ function facts(
         {
             icon: "download-outline",
             lead: "Installs",
-            text: "a small signed runner in your account. No admin password. It starts when you log in.",
+            text: "a runner in your user account. No admin password is needed.",
         },
         {
             icon: "terminal-outline",
             lead: "Agents can",
-            text: "run commands as you, read your disk, and write in their workspace, your home folder and temporary folders.",
+            text: "run commands as you, within what auto review allows.",
         },
         {
             icon: "warning-outline",
             lead: "Full access",
-            text: "is your choice per agent. An agent with it can do anything your account can.",
+            text: "is your choice per conversation. With it, an agent can do anything your account can.",
         },
         {
             icon: "lock-closed-outline",
             lead: "No admin rights.",
-            text: "Nothing is installed or run as an administrator. Provider keys and tool credentials never reach your computer.",
+            text: "Nothing is installed or run as an administrator. Secrets you attach to an agent reach it.",
         },
         {
             icon: "eye-outline",
@@ -532,20 +532,20 @@ function facts(
         {
             icon: "folder-open-outline",
             lead: "Your team reads the folder too.",
-            text: `Everyone on ${server} can browse the folder an agent works in, read-only.`,
+            text: `Everyone on ${server} can browse the folder an agent works in, read-only, except an admin bot’s folder.`,
         },
         {
             icon: "shield-outline",
-            lead: "Owners and admins",
-            text: `of ${server} can see this computer in their list and remove it.`,
+            lead: "People who manage computers",
+            text: `on ${server} can see it and remove it.`,
         },
     ];
 }
 
 /**
- * The explainer's height at the opening window, measured; one view, so it is
- * centred on it. A shorter window drops the cards' second lines, and the
- * stylesheet gives that height there.
+ * The explainer's height as drawn at the opening window. Its top is set from
+ * it and the card hangs from there, as tall as its text. A shorter window
+ * drops the cards' second lines, and the stylesheet gives that height there.
  */
 const EXPLAINER_HEIGHT: Readonly<Record<CloudOnboardingComputerReader, number>> = {
     owner: 471,
