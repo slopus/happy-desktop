@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "./Button";
+import { CopyButton } from "./CopyButton";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /** Where one watched console entry came from, as the watcher observed it. */
@@ -74,6 +75,15 @@ function countLabel(errors: number, warnings: number): string {
     return parts.join(", ");
 }
 
+/** The kept entries as plain text, newest first, under the summary line. */
+function entriesText(summary: string, entries: readonly ConsoleWatchEntry[]): string {
+    const lines = entries.map(
+        (entry) =>
+            `${SOURCE_LABELS[entry.source]}${entry.count > 1 ? ` × ${entry.count}` : ""}\n${entry.text}`,
+    );
+    return [summary, ...lines].join("\n\n");
+}
+
 /**
  * SidebarConsoleAction — a preview-build footer mark that says how many errors
  * and warnings reached the console, and lists the newest in the footer marks'
@@ -134,9 +144,6 @@ export function SidebarConsoleAction(props: SidebarConsoleActionProps) {
                 >
                     <div className="happy-sidebar-console-action__head">
                         <span className="happy-sidebar-update__state">{label}</span>
-                        <Button onClick={props.onClear} size="small" variant="secondary">
-                            Clear
-                        </Button>
                     </div>
                     <ol className="happy-sidebar-console-action__list">
                         {props.entries.map((entry) => (
@@ -155,6 +162,17 @@ export function SidebarConsoleAction(props: SidebarConsoleActionProps) {
                             </li>
                         ))}
                     </ol>
+                    <div className="happy-sidebar-console-action__foot">
+                        <CopyButton
+                            caption="Copy"
+                            copiedCaption="Copied"
+                            label="Copy console entries"
+                            text={() => entriesText(label, props.entries)}
+                        />
+                        <Button onClick={props.onClear} size="small" variant="secondary">
+                            Clear
+                        </Button>
+                    </div>
                 </div>
             ) : null}
         </div>

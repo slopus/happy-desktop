@@ -2236,8 +2236,19 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 6px 6px 6px 12px;
+    height: 28px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--divider);
+}
+
+.happy-sidebar-console-action__foot {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 6px;
+    border-top: 1px solid var(--divider);
 }
 
 .happy-sidebar-console-action__list {
