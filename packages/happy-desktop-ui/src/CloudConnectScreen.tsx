@@ -11,6 +11,7 @@ import { LottieScene, type LottieSceneName } from "./LottieScene";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import type { WelcomeSlide } from "./WelcomeDeck";
 import { WelcomeScreen } from "./WelcomeScreen";
+import { WindowOverlayHostContext } from "./WindowOverlay";
 
 /** One Happy Cloud server the person belongs to. */
 export interface CloudConnectServer {
@@ -375,6 +376,9 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
     const { view, onClose } = props;
     // Leaving plays the sheet back down first; the caller hears once it is gone.
     const [dismissed, dismissedSet] = useState(false);
+    // The sheet is drawn over the app, outside its shell, so what it opens (the
+    // picture's crop) hangs here rather than inside the page that opened it.
+    const [overlays, overlaysSet] = useState<HTMLElement | null>(null);
     // A choice drafted to the Chief of Staff leaves the same way, onto it.
     const closing = dismissed || (view.kind === "choose" && view.asked === true);
     const dismiss = () => dismissedSet(true);
@@ -418,479 +422,495 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
             aria-modal="true"
             aria-label="Happy Cloud"
         >
-            {(() => {
-                switch (view.kind) {
-                    case "choose":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                className="happy-cloud-connect happy-cloud-connect--plans"
-                                copy="Run agents somewhere other than this computer."
-                                placement="centered"
-                                {...(view.error ? { status: { label: view.error } } : {})}
-                                title="Add to Happy"
-                            >
-                                <div className="happy-cloud-connect__plans">
-                                    {PLANS.map((plan) => (
-                                        <article
-                                            className="happy-cloud-connect__plan"
-                                            data-happy-desktop-ui="cloud-connect-plan"
-                                            key={plan.id}
-                                        >
-                                            <LottieScene
-                                                className="happy-cloud-connect__plan-scene"
-                                                name={plan.scene}
-                                                replayLabel={plan.title}
-                                                size={64}
-                                                style={{ marginInlineStart: plan.sceneInset - 4 }}
-                                            />
-                                            <span className="happy-cloud-connect__plan-audience">
-                                                {plan.audience}
-                                            </span>
-                                            <h2 className="happy-cloud-connect__plan-title">
-                                                {plan.title}
-                                            </h2>
-                                            <p className="happy-cloud-connect__plan-detail">
-                                                {plan.detail}
-                                            </p>
-                                            <ul className="happy-cloud-connect__plan-features">
-                                                {plan.features.map((feature) => (
-                                                    <li key={feature}>
-                                                        <Ionicon name="checkmark" size={14} />
-                                                        <span>{feature}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                            <Button
-                                                className="happy-cloud-connect__plan-action"
-                                                disabled={
-                                                    view.asking !== undefined &&
-                                                    view.asking !== plan.id
-                                                }
-                                                loading={view.asking === plan.id}
-                                                variant={plan.recommended ? "primary" : "secondary"}
-                                                onClick={() =>
-                                                    plan.id === "cloud"
-                                                        ? props.onCloudOpen()
-                                                        : props.onAgentAdd(plan.id)
-                                                }
+            <WindowOverlayHostContext value={overlays}>
+                {(() => {
+                    switch (view.kind) {
+                        case "choose":
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    className="happy-cloud-connect happy-cloud-connect--plans"
+                                    copy="Run agents somewhere other than this computer."
+                                    placement="centered"
+                                    {...(view.error ? { status: { label: view.error } } : {})}
+                                    title="Add to Happy"
+                                >
+                                    <div className="happy-cloud-connect__plans">
+                                        {PLANS.map((plan) => (
+                                            <article
+                                                className="happy-cloud-connect__plan"
+                                                data-happy-desktop-ui="cloud-connect-plan"
+                                                key={plan.id}
                                             >
-                                                {plan.action}
-                                            </Button>
-                                        </article>
-                                    ))}
-                                </div>
-                            </SetupPage>
-                        );
-                    case "welcome": {
-                        const test = view.testSignIn;
-                        return (
-                            <WelcomeScreen
-                                actionAutoFocus={!test}
-                                actionDisabled={test?.busy}
-                                actionLabel="Continue"
-                                appearance={props.appearance}
-                                backdrop={{ kind: "sky" }}
-                                decoration={<SetupDrift scenes={CLOUD_DRIFT} />}
-                                className="happy-cloud-connect happy-cloud-connect--welcome"
-                                data-testid="cloud-connect"
-                                onAction={props.onContinue}
-                                onArtPress={props.onLogoPress}
-                                {...(view.emailSignIn && !test
-                                    ? {
-                                          alternateAction: {
-                                              label: "Continue with email",
-                                              onAction: props.onEmailOpen,
-                                          },
-                                      }
-                                    : {})}
-                                secondaryAction={{
-                                    label: "Back",
-                                    // The welcome is the first step: Back sinks the
-                                    // sheet onto the start page or the app.
-                                    onAction: dismiss,
-                                    ...(test?.busy ? { disabled: true } : {}),
-                                }}
-                                slides={CLOUD_SLIDES}
-                            >
-                                {test ? (
+                                                <LottieScene
+                                                    className="happy-cloud-connect__plan-scene"
+                                                    name={plan.scene}
+                                                    replayLabel={plan.title}
+                                                    size={64}
+                                                    style={{
+                                                        marginInlineStart: plan.sceneInset - 4,
+                                                    }}
+                                                />
+                                                <span className="happy-cloud-connect__plan-audience">
+                                                    {plan.audience}
+                                                </span>
+                                                <h2 className="happy-cloud-connect__plan-title">
+                                                    {plan.title}
+                                                </h2>
+                                                <p className="happy-cloud-connect__plan-detail">
+                                                    {plan.detail}
+                                                </p>
+                                                <ul className="happy-cloud-connect__plan-features">
+                                                    {plan.features.map((feature) => (
+                                                        <li key={feature}>
+                                                            <Ionicon name="checkmark" size={14} />
+                                                            <span>{feature}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                                <Button
+                                                    className="happy-cloud-connect__plan-action"
+                                                    disabled={
+                                                        view.asking !== undefined &&
+                                                        view.asking !== plan.id
+                                                    }
+                                                    loading={view.asking === plan.id}
+                                                    variant={
+                                                        plan.recommended ? "primary" : "secondary"
+                                                    }
+                                                    onClick={() =>
+                                                        plan.id === "cloud"
+                                                            ? props.onCloudOpen()
+                                                            : props.onAgentAdd(plan.id)
+                                                    }
+                                                >
+                                                    {plan.action}
+                                                </Button>
+                                            </article>
+                                        ))}
+                                    </div>
+                                </SetupPage>
+                            );
+                        case "welcome": {
+                            const test = view.testSignIn;
+                            return (
+                                <WelcomeScreen
+                                    actionAutoFocus={!test}
+                                    actionDisabled={test?.busy}
+                                    actionLabel="Continue"
+                                    appearance={props.appearance}
+                                    backdrop={{ kind: "sky" }}
+                                    decoration={<SetupDrift scenes={CLOUD_DRIFT} />}
+                                    className="happy-cloud-connect happy-cloud-connect--welcome"
+                                    data-testid="cloud-connect"
+                                    onAction={props.onContinue}
+                                    onArtPress={props.onLogoPress}
+                                    {...(view.emailSignIn && !test
+                                        ? {
+                                              alternateAction: {
+                                                  label: "Continue with email",
+                                                  onAction: props.onEmailOpen,
+                                              },
+                                          }
+                                        : {})}
+                                    secondaryAction={{
+                                        label: "Back",
+                                        // The welcome is the first step: Back sinks the
+                                        // sheet onto the start page or the app.
+                                        onAction: dismiss,
+                                        ...(test?.busy ? { disabled: true } : {}),
+                                    }}
+                                    slides={CLOUD_SLIDES}
+                                >
+                                    {test ? (
+                                        <div className="happy-cloud-connect__column">
+                                            <TextField
+                                                aria-label="Login"
+                                                autoFocus
+                                                className="happy-cloud-connect__handle"
+                                                disabled={test.busy}
+                                                fullWidth
+                                                onSubmit={props.onTestSignIn}
+                                                onValueChange={props.onTestLoginChange}
+                                                placeholder="Login"
+                                                size="large"
+                                                value={test.login}
+                                            />
+                                            <TextField
+                                                aria-label="Password"
+                                                autoComplete="off"
+                                                className="happy-cloud-connect__handle"
+                                                disabled={test.busy}
+                                                fullWidth
+                                                onSubmit={props.onTestSignIn}
+                                                onValueChange={props.onTestPasswordChange}
+                                                placeholder="Password"
+                                                size="large"
+                                                type="password"
+                                                value={test.password}
+                                            />
+                                            <p
+                                                className="happy-cloud-connect__hint"
+                                                data-tone={test.error ? "attention" : undefined}
+                                                role="status"
+                                            >
+                                                {test.error}
+                                            </p>
+                                            <div className="happy-cloud-connect__links">
+                                                <Button
+                                                    disabled={
+                                                        test.login.trim() === "" ||
+                                                        test.password === ""
+                                                    }
+                                                    loading={test.busy}
+                                                    onClick={props.onTestSignIn}
+                                                    variant="secondary"
+                                                >
+                                                    Sign in with a test account
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : undefined}
+                                </WelcomeScreen>
+                            );
+                        }
+                        case "signingIn":
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    copy="Sign in or create an account in your browser, then come back here."
+                                    scene="closed-lock"
+                                    secondary={{ label: "Cancel", onSelect: props.onBack }}
+                                    status={{ busy: true, label: "Waiting for your browser…" }}
+                                    title="Signing in"
+                                />
+                            );
+                        case "email":
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    action={{
+                                        busy: view.busy,
+                                        disabled: view.email.trim() === "" || Boolean(view.wait),
+                                        label: "Send code",
+                                        onSelect: props.onEmailCodeSend,
+                                    }}
+                                    copy="Enter your email and we’ll send you a code to sign in."
+                                    placement="centered"
+                                    secondary={back(view.busy)}
+                                    title="Continue with email"
+                                >
                                     <div className="happy-cloud-connect__column">
                                         <TextField
-                                            aria-label="Login"
+                                            aria-label="Email"
+                                            autoComplete="email"
                                             autoFocus
                                             className="happy-cloud-connect__handle"
-                                            disabled={test.busy}
+                                            disabled={view.busy}
                                             fullWidth
-                                            onSubmit={props.onTestSignIn}
-                                            onValueChange={props.onTestLoginChange}
-                                            placeholder="Login"
+                                            inputMode="email"
+                                            onSubmit={props.onEmailCodeSend}
+                                            onValueChange={props.onEmailChange}
+                                            placeholder="you@example.com"
                                             size="large"
-                                            value={test.login}
-                                        />
-                                        <TextField
-                                            aria-label="Password"
-                                            autoComplete="off"
-                                            className="happy-cloud-connect__handle"
-                                            disabled={test.busy}
-                                            fullWidth
-                                            onSubmit={props.onTestSignIn}
-                                            onValueChange={props.onTestPasswordChange}
-                                            placeholder="Password"
-                                            size="large"
-                                            type="password"
-                                            value={test.password}
+                                            type="email"
+                                            value={view.email}
                                         />
                                         <p
                                             className="happy-cloud-connect__hint"
-                                            data-tone={test.error ? "attention" : undefined}
+                                            data-tone={view.error ? "attention" : undefined}
                                             role="status"
                                         >
-                                            {test.error}
+                                            {emailHint(view.error, view.wait)}
+                                        </p>
+                                    </div>
+                                </SetupPage>
+                            );
+                        case "emailCode": {
+                            const waiting = Boolean(view.wait);
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    action={{
+                                        busy: view.busy,
+                                        disabled: view.code.trim() === "" || waiting,
+                                        label: "Sign in",
+                                        onSelect: props.onEmailCodeVerify,
+                                    }}
+                                    copy={
+                                        <>
+                                            Enter the code we sent to{" "}
+                                            <strong className="happy-cloud-connect__email">
+                                                {view.email}
+                                            </strong>
+                                            .
+                                        </>
+                                    }
+                                    placement="centered"
+                                    secondary={back(view.busy)}
+                                    title="Check your email"
+                                >
+                                    <div className="happy-cloud-connect__column">
+                                        <TextField
+                                            aria-label="Code"
+                                            autoComplete="one-time-code"
+                                            autoFocus
+                                            className="happy-cloud-connect__handle happy-cloud-connect__code"
+                                            disabled={view.busy}
+                                            fullWidth
+                                            inputMode="numeric"
+                                            name="one-time-code"
+                                            onSubmit={props.onEmailCodeVerify}
+                                            onValueChange={props.onEmailCodeChange}
+                                            placeholder="Code"
+                                            size="large"
+                                            value={view.code}
+                                        />
+                                        <p
+                                            className="happy-cloud-connect__hint"
+                                            data-tone={view.error ? "attention" : undefined}
+                                            role="status"
+                                        >
+                                            {emailHint(view.error, view.wait) ??
+                                                (view.resent
+                                                    ? "We sent you a new code."
+                                                    : undefined)}
                                         </p>
                                         <div className="happy-cloud-connect__links">
                                             <Button
-                                                disabled={
-                                                    test.login.trim() === "" || test.password === ""
-                                                }
-                                                loading={test.busy}
-                                                onClick={props.onTestSignIn}
-                                                variant="secondary"
+                                                disabled={view.busy || view.resendIn > 0 || waiting}
+                                                loading={view.resending}
+                                                onClick={props.onEmailCodeResend}
+                                                variant="ghost"
                                             >
-                                                Sign in with a test account
+                                                {view.resendIn > 0
+                                                    ? `Resend code in ${countdown(view.resendIn)}`
+                                                    : "Resend code"}
+                                            </Button>
+                                            <Button
+                                                disabled={view.busy}
+                                                onClick={props.onEmailChangeOpen}
+                                                variant="ghost"
+                                            >
+                                                Change email
                                             </Button>
                                         </div>
                                     </div>
-                                ) : undefined}
-                            </WelcomeScreen>
-                        );
-                    }
-                    case "signingIn":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                copy="Sign in or create an account in your browser, then come back here."
-                                scene="closed-lock"
-                                secondary={{ label: "Cancel", onSelect: props.onBack }}
-                                status={{ busy: true, label: "Waiting for your browser…" }}
-                                title="Signing in"
-                            />
-                        );
-                    case "email":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                action={{
-                                    busy: view.busy,
-                                    disabled: view.email.trim() === "" || Boolean(view.wait),
-                                    label: "Send code",
-                                    onSelect: props.onEmailCodeSend,
-                                }}
-                                copy="Enter your email and we’ll send you a code to sign in."
-                                placement="centered"
-                                secondary={back(view.busy)}
-                                title="Continue with email"
-                            >
-                                <div className="happy-cloud-connect__column">
-                                    <TextField
-                                        aria-label="Email"
-                                        autoComplete="email"
-                                        autoFocus
-                                        className="happy-cloud-connect__handle"
-                                        disabled={view.busy}
-                                        fullWidth
-                                        inputMode="email"
-                                        onSubmit={props.onEmailCodeSend}
-                                        onValueChange={props.onEmailChange}
-                                        placeholder="you@example.com"
-                                        size="large"
-                                        type="email"
-                                        value={view.email}
-                                    />
-                                    <p
-                                        className="happy-cloud-connect__hint"
-                                        data-tone={view.error ? "attention" : undefined}
-                                        role="status"
-                                    >
-                                        {emailHint(view.error, view.wait)}
-                                    </p>
-                                </div>
-                            </SetupPage>
-                        );
-                    case "emailCode": {
-                        const waiting = Boolean(view.wait);
-                        return (
-                            <SetupPage
-                                {...frame}
-                                action={{
-                                    busy: view.busy,
-                                    disabled: view.code.trim() === "" || waiting,
-                                    label: "Sign in",
-                                    onSelect: props.onEmailCodeVerify,
-                                }}
-                                copy={
-                                    <>
-                                        Enter the code we sent to{" "}
-                                        <strong className="happy-cloud-connect__email">
-                                            {view.email}
-                                        </strong>
-                                        .
-                                    </>
-                                }
-                                placement="centered"
-                                secondary={back(view.busy)}
-                                title="Check your email"
-                            >
-                                <div className="happy-cloud-connect__column">
-                                    <TextField
-                                        aria-label="Code"
-                                        autoComplete="one-time-code"
-                                        autoFocus
-                                        className="happy-cloud-connect__handle happy-cloud-connect__code"
-                                        disabled={view.busy}
-                                        fullWidth
-                                        inputMode="numeric"
-                                        name="one-time-code"
-                                        onSubmit={props.onEmailCodeVerify}
-                                        onValueChange={props.onEmailCodeChange}
-                                        placeholder="Code"
-                                        size="large"
-                                        value={view.code}
-                                    />
-                                    <p
-                                        className="happy-cloud-connect__hint"
-                                        data-tone={view.error ? "attention" : undefined}
-                                        role="status"
-                                    >
-                                        {emailHint(view.error, view.wait) ??
-                                            (view.resent ? "We sent you a new code." : undefined)}
-                                    </p>
-                                    <div className="happy-cloud-connect__links">
-                                        <Button
-                                            disabled={view.busy || view.resendIn > 0 || waiting}
-                                            loading={view.resending}
-                                            onClick={props.onEmailCodeResend}
-                                            variant="ghost"
-                                        >
-                                            {view.resendIn > 0
-                                                ? `Resend code in ${countdown(view.resendIn)}`
-                                                : "Resend code"}
-                                        </Button>
-                                        <Button
-                                            disabled={view.busy}
-                                            onClick={props.onEmailChangeOpen}
-                                            variant="ghost"
-                                        >
-                                            Change email
-                                        </Button>
-                                    </div>
-                                </div>
-                            </SetupPage>
-                        );
-                    }
-                    case "servers": {
-                        const joins = [...view.joins.values()];
-                        return (
-                            <SetupPage
-                                {...frame}
-                                {...(joins.includes("joined")
-                                    ? {
-                                          action: {
-                                              label: "Continue",
-                                              onSelect: props.onServersContinue,
-                                          },
-                                      }
-                                    : {})}
-                                copy="Join the servers your account is on, as many as you like."
-                                placement="top"
-                                secondary={back(joins.includes("joining"))}
-                                {...(view.servers.status === "loading"
-                                    ? { status: { busy: true, label: "Loading your servers…" } }
-                                    : view.servers.status === "error"
-                                      ? { status: { label: view.servers.message } }
-                                      : view.error
-                                        ? { status: { label: view.error } }
+                                </SetupPage>
+                            );
+                        }
+                        case "servers": {
+                            const joins = [...view.joins.values()];
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    {...(joins.includes("joined")
+                                        ? {
+                                              action: {
+                                                  label: "Continue",
+                                                  onSelect: props.onServersContinue,
+                                              },
+                                          }
                                         : {})}
-                                title="Join a server"
-                            >
-                                <div className="happy-cloud-connect__column">
-                                    {view.servers.status === "ready" ? (
-                                        <div className="happy-cloud-connect__servers">
-                                            {view.servers.servers.map((server, index) => {
-                                                const join = view.joins.get(server.id);
-                                                return (
-                                                    <div
-                                                        className="happy-cloud-connect__server"
-                                                        data-happy-desktop-ui="cloud-connect-server"
-                                                        key={server.id}
-                                                    >
-                                                        <CloudConnectServerImage
-                                                            server={server}
-                                                            size={44}
-                                                        />
-                                                        <span className="happy-cloud-connect__server-text">
-                                                            <span className="happy-cloud-connect__server-name">
-                                                                {server.displayName}
-                                                            </span>
-                                                            <span className="happy-cloud-connect__server-detail">
-                                                                @{server.name}
-                                                            </span>
-                                                        </span>
-                                                        <Button
-                                                            aria-label={`Join ${server.displayName}`}
-                                                            // eslint-disable-next-line jsx-a11y/no-autofocus -- the first server is where a keyboard starts on this screen
-                                                            autoFocus={index === 0}
-                                                            disabled={join === "joined"}
-                                                            {...(join === "joined"
-                                                                ? { icon: "check" as const }
-                                                                : {})}
-                                                            loading={join === "joining"}
-                                                            onClick={() =>
-                                                                props.onServerPick(server.id)
-                                                            }
-                                                            variant={
-                                                                join === "joined"
-                                                                    ? "ghost"
-                                                                    : "secondary"
-                                                            }
-                                                            width={104}
+                                    copy="Join the servers your account is on, as many as you like."
+                                    placement="top"
+                                    secondary={back(joins.includes("joining"))}
+                                    {...(view.servers.status === "loading"
+                                        ? { status: { busy: true, label: "Loading your servers…" } }
+                                        : view.servers.status === "error"
+                                          ? { status: { label: view.servers.message } }
+                                          : view.error
+                                            ? { status: { label: view.error } }
+                                            : {})}
+                                    title="Join a server"
+                                >
+                                    <div className="happy-cloud-connect__column">
+                                        {view.servers.status === "ready" ? (
+                                            <div className="happy-cloud-connect__servers">
+                                                {view.servers.servers.map((server, index) => {
+                                                    const join = view.joins.get(server.id);
+                                                    return (
+                                                        <div
+                                                            className="happy-cloud-connect__server"
+                                                            data-happy-desktop-ui="cloud-connect-server"
+                                                            key={server.id}
                                                         >
-                                                            {join === "joined" ? "Joined" : "Join"}
-                                                        </Button>
-                                                    </div>
-                                                );
-                                            })}
+                                                            <CloudConnectServerImage
+                                                                server={server}
+                                                                size={44}
+                                                            />
+                                                            <span className="happy-cloud-connect__server-text">
+                                                                <span className="happy-cloud-connect__server-name">
+                                                                    {server.displayName}
+                                                                </span>
+                                                                <span className="happy-cloud-connect__server-detail">
+                                                                    @{server.name}
+                                                                </span>
+                                                            </span>
+                                                            <Button
+                                                                aria-label={`Join ${server.displayName}`}
+                                                                // eslint-disable-next-line jsx-a11y/no-autofocus -- the first server is where a keyboard starts on this screen
+                                                                autoFocus={index === 0}
+                                                                disabled={join === "joined"}
+                                                                {...(join === "joined"
+                                                                    ? { icon: "check" as const }
+                                                                    : {})}
+                                                                loading={join === "joining"}
+                                                                onClick={() =>
+                                                                    props.onServerPick(server.id)
+                                                                }
+                                                                variant={
+                                                                    join === "joined"
+                                                                        ? "ghost"
+                                                                        : "secondary"
+                                                                }
+                                                                width={104}
+                                                            >
+                                                                {join === "joined"
+                                                                    ? "Joined"
+                                                                    : "Join"}
+                                                            </Button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : null}
+                                        <div className="happy-cloud-connect__links">
+                                            <Button
+                                                icon="plus"
+                                                onClick={props.onCreateOpen}
+                                                variant="secondary"
+                                            >
+                                                Bootstrap a new one
+                                            </Button>
                                         </div>
-                                    ) : null}
-                                    <div className="happy-cloud-connect__links">
-                                        <Button
-                                            icon="plus"
-                                            onClick={props.onCreateOpen}
-                                            variant="secondary"
-                                        >
-                                            Bootstrap a new one
-                                        </Button>
                                     </div>
-                                </div>
-                            </SetupPage>
-                        );
-                    }
-                    case "create": {
-                        const picture = props.picture;
-                        const hint =
-                            view.error ??
-                            picture?.error ??
-                            availabilityHint(view.availability, view.name);
-                        return (
-                            <SetupPage
-                                {...frame}
-                                action={{
-                                    busy: view.busy,
-                                    disabled: view.availability !== "available",
-                                    label: "Bootstrap",
-                                    onSelect: props.onCreate,
-                                }}
-                                copy={
-                                    view.back
-                                        ? "Name your team’s new server. You can change it later."
-                                        : "Name your team’s first server, or open an invite link."
-                                }
-                                placement="top"
-                                secondary={back(view.busy)}
-                                title="Bootstrap a server"
-                            >
-                                <div className="happy-cloud-connect__column">
-                                    {picture ? (
-                                        <PicturePicker
-                                            {...(picture.crop ? { crop: picture.crop } : {})}
-                                            data-testid="cloud-connect-picture"
-                                            disabled={view.busy === true}
-                                            layout="column"
-                                            noun="picture"
-                                            onChoose={picture.onChoose}
-                                            onCropCancel={picture.onCropCancel}
-                                            onCropConfirm={picture.onCropConfirm}
-                                            opening={picture.opening}
-                                            {...(picture.url ? { pictureUrl: picture.url } : {})}
-                                            placeholder={
-                                                <Avatar
-                                                    className="happy-picture-picker__image"
-                                                    initials={view.name.slice(0, 1).toUpperCase()}
-                                                    // The placeholder the server will wear in the rail.
-                                                    placeholderSeed={view.name}
-                                                    size="lg"
-                                                    style={{
-                                                        width: CREATE_PICTURE_SIDE,
-                                                        height: CREATE_PICTURE_SIDE,
-                                                        borderRadius: "25%",
-                                                    }}
-                                                    type="agent"
-                                                />
-                                            }
-                                            shape="rounded"
-                                            side={CREATE_PICTURE_SIDE}
+                                </SetupPage>
+                            );
+                        }
+                        case "create": {
+                            const picture = props.picture;
+                            const hint =
+                                view.error ??
+                                picture?.error ??
+                                availabilityHint(view.availability, view.name);
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    action={{
+                                        busy: view.busy,
+                                        disabled: view.availability !== "available",
+                                        label: "Bootstrap",
+                                        onSelect: props.onCreate,
+                                    }}
+                                    copy={
+                                        view.back
+                                            ? "Name your team’s new server. You can change it later."
+                                            : "Name your team’s first server, or open an invite link."
+                                    }
+                                    placement="top"
+                                    secondary={back(view.busy)}
+                                    title="Bootstrap a server"
+                                >
+                                    <div className="happy-cloud-connect__column">
+                                        {picture ? (
+                                            <PicturePicker
+                                                {...(picture.crop ? { crop: picture.crop } : {})}
+                                                data-testid="cloud-connect-picture"
+                                                disabled={view.busy === true}
+                                                layout="column"
+                                                noun="picture"
+                                                onChoose={picture.onChoose}
+                                                onCropCancel={picture.onCropCancel}
+                                                onCropConfirm={picture.onCropConfirm}
+                                                opening={picture.opening}
+                                                {...(picture.url
+                                                    ? { pictureUrl: picture.url }
+                                                    : {})}
+                                                placeholder={
+                                                    <Avatar
+                                                        className="happy-picture-picker__image"
+                                                        initials={view.name
+                                                            .slice(0, 1)
+                                                            .toUpperCase()}
+                                                        // The placeholder the server will wear in the rail.
+                                                        placeholderSeed={view.name}
+                                                        size="lg"
+                                                        style={{
+                                                            width: CREATE_PICTURE_SIDE,
+                                                            height: CREATE_PICTURE_SIDE,
+                                                            borderRadius: "25%",
+                                                        }}
+                                                        type="agent"
+                                                    />
+                                                }
+                                                shape="rounded"
+                                                side={CREATE_PICTURE_SIDE}
+                                            />
+                                        ) : null}
+                                        <TextField
+                                            aria-label="Server name"
+                                            autoFocus
+                                            className="happy-cloud-connect__handle"
+                                            disabled={view.busy}
+                                            fullWidth
+                                            leadingText="@"
+                                            onSubmit={props.onCreate}
+                                            onValueChange={props.onCreateNameChange}
+                                            placeholder="acme"
+                                            size="large"
+                                            value={view.name}
                                         />
-                                    ) : null}
-                                    <TextField
-                                        aria-label="Server name"
-                                        autoFocus
-                                        className="happy-cloud-connect__handle"
-                                        disabled={view.busy}
-                                        fullWidth
-                                        leadingText="@"
-                                        onSubmit={props.onCreate}
-                                        onValueChange={props.onCreateNameChange}
-                                        placeholder="acme"
-                                        size="large"
-                                        value={view.name}
-                                    />
-                                    {/* Under the field, in a line kept whether or not it
+                                        {/* Under the field, in a line kept whether or not it
                                         says anything, so typing never moves the page. */}
-                                    <p
-                                        className="happy-cloud-connect__hint"
-                                        data-tone={
-                                            view.error !== undefined ||
-                                            picture?.error !== undefined ||
-                                            view.availability === "taken" ||
-                                            view.availability === "reserved" ||
-                                            view.availability === "invalid"
-                                                ? "attention"
-                                                : undefined
-                                        }
-                                        role="status"
-                                    >
-                                        {hint}
-                                    </p>
-                                </div>
-                            </SetupPage>
-                        );
+                                        <p
+                                            className="happy-cloud-connect__hint"
+                                            data-tone={
+                                                view.error !== undefined ||
+                                                picture?.error !== undefined ||
+                                                view.availability === "taken" ||
+                                                view.availability === "reserved" ||
+                                                view.availability === "invalid"
+                                                    ? "attention"
+                                                    : undefined
+                                            }
+                                            role="status"
+                                        >
+                                            {hint}
+                                        </p>
+                                    </div>
+                                </SetupPage>
+                            );
+                        }
+                        case "failed":
+                            return (
+                                <SetupPage
+                                    {...frame}
+                                    action={{
+                                        autoFocus: true,
+                                        label: "Try again",
+                                        onSelect: props.onContinue,
+                                    }}
+                                    copy={view.message}
+                                    scene="snail"
+                                    secondary={back()}
+                                    title="Couldn’t connect"
+                                />
+                            );
                     }
-                    case "failed":
-                        return (
-                            <SetupPage
-                                {...frame}
-                                action={{
-                                    autoFocus: true,
-                                    label: "Try again",
-                                    onSelect: props.onContinue,
-                                }}
-                                copy={view.message}
-                                scene="snail"
-                                secondary={back()}
-                                title="Couldn’t connect"
-                            />
-                        );
-                }
-            })()}
-            {view.kind === "welcome" && view.start ? null : (
-                <Button
-                    aria-label="Close"
-                    className="happy-cloud-connect__close"
-                    icon="close"
-                    iconOnly
-                    onClick={dismiss}
-                    variant="ghost"
-                />
-            )}
+                })()}
+                {view.kind === "welcome" && view.start ? null : (
+                    <Button
+                        aria-label="Close"
+                        className="happy-cloud-connect__close"
+                        icon="close"
+                        iconOnly
+                        onClick={dismiss}
+                        variant="ghost"
+                    />
+                )}
+            </WindowOverlayHostContext>
+            <div className="happy-cloud-connect__overlays" ref={overlaysSet} />
         </div>
     );
 }

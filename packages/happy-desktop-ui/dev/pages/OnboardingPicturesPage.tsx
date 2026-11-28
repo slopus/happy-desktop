@@ -7,6 +7,7 @@ import {
 } from "../../src/CloudOnboardingScreen";
 import { ConnectionShell, type ConnectionShellItem } from "../../src/ConnectionShell";
 import { ConnectionSurface } from "../../src/ConnectionSurface";
+import type { ProfilePhotoCropSource } from "../../src/ProfilePhotoCropDialog";
 import { SetupCover } from "../../src/SetupCover";
 import { ThemeScope, type ThemeMode } from "../../src/ThemeScope";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -125,7 +126,18 @@ function Gate(props: {
     );
 }
 
-function Create(props: { readonly mode: ThemeMode; readonly pictureUrl?: string }) {
+/** A picture dropped on the create step, open in its crop. */
+const cropSource: ProfilePhotoCropSource = {
+    imageUrl: new URL("../assets/crop-landscape.webp", import.meta.url).href,
+    width: 960,
+    height: 540,
+};
+
+function Create(props: {
+    readonly mode: ThemeMode;
+    readonly pictureUrl?: string;
+    readonly crop?: ProfilePhotoCropSource;
+}) {
     const view: CloudConnectView = {
         kind: "create",
         name: "acme",
@@ -158,6 +170,7 @@ function Create(props: { readonly mode: ThemeMode; readonly pictureUrl?: string 
             onTestSignIn={noop}
             picture={{
                 ...(props.pictureUrl ? { url: props.pictureUrl } : {}),
+                ...(props.crop ? { crop: props.crop } : {}),
                 opening: false,
                 onChoose: noop,
                 onCropCancel: noop,
@@ -236,6 +249,11 @@ const shots: readonly Shot[] = [
         id: "o02a-create-picture",
         label: "Create a server · picture uploaded",
         render: (mode) => <Create mode={mode} pictureUrl={photoUrl} />,
+    },
+    {
+        id: "o02b-create-crop",
+        label: "Create a server · a dropped picture in its crop, over the whole window",
+        render: (mode) => <Create crop={cropSource} mode={mode} />,
     },
     {
         id: "o03-profile",

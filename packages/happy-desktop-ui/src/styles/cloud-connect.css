@@ -13,6 +13,11 @@
     background: var(--groupped-background);
 }
 
+/* What the sheet opens, such as a picture's crop, over the whole sheet. */
+.happy-cloud-connect__overlays {
+    display: contents;
+}
+
 .happy-cloud-connect__window > .happy-setup-page,
 .happy-cloud-connect__window > .happy-welcome-screen {
     flex: 1 1 auto;
