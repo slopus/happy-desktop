@@ -136,9 +136,10 @@ export type CloudConnectView = (
     | { readonly kind: "failed"; readonly message: string }
 ) & {
     /**
-     * Opened from the start page, whose sky it shares: it takes the page's
-     * place where it stands instead of rising over it, Back on its first
-     * screen returns to it, and there is no close button.
+     * Opened from a page on the same sky, the start page or the first step of
+     * a server's setup: it takes that page's place where it stands instead of
+     * rising over it, Back on its first screen returns to it, and there is no
+     * close button.
      */
     readonly start?: true;
 };
@@ -176,8 +177,8 @@ export interface CloudConnectScreenProps {
     onCreateOpen(): void;
     /**
      * From create back to the servers; from the servers, as "Use another
-     * account", back to the welcome, signed out; and from signing in or a
-     * failure back to the welcome.
+     * account", back to the welcome, signed out; from the code back to the
+     * email; and from the email, signing in or a failure back to the welcome.
      */
     onBack(): void;
     onCreateNameChange(name: string): void;
@@ -732,6 +733,19 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                               action: {
                                                   label: "Continue",
                                                   onSelect: props.onServersContinue,
+                                              },
+                                          }
+                                        : {})}
+                                    // In a page's place, Back returns to that page;
+                                    // over the app, the close button leaves.
+                                    {...(view.start
+                                        ? {
+                                              back: {
+                                                  label: "Back",
+                                                  onSelect: dismiss,
+                                                  ...(joins.includes("joining")
+                                                      ? { disabled: true }
+                                                      : {}),
                                               },
                                           }
                                         : {})}

@@ -507,6 +507,8 @@ function HappyAgentBoundary(props: {
     titleShimmer: TitleShimmerStore;
     update?: WorkspaceUpdate;
     windowState: HappyAgentWindowStore;
+    /** A Happy Cloud server's: its account's servers, from its setup's first step. */
+    cloudServersShow?: () => void;
 }) {
     const update = props.update;
     return (
@@ -537,6 +539,7 @@ function HappyAgentBoundary(props: {
                 ...(props.platform === "desktop"
                     ? { externalLinkOpen: desktopExternalLinkOpen(props.bridge) }
                     : {}),
+                ...(props.cloudServersShow ? { cloudServersShow: props.cloudServersShow } : {}),
                 ...(update
                     ? {
                           onUpdateApply: () => {
@@ -1036,6 +1039,13 @@ function DesktopScreens(props: DesktopRendererProps) {
                                         browserContent={props.browserContent}
                                         commandPalette={ui.commandPalette}
                                         connectionOnboarding
+                                        {...(props.cloudConnect &&
+                                        cloudServerConnectionOf(entry.id) !== undefined
+                                            ? {
+                                                  cloudServersShow:
+                                                      props.cloudConnect.setupServersOpen,
+                                              }
+                                            : {})}
                                         experiments={props.experiments}
                                         projectsVisibility={props.projectsVisibility}
                                         statusBar={props.statusBar}

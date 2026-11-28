@@ -40,6 +40,12 @@ export interface DesktopCloudConnectStore {
      * returns to the start page.
      */
     welcomeConnectOpen(): void;
+    /**
+     * Back from the first step of a server's setup: the account's servers in
+     * the step's place, whose Back returns to it. The server and its setup
+     * stay as they are; opening it again resumes the setup.
+     */
+    setupServersOpen(): void;
     /** Drafts setting up a personal or team Happy Agent to the Chief of Staff. */
     agentAdd(audience: CloudConnectAgentAudience): void;
     /** Happy Cloud, from the choices: its welcome. */
@@ -151,7 +157,8 @@ export function desktopCloudConnectStoreCreate(input: {
         ? happyAgentPicturePickStoreCreate({ codec: input.photoCodec })
         : undefined;
     let view: CloudConnectView | undefined;
-    // Opened from the start page rather than the sidebar's "+".
+    // Opened in a page's place, the start page's or a setup's first step's,
+    // rather than over the app from the sidebar's "+".
     let fromStart = false;
     const welcome = (
         testSignIn?: Extract<CloudConnectView, { kind: "welcome" }>["testSignIn"],
@@ -460,8 +467,8 @@ export function desktopCloudConnectStoreCreate(input: {
      * Opens on the account's servers. Signed out, the welcome comes first:
      * signing in is the person's step there, not this one's.
      */
-    const serversOpen = (): void => {
-        fromStart = false;
+    const serversOpen = (inPlace = false): void => {
+        fromStart = inPlace;
         generation += 1;
         const asked = generation;
         logoPresses = [];
@@ -487,6 +494,9 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         connectOpen() {
             if (view === undefined) serversOpen();
+        },
+        setupServersOpen() {
+            if (view === undefined) serversOpen(true);
         },
         welcomeConnectOpen() {
             if (view !== undefined) return;
@@ -598,9 +608,16 @@ export function desktopCloudConnectStoreCreate(input: {
             });
         },
         back() {
-            // Leaving the browser sign-in, an email step, or a failure lands
+            // Leaving the browser sign-in, the email step, or a failure lands
             // on the Cloud's welcome.
-            if (view?.kind === "email" || view?.kind === "emailCode") {
+            // The code's step before is the email, still typed in.
+            if (view?.kind === "emailCode") {
+                if (view.busy) return;
+                generation += 1;
+                emailSet({ kind: "email", email: view.email });
+                return;
+            }
+            if (view?.kind === "email") {
                 if (view.busy) return;
                 generation += 1;
                 countdownStop();

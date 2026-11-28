@@ -43,6 +43,8 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly placeholderSeed: string;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
+    /** Back from the setup's first step: the Happy Cloud account's servers. */
+    readonly onServersShow?: () => void;
     /** A Happy Cloud server's AI connections, plugins and payments, for its gates. */
     readonly cloudProviders?: () => HappyAgentCloudProvidersStore | undefined;
     readonly plugins?: () => HappyAgentPluginsStore | undefined;
@@ -124,6 +126,7 @@ export function HappyAgentOnboardingBoundary(props: {
                     {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                     {...(props.serverCreated ? { serverCreated: true } : {})}
                     {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
+                    {...(props.onServersShow ? { onServersShow: props.onServersShow } : {})}
                 />
             </SetupCover>
         );

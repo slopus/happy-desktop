@@ -120,6 +120,12 @@ export interface HappyAgentRouterContext {
      * packaged Electron; a browser tab opens links its own way.
      */
     readonly externalLinkOpen?: (url: string) => void;
+    /**
+     * Shows the Happy Cloud account's servers in place of this server's setup,
+     * as Back from its first step. Present only for a Happy Cloud server in a
+     * shell that signs in to Happy Cloud.
+     */
+    readonly cloudServersShow?: () => void;
     readonly debug?: AppHappyAgentDebugStore;
     /** Live renderer diagnostics, present only in an explicitly debug-launched desktop window. */
     readonly performance?: LivePerformanceStore;
@@ -306,6 +312,7 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             {...(setup.payments ? { payments: setup.payments } : {})}
             {...(setup.providers ? { providers: setup.providers } : {})}
             {...(context.externalLinkOpen ? { onExternalOpen: context.externalLinkOpen } : {})}
+            {...(context.cloudServersShow ? { onServersShow: context.cloudServersShow } : {})}
         >
             {content}
         </HappyAgentOnboardingBoundary>

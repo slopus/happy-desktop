@@ -401,6 +401,11 @@ export function AppCloudOnboarding(props: {
     readonly serverCreated?: boolean;
     readonly placeholderSeed: string;
     readonly onExternalOpen?: (url: string) => void;
+    /**
+     * Back from the first step: the account's servers, in this setup's place.
+     * Nothing is undone; opening the server again resumes here.
+     */
+    readonly onServersShow?: () => void;
 }) {
     const flow = props.snapshot.flow!;
     const gate = flow.current!;
@@ -740,14 +745,21 @@ export function AppCloudOnboarding(props: {
                 ]}
                 {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
                 {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
-                {...(flow.previous === undefined
-                    ? {}
-                    : {
+                {...(flow.previous !== undefined
+                    ? {
                           back: {
                               disabled: flow.pending !== undefined,
                               onSelect: store.gateBack,
                           },
-                      })}
+                      }
+                    : props.onServersShow
+                      ? {
+                            back: {
+                                disabled: flow.pending !== undefined,
+                                onSelect: props.onServersShow,
+                            },
+                        }
+                      : {})}
                 exit={{ onSelect: store.onboardingExit }}
                 {...screen}
             />
