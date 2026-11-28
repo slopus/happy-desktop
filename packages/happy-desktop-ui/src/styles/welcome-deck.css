@@ -135,11 +135,11 @@
 }
 
 /*
- * A welcome tag, on a slide's title or on an action's label: the outline Badge
- * hung off the end of the last word, raised like a superscript. It takes no
- * width, so the words stay centred on themselves. Everything is measured in
- * the words' own em, so a tag on small text is drawn small in proportion;
- * the badge only stops shrinking where its letters would stop reading.
+ * A welcome tag on a slide's title: the outline Badge hung off the end of the
+ * last word, raised like a superscript. It takes no width, so the words stay
+ * centred on themselves. Everything is measured in the words' own em, so a
+ * tag on small text is drawn small in proportion; the badge only stops
+ * shrinking where its letters would stop reading.
  */
 .happy-welcome-tag {
     position: relative;
@@ -167,6 +167,26 @@
      */
     --happy-badge-label-x: -0.05em;
     --happy-badge-label-y: 0px;
+}
+
+/*
+ * On an action the tag is part of the button: it takes its width after the
+ * label, centred on the label's line, so the hover and press fill cover it.
+ * The badge is far shorter than the button, which keeps its own height.
+ */
+.happy-button .happy-welcome-tag {
+    top: 0;
+    left: 0;
+    align-items: center;
+    width: auto;
+    height: 1lh;
+    margin-left: 0.5em;
+    vertical-align: top;
+}
+
+.happy-button .happy-welcome-tag > .happy-badge {
+    position: static;
+    transform: none;
 }
 
 /*

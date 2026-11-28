@@ -115,7 +115,11 @@ export function WelcomeScreenPage() {
                         appearance="system"
                         onAction={noop}
                         onAppearanceChange={noop}
-                        secondaryAction={{ label: "Connect to Happy Cloud", onAction: noop }}
+                        secondaryAction={{
+                            label: "Connect to Happy Cloud",
+                            tag: "Beta",
+                            onAction: noop,
+                        }}
                         slides={[brand, agents, build, clear]}
                     />
                 </WindowFrame>
