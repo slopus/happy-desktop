@@ -3,15 +3,16 @@ import type { HappyAgentCloudProviderAddFlow } from "./happyAgentCloudProvidersS
 
 /** What a `happy://settings/providers/add…` link opens. */
 export interface HappyAgentProviderAddLink {
-    readonly flow: HappyAgentCloudProviderAddFlow;
+    /** What it asks for; the add form's own first choice when absent. */
+    readonly flow?: HappyAgentCloudProviderAddFlow;
     /** Where it asks to keep what is added; the reader's own account when absent. */
     readonly to?: HappyAgentCloudScope;
 }
 
 const PREFIX = "happy://settings/";
 
-const FLOWS: Readonly<Record<string, HappyAgentCloudProviderAddFlow>> = {
-    "providers/add": { kind: "choose" },
+const FLOWS: Readonly<Record<string, HappyAgentCloudProviderAddFlow | null>> = {
+    "providers/add": null,
     "providers/add/openai": { kind: "chatgpt" },
     "providers/add/anthropic": { kind: "claude", setupToken: false },
 };
@@ -47,8 +48,9 @@ export function happyAgentProviderAddLinkParse(
             return undefined;
         flow = { kind: "apiKey", vendor };
     } else if (vendor !== null) return undefined;
-    if (!flow || keys.some((key) => key !== "to" && key !== "vendor")) return undefined;
-    return { flow, ...(to === null ? {} : { to }) };
+    if (flow === undefined || keys.some((key) => key !== "to" && key !== "vendor"))
+        return undefined;
+    return { ...(flow === null ? {} : { flow }), ...(to === null ? {} : { to }) };
 }
 
 /** The provider add page a `happy://settings/…` URL names, or nothing for any other URL. */

@@ -7,13 +7,14 @@ import {
     type HappyAgentCloudSignIn,
 } from "./happyAgentCloudProviders.js";
 import {
+    happyAgentCloudProviderAddFlows,
     happyAgentCloudProviderAddOptions,
     happyAgentCloudProvidersStoreCreate,
 } from "./happyAgentCloudProvidersStore.js";
 
-/* Adding goes one step at a time: what to add, then its name and where it is
- * kept (a provider already listed, or a new one), then the key or sign-in.
- * The list shows whose providers the reader picks, the team's first. */
+/* Adding is one page: the way, whose it is, where it is kept (a provider
+ * already listed, or a new one), its name and the key or sign-in, all sent
+ * together. The list shows whose providers the reader picks, the team's first. */
 
 function connection(
     id: string,
@@ -121,31 +122,29 @@ it("offers a flow's own default first, then the named providers of the same scop
     ).toEqual([{ connectionId: "bedrock", name: "Amazon Bedrock" }]);
 });
 
-it("asks what to add, then its name and where, then the key", async () => {
+it("takes the way, the name, where it goes and the key on one page", async () => {
     const { api, calls } = apiCreate();
     const store = await storeRead(api);
     store.addOpen({ to: "team" });
-    expect(store.get().add).toMatchObject({ flow: { kind: "choose" }, to: "team" });
-
-    store.addFlowSelect({ kind: "apiKey", vendor: "openai" });
+    // ChatGPT's sign-in comes first where the server offers it.
     expect(store.get().add).toMatchObject({
-        step: "details",
+        flow: { kind: "chatgpt" },
         to: "team",
         label: "",
-        destination: { kind: "existing", connectionId: "openai" },
+        destination: { kind: "existing", connectionId: "codex" },
+        phase: "idle",
     });
-    // A key is not taken before its name and place are settled.
-    store.apiKeySubmit("sk-early");
-    expect(calls).toEqual([]);
 
+    store.addFlowSelect({ kind: "apiKey", vendor: "openai" });
+    expect(store.get().add?.destination).toEqual({ kind: "existing", connectionId: "openai" });
     store.addLabelUpdate("Prod key");
-    store.addDestinationSelect("p-team");
     // A provider of the reader's own is not where a team key goes.
     store.addDestinationSelect("p-mine");
     expect(store.get().add?.destination).toEqual({ kind: "existing", connectionId: "openai" });
     store.addDestinationSelect("p-team");
-    store.addDetailsSubmit();
-    expect(store.get().add?.step).toBe("credential");
+    // Nothing is sent without a key.
+    store.apiKeySubmit("  ");
+    expect(calls).toEqual([]);
 
     store.apiKeySubmit(" sk-live ");
     await vi.waitFor(() => expect(store.get().add?.phase).toBe("done"));
@@ -170,11 +169,11 @@ it("creates a new provider once, even when its first key is refused", async () =
     store.addOpen({ to: "private" });
     store.addFlowSelect({ kind: "apiKey", vendor: "anthropic" });
     store.addDestinationNewSelect();
-    store.addDetailsSubmit();
     // A new provider needs a name first.
-    expect(store.get().add?.step).toBe("details");
+    store.apiKeySubmit("sk-ant-early");
+    expect(store.get().add?.phase).toBe("idle");
+    expect(calls).toEqual([]);
     store.addDestinationNameUpdate("Research");
-    store.addDetailsSubmit();
 
     store.apiKeySubmit("sk-ant-bad");
     await vi.waitFor(() => expect(store.get().add?.error?.title).toBe("Couldn't add the key"));
@@ -195,7 +194,6 @@ it("says the provider wasn't created when the server refuses its name", async ()
     store.addFlowSelect({ kind: "apiKey", vendor: "openai" });
     store.addDestinationNewSelect();
     store.addDestinationNameUpdate("Prod pool");
-    store.addDetailsSubmit();
     store.apiKeySubmit("sk-live");
     await vi.waitFor(() =>
         expect(store.get().add?.error).toEqual({
@@ -211,10 +209,8 @@ it("signs in to where the person picked and gives it the name they typed", async
     const { api, calls } = apiCreate();
     const store = await storeRead(api);
     store.addOpen({ to: "team" });
-    store.addFlowSelect({ kind: "chatgpt" });
     store.addLabelUpdate("Steve's Pro");
     store.addDestinationSelect("p-team");
-    store.addDetailsSubmit();
     store.signInStart();
     await vi.waitFor(() => expect(store.get().add?.phase).toBe("done"));
     expect(store.get().add?.done).toBe("ChatGPT connected");
@@ -229,26 +225,20 @@ it("keeps a sign-in to the reader's own account and the account's own name", asy
     const { api, calls } = apiCreate();
     const store = await storeRead(api);
     store.addOpen({ to: "private" });
-    store.addFlowSelect({ kind: "chatgpt" });
-    store.addDetailsSubmit();
     store.signInStart();
     await vi.waitFor(() => expect(store.get().add?.phase).toBe("done"));
     expect(calls).toEqual(['sign-in codex {"scope":"private"}']);
     store[Symbol.dispose]();
 });
 
-it("opens a link's flow on its credential, and goes back one step at a time", async () => {
+it("opens a link's way with its default place, and closes", async () => {
     const store = await storeRead(apiCreate().api);
     store.addOpen({ flow: { kind: "apiKey", vendor: "grok" }, to: "team" });
     expect(store.get().add).toMatchObject({
         flow: { kind: "apiKey", vendor: "grok" },
-        step: "credential",
         destination: { kind: "existing", connectionId: "grok" },
+        phase: "idle",
     });
-    store.addBack();
-    expect(store.get().add).toMatchObject({ step: "details" });
-    store.addBack();
-    expect(store.get().add?.flow).toEqual({ kind: "choose" });
     store.addClose();
     expect(store.get().add).toBeUndefined();
     store[Symbol.dispose]();
@@ -272,6 +262,20 @@ it("moves to the other scope's default when the scope changes", async () => {
     });
     store.addDestinationNewSelect();
     expect(store.get().add?.destination.kind).toBe("existing");
+    store[Symbol.dispose]();
+});
+
+it("offers only the ways this server and role can add", async () => {
+    const store = await storeRead(apiCreate().api);
+    store.addOpen();
+    // No Claude sign-in or setup token here; Bedrock for those who manage the team's.
+    expect(happyAgentCloudProviderAddFlows(store.get())).toEqual([
+        { kind: "chatgpt" },
+        { kind: "apiKey", vendor: "openai" },
+        { kind: "apiKey", vendor: "anthropic" },
+        { kind: "apiKey", vendor: "grok" },
+        { kind: "apiKey", vendor: "bedrock" },
+    ]);
     store[Symbol.dispose]();
 });
 

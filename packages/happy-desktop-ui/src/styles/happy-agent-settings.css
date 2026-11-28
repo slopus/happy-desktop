@@ -1044,48 +1044,108 @@
     line-height: 18px;
 }
 
+.happy-agent-ai-provider-sheet__text {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
 .happy-agent-ai-provider-sheet__credentials {
     display: flex;
     flex-direction: column;
 }
 
-/* A token the reader may not change reads as a row but takes no hover. */
-.happy-agent-ai-provider-sheet__static {
-    cursor: default;
+/* A token owns its hairline: its line of status, its actions under it, and
+   the one that is open under those. */
+.happy-agent-ai-provider-sheet__credential {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-block: 10px;
+    border-bottom: 1px solid var(--divider);
 }
 
-.happy-agent-ai-provider-sheet__static:hover {
-    background: transparent;
-}
-
-.happy-agent-ai-provider-sheet__switch {
+.happy-agent-ai-provider-sheet__credential-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 32px;
+    gap: 12px;
+    min-width: 0;
+    min-height: 36px;
+    color: var(--text-secondary);
 }
 
-.happy-agent-ai-provider-sheet__switch-text {
-    flex: 1 1 0%;
+/* The actions start under the token's name; a ghost button's own 8px of
+   padding is taken back so its words line up with the name. */
+.happy-agent-ai-provider-sheet__credential-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding-inline-start: 18px;
+}
+
+/* An open action: an unfilled frame, as a group inside a dialog is. */
+.happy-agent-ai-provider-sheet__action {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-block-start: 4px;
+    padding: 12px;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+}
+
+.happy-agent-ai-provider-sheet__action .happy-agent-provider-add--panel {
+    gap: 12px;
+}
+
+.happy-agent-ai-provider-sheet__action-buttons,
+.happy-agent-provider-add__buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.happy-agent-ai-provider-sheet__add {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+}
+
+.happy-agent-ai-provider-sheet__add-title {
     color: var(--text);
     font-size: 13px;
+    font-weight: 600;
     line-height: 18px;
 }
 
 .happy-agent-provider-add {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
 }
 
 .happy-agent-provider-add__field {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
 }
 
-.happy-agent-provider-add__label,
+.happy-agent-provider-add__label {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
 .happy-agent-provider-add__text {
     color: var(--text);
     font-size: 13px;
@@ -1099,6 +1159,25 @@
     line-height: 16px;
 }
 
+.happy-agent-provider-add__link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-link);
+    font: inherit;
+    cursor: pointer;
+}
+
+.happy-agent-provider-add__link:hover {
+    text-decoration: underline;
+}
+
+.happy-agent-provider-add__divider {
+    flex: none;
+    height: 1px;
+    background: var(--divider);
+}
+
 .happy-agent-provider-add__waiting,
 .happy-agent-provider-add__row,
 .happy-agent-provider-add__code,
@@ -1108,61 +1187,63 @@
     gap: 8px;
 }
 
-/* The rows' hover fill reaches past the text column, so their marks line up with it. */
-.happy-agent-provider-add__choices {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-inline: -8px;
+.happy-agent-provider-add__row {
+    gap: 12px;
 }
 
-/* A family or a way: the native clients' settings row, which takes the one
-   hover shape every control shares (theme.css). */
-.happy-agent-provider-add__choice {
+.happy-agent-provider-add__sign-in {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* The vendors: one chip each, its mark and its name. Chosen or not, a chip
+   keeps its box; only its ring is drawn in. */
+.happy-agent-provider-add__vendors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.happy-agent-provider-add__vendor {
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 52px;
-    padding: 8px;
-    border: 0;
-    border-radius: var(--happy-hover-radius);
+    gap: 8px;
+    height: 36px;
+    padding-inline: 8px 12px;
+    border: 1px solid var(--divider);
+    border-radius: 10px;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--text);
     font: inherit;
-    text-align: start;
     cursor: pointer;
 }
 
-.happy-agent-provider-add__choice:hover {
+.happy-agent-provider-add__vendor:hover {
     background: var(--happy-hover-fill);
 }
 
-.happy-agent-provider-add__choice:focus-visible {
+.happy-agent-provider-add__vendor:focus-visible {
     outline: 2px solid var(--radio-active);
-    outline-offset: 0;
+    outline-offset: 1px;
 }
 
-.happy-agent-provider-add__choice-text {
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+.happy-agent-provider-add__vendor:disabled {
+    cursor: default;
+    opacity: 0.6;
 }
 
-.happy-agent-provider-add__choice-name {
-    color: var(--text);
+.happy-agent-provider-add__vendor[aria-checked="true"] {
+    border-color: var(--radio-active);
+    box-shadow: inset 0 0 0 1px var(--radio-active);
+}
+
+.happy-agent-provider-add__vendor-name {
     font-size: 13px;
     font-weight: 500;
     line-height: 18px;
-}
-
-.happy-agent-provider-add__choice-detail {
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
+    white-space: nowrap;
 }
 
 .happy-agent-provider-add__user-code {
@@ -1183,87 +1264,6 @@
 
 .happy-agent-provider-add__done .happy-icon {
     color: var(--status-connected);
-}
-
-.happy-agent-provider-add__destinations {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-/* The rows' fill reaches past the text column, so their rings line up with it. */
-.happy-agent-provider-add__options {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-inline: -8px;
-}
-
-.happy-agent-provider-add__option {
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 36px;
-    padding: 8px;
-    border: 0;
-    border-radius: var(--happy-hover-radius);
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    text-align: start;
-    cursor: pointer;
-}
-
-.happy-agent-provider-add__option:hover {
-    background: var(--happy-hover-fill);
-}
-
-.happy-agent-provider-add__option:focus-visible {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 0;
-}
-
-.happy-agent-provider-add__option:disabled {
-    cursor: default;
-}
-
-/* The radio's ring is the same box chosen or not; only its dot is filled in. */
-.happy-agent-provider-add__radio {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    box-sizing: border-box;
-    border: 1px solid var(--radio-inactive);
-    border-radius: var(--happy-radius-pill);
-}
-
-.happy-agent-provider-add__radio::after {
-    content: "";
-    width: 8px;
-    height: 8px;
-    border-radius: var(--happy-radius-pill);
-    background: transparent;
-}
-
-.happy-agent-provider-add__option[aria-checked="true"] .happy-agent-provider-add__radio {
-    border-color: var(--radio-active);
-}
-
-.happy-agent-provider-add__option[aria-checked="true"] .happy-agent-provider-add__radio::after {
-    background: var(--radio-active);
-}
-
-.happy-agent-provider-add__option-name {
-    overflow: hidden;
-    font-size: 13px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 /* ---- Nodes ------------------------------------------------------------- */

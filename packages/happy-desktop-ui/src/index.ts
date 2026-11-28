@@ -1278,15 +1278,18 @@ export {
     HappyAgentAiProviderSheet,
     type HappyAgentAiProviderCredentialRow,
     type HappyAgentAiProviderCredentialState,
+    type HappyAgentAiProviderSheetAction,
     type HappyAgentAiProviderSheetProps,
-    type HappyAgentAiProviderSheetView,
 } from "./pages/settings/HappyAgentAiProviderSheet";
 export {
     HappyAgentProviderAddDialog,
+    HappyAgentProviderAddPanel,
     type HappyAgentProviderAddDestination,
     type HappyAgentProviderAddDestinationOption,
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderAddFlow,
+    type HappyAgentProviderAddFormProps,
+    type HappyAgentProviderAddPanelProps,
     type HappyAgentProviderKeyVendor,
 } from "./pages/settings/HappyAgentProviderAddDialog";
 export {

@@ -4,11 +4,12 @@ import {
     HappyAgentSettingsShell,
     type HappyAgentAiProviderCredentialRow,
     type HappyAgentAiProviderRow,
-    type HappyAgentAiProviderSheetView,
+    type HappyAgentAiProviderSheetAction,
     type HappyAgentAiProvidersScope,
     type HappyAgentProviderAddDestination,
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderAddFlow,
+    type HappyAgentProviderAddFormProps,
     type HappyAgentSettingsCategory,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -58,7 +59,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 meta: "Anthropic · API key",
                 enabled: true,
                 state: "ready",
-                replaceable: true,
+                replaceWith: "key",
             },
             {
                 id: "c2",
@@ -67,7 +68,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 enabled: true,
                 state: "cooling",
                 coolingUntil: "3:40 PM",
-                replaceable: true,
+                replaceWith: "key",
             },
         ],
     },
@@ -88,7 +89,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 meta: "ChatGPT · Subscription",
                 enabled: true,
                 state: "ready",
-                replaceable: false,
+                reauth: true,
             },
         ],
     },
@@ -109,7 +110,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 meta: "OpenAI · API key",
                 enabled: true,
                 state: "invalid",
-                replaceable: true,
+                replaceWith: "key",
             },
         ],
     },
@@ -130,7 +131,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 meta: "Claude · Setup token",
                 enabled: true,
                 state: "ready",
-                replaceable: true,
+                replaceWith: "token",
             },
             {
                 id: "c6",
@@ -138,7 +139,7 @@ const aiProviderFixtures: readonly AiProviderFixture[] = [
                 meta: "Grok · API key",
                 enabled: false,
                 state: "disabled",
-                replaceable: true,
+                replaceWith: "key",
             },
         ],
     },
@@ -160,22 +161,90 @@ function teamDefaultOf(flow: HappyAgentProviderAddFlow): { id: string; name: str
     return { id: "claude-code", name: "Claude" };
 }
 
-/** The add dialog a specimen opens on. */
-type AiProvidersAdd = Pick<
-    HappyAgentProviderAddDialogProps,
-    "flow" | "phase" | "signIn" | "done" | "error"
+/** What this fixture server offers: no Claude sign-in, as Happy Cloud today. */
+const FLOWS: readonly HappyAgentProviderAddFlow[] = [
+    { kind: "chatgpt" },
+    { kind: "apiKey", vendor: "openai" },
+    { kind: "claude", setupToken: true },
+    { kind: "apiKey", vendor: "anthropic" },
+    { kind: "apiKey", vendor: "grok" },
+    { kind: "apiKey", vendor: "bedrock" },
+];
+
+/** The flows a provider's sheet offers: a team vendor's own takes only that vendor's. */
+function flowsOf(fixture: AiProviderFixture): readonly HappyAgentProviderAddFlow[] {
+    if (fixture.named || fixture.scope === "private")
+        return FLOWS.filter((flow) => !(flow.kind === "apiKey" && flow.vendor === "bedrock"));
+    return FLOWS.filter((flow) => teamDefaultOf(flow).id === fixture.row.id);
+}
+
+function labelPlaceholderOf(flow: HappyAgentProviderAddFlow): string | undefined {
+    if (flow.kind === "apiKey") return `${teamDefaultOf(flow).name} API key`;
+    if (flow.kind === "claude" && flow.setupToken) return "Claude (setup token)";
+    return undefined;
+}
+
+/** A token form a specimen opens on. */
+type AiProvidersForm = Pick<
+    HappyAgentProviderAddFormProps,
+    "flow" | "phase" | "signIn" | "error"
 > & {
-    readonly step?: "details" | "credential";
-    readonly destination?: HappyAgentProviderAddDestination;
     readonly label?: string;
 };
+
+/** The add dialog a specimen opens on. */
+type AiProvidersAdd = AiProvidersForm &
+    Pick<HappyAgentProviderAddDialogProps, "done"> & {
+        readonly destination?: HappyAgentProviderAddDestination;
+    };
+
+/** The provider sheet a specimen opens on: its open action, or its add form. */
+interface AiProvidersDetail {
+    readonly id: string;
+    readonly action?: HappyAgentAiProviderSheetAction;
+    readonly add?: AiProvidersForm & { readonly credentialId?: string };
+}
+
+/** The token form's props over a specimen's local state. */
+function formProps(
+    form: AiProvidersForm,
+    flows: readonly HappyAgentProviderAddFlow[],
+    set: (form: AiProvidersForm) => void,
+): HappyAgentProviderAddFormProps {
+    const labelPlaceholder = labelPlaceholderOf(form.flow);
+    return {
+        ...form,
+        flows,
+        label: form.label ?? "",
+        ...(labelPlaceholder === undefined ? {} : { labelPlaceholder }),
+        teamRoutingEditable: true,
+        onFlowSelect: (flow) => set({ flow, phase: "idle" }),
+        onLabelChange: (label) => set({ ...form, label }),
+        onApiKeySubmit: noop,
+        onAwsKeysSubmit: noop,
+        onSetupTokenSubmit: noop,
+        onSignInStart: () =>
+            set({
+                ...form,
+                phase: "waiting",
+                signIn: {
+                    url: "https://auth.openai.com/codex/device",
+                    userCode: "ABCD-1234",
+                    acceptsCode: false,
+                },
+            }),
+        onSignInCodeSubmit: noop,
+    };
+}
+
+const FIRST_FLOW: HappyAgentProviderAddFlow = { kind: "chatgpt" };
 
 /** AI providers wired to local state, so the list, sheet and dialog answer. */
 function AiProvidersSpecimen(props: {
     readonly scope?: HappyAgentAiProvidersScope;
     readonly empty?: boolean;
     readonly add?: AiProvidersAdd;
-    readonly detail?: { readonly id: string; readonly view: HappyAgentAiProviderSheetView };
+    readonly detail?: AiProvidersDetail;
 }) {
     const [scope, scopeSet] = useState<HappyAgentAiProvidersScope>(props.scope ?? "team");
     const [add, addSet] = useState(props.add);
@@ -184,24 +253,26 @@ function AiProvidersSpecimen(props: {
     const fixtures = props.empty ? [] : aiProviderFixtures;
     const teamOnly = add?.flow.kind === "apiKey" && add.flow.vendor === "bedrock";
     const scopeOfAdd = teamOnly ? "team" : to;
-    const destinations =
-        add && add.flow.kind !== "choose"
-            ? [
-                  scopeOfAdd === "team"
-                      ? teamDefaultOf(add.flow)
-                      : { id: "private", name: "My account" },
-                  ...(teamOnly
-                      ? []
-                      : fixtures
-                            .filter((fixture) => fixture.named && fixture.scope === scopeOfAdd)
-                            .map((fixture) => ({ id: fixture.row.id, name: fixture.row.name }))),
-              ]
-            : [];
+    const destinations = add
+        ? [
+              scopeOfAdd === "team"
+                  ? teamDefaultOf(add.flow)
+                  : { id: "private", name: "My account" },
+              ...(teamOnly
+                  ? []
+                  : fixtures
+                        .filter((fixture) => fixture.named && fixture.scope === scopeOfAdd)
+                        .map((fixture) => ({ id: fixture.row.id, name: fixture.row.name }))),
+          ]
+        : [];
     const destination: HappyAgentProviderAddDestination = add?.destination ?? {
         kind: "existing",
         id: destinations[0]?.id ?? "private",
     };
     const open = detail ? fixtures.find((fixture) => fixture.row.id === detail.id) : undefined;
+    const sheetAdd = detail?.add;
+    const actionSet = (action: HappyAgentAiProviderSheetAction | undefined) =>
+        detail && detailSet({ id: detail.id, ...(action ? { action } : {}) });
     return (
         <div
             style={{
@@ -228,46 +299,29 @@ function AiProvidersSpecimen(props: {
                     {...(add
                         ? {
                               add: {
-                                  ...add,
-                                  step: add.step ?? "details",
+                                  ...formProps(add, FLOWS, (form) =>
+                                      addSet({
+                                          ...form,
+                                          ...(add.destination
+                                              ? { destination: add.destination }
+                                              : {}),
+                                      }),
+                                  ),
+                                  ...(add.done === undefined ? {} : { done: add.done }),
                                   to: scopeOfAdd,
                                   scopeChoice: !teamOnly,
-                                  label: add.label ?? "",
-                                  ...(add.flow.kind === "apiKey"
-                                      ? { labelPlaceholder: "Anthropic API key" }
-                                      : {}),
                                   destinations,
                                   destination,
                                   newAllowed: !teamOnly,
-                                  keyVendors: ["openai", "anthropic", "grok", "bedrock"],
                                   teamOnly,
-                                  teamRoutingEditable: true,
-                                  chatgptAvailable: true,
-                                  claudeAvailable: false,
-                                  setupTokenAvailable: true,
-                                  onFlowSelect: (flow) =>
-                                      addSet({ flow, step: "details", phase: "idle" }),
-                                  onBack: () =>
-                                      addSet(
-                                          add.step === "credential"
-                                              ? { ...add, step: "details" }
-                                              : { flow: { kind: "choose" }, phase: "idle" },
-                                      ),
                                   onClose: () => addSet(undefined),
                                   onScopeChange: toSet,
-                                  onLabelChange: (label) => addSet({ ...add, label }),
                                   onDestinationSelect: (id) =>
                                       addSet({ ...add, destination: { kind: "existing", id } }),
                                   onDestinationNewSelect: () =>
                                       addSet({ ...add, destination: { kind: "new", name: "" } }),
                                   onDestinationNameChange: (name) =>
                                       addSet({ ...add, destination: { kind: "new", name } }),
-                                  onDetailsSubmit: () => addSet({ ...add, step: "credential" }),
-                                  onApiKeySubmit: noop,
-                                  onAwsKeysSubmit: noop,
-                                  onSetupTokenSubmit: noop,
-                                  onSignInStart: noop,
-                                  onSignInCodeSubmit: noop,
                                   onCustomProviderCreate: () => addSet(undefined),
                               },
                           }
@@ -278,43 +332,68 @@ function AiProvidersSpecimen(props: {
                                   name: open.row.name,
                                   tile: open.row.tile,
                                   meta: `${open.scope === "team" ? "Team" : "Personal"} · ${open.row.meta}`,
-                                  view: detail.view,
+                                  ...(detail.action ? { action: detail.action } : {}),
+                                  ...(sheetAdd
+                                      ? {
+                                            add: {
+                                                ...(sheetAdd.credentialId === undefined
+                                                    ? {}
+                                                    : { credentialId: sheetAdd.credentialId }),
+                                                panel: {
+                                                    ...formProps(sheetAdd, flowsOf(open), (form) =>
+                                                        detailSet({
+                                                            id: detail.id,
+                                                            add: { ...sheetAdd, ...form },
+                                                        }),
+                                                    ),
+                                                    onCancel: () => detailSet({ id: detail.id }),
+                                                },
+                                            },
+                                        }
+                                      : {}),
                                   credentials: open.credentials,
                                   editable: true,
                                   onClose: () => detailSet(undefined),
-                                  onBack: () =>
-                                      detailSet({ id: detail.id, view: { kind: "credentials" } }),
-                                  onCredentialOpen: (credentialId) =>
+                                  onCredentialEnabledChange: noop,
+                                  onCredentialRenameOpen: (credentialId) =>
+                                      actionSet({ kind: "label", credentialId }),
+                                  onCredentialReplaceOpen: (credentialId) =>
+                                      actionSet({ kind: "secret", credentialId }),
+                                  onCredentialRemoveOpen: (credentialId) =>
+                                      actionSet({ kind: "remove", credentialId }),
+                                  onCredentialReauth: (credentialId) =>
                                       detailSet({
                                           id: detail.id,
-                                          view: { kind: "credential", credentialId },
+                                          add: {
+                                              flow: { kind: "chatgpt" },
+                                              phase: "waiting",
+                                              credentialId,
+                                              signIn: {
+                                                  url: "https://auth.openai.com/codex/device",
+                                                  userCode: "ABCD-1234",
+                                                  acceptsCode: false,
+                                              },
+                                          },
                                       }),
-                                  onCredentialSave: () =>
-                                      detailSet({ id: detail.id, view: { kind: "credentials" } }),
-                                  onCredentialEnabledChange: noop,
-                                  onCredentialRemove: () =>
-                                      detailSet({ id: detail.id, view: { kind: "credentials" } }),
-                                  onAdd: () => {
-                                      detailSet(undefined);
-                                      addSet({ flow: { kind: "choose" }, phase: "idle" });
-                                  },
+                                  onActionCancel: () => actionSet(undefined),
+                                  onCredentialLabelSave: () => actionSet(undefined),
+                                  onCredentialSecretSave: () => actionSet(undefined),
+                                  onCredentialRemove: () => actionSet(undefined),
+                                  onAdd: () =>
+                                      detailSet({
+                                          id: detail.id,
+                                          add: { flow: flowsOf(open)[0]!, phase: "idle" },
+                                      }),
                                   ...(open.named
-                                      ? {
-                                            onRename: () =>
-                                                detailSet({
-                                                    id: detail.id,
-                                                    view: { kind: "rename" },
-                                                }),
-                                        }
+                                      ? { onRename: () => actionSet({ kind: "name" }) }
                                       : {}),
-                                  onNameSave: () =>
-                                      detailSet({ id: detail.id, view: { kind: "credentials" } }),
+                                  onNameSave: () => actionSet(undefined),
                               },
                           }
                         : {})}
                     onScopeChange={scopeSet}
-                    onProviderOpen={(id) => detailSet({ id, view: { kind: "credentials" } })}
-                    onAdd={() => addSet({ flow: { kind: "choose" }, phase: "idle" })}
+                    onProviderOpen={(id) => detailSet({ id })}
+                    onAdd={() => addSet({ flow: FIRST_FLOW, phase: "idle" })}
                 />
             </HappyAgentSettingsShell>
         </div>
@@ -348,15 +427,15 @@ function Screens(props: {
 
 /**
  * Settings › Inference on Happy Cloud, in the order a person meets it: the
- * team's providers, their own, nothing added yet, one provider opened and one
- * token edited, then adding one step at a time.
+ * team's providers, their own, nothing added yet, one provider opened with
+ * each of a token's actions, then the add page.
  */
 export function CloudProvidersFlowPage() {
     return (
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Happy Cloud's AI providers: a short list of what the team or the reader added, each opened on its own sheet to edit its tokens one by one, and adding one step at a time."
+            summary="Happy Cloud's AI providers: a short list of what the team or the reader added; a provider opens in one fixed card whose tokens carry their actions, and adding is one page in a card of the same size."
             title="Cloud AI providers"
             width={WINDOWS[0].width + 96}
         >
@@ -382,95 +461,123 @@ export function CloudProvidersFlowPage() {
                 {() => <AiProvidersSpecimen empty />}
             </Screens>
             <Screens
-                detail="One provider opened: its tokens, each opened on its own to edit"
+                detail="One provider opened: its tokens, each with its actions in plain sight and its switch"
                 label="Provider"
-                step="04-detail"
+                step="04-provider"
+            >
+                {() => <AiProvidersSpecimen detail={{ id: "anthropic" }} />}
+            </Screens>
+            <Screens
+                detail="Rename opens under its token, in the same card"
+                label="Rename a token"
+                step="05-rename-token"
             >
                 {() => (
                     <AiProvidersSpecimen
-                        detail={{ id: "anthropic", view: { kind: "credentials" } }}
+                        detail={{ id: "anthropic", action: { kind: "label", credentialId: "c2" } }}
                     />
                 )}
             </Screens>
             <Screens
-                detail="One token on its own: its name, a key to replace it, its switch, and removing it"
-                label="Edit a token"
-                step="05-edit-token"
+                detail="Replace key is an action of its own: a new key, and its button"
+                label="Replace a key"
+                step="06-replace-key"
+            >
+                {() => (
+                    <AiProvidersSpecimen
+                        detail={{ id: "anthropic", action: { kind: "secret", credentialId: "c1" } }}
+                    />
+                )}
+            </Screens>
+            <Screens
+                detail="Remove asks once, in place"
+                label="Remove a token"
+                step="07-remove-token"
+            >
+                {() => (
+                    <AiProvidersSpecimen
+                        detail={{ id: "anthropic", action: { kind: "remove", credentialId: "c2" } }}
+                    />
+                )}
+            </Screens>
+            <Screens
+                detail="Sign in again runs a ChatGPT sign-in for that token, under it"
+                label="Sign in again"
+                step="08-reauth"
             >
                 {() => (
                     <AiProvidersSpecimen
                         detail={{
-                            id: "anthropic",
-                            view: { kind: "credential", credentialId: "c2" },
+                            id: "codex",
+                            add: {
+                                flow: { kind: "chatgpt" },
+                                phase: "waiting",
+                                credentialId: "c3",
+                                signIn: {
+                                    url: "https://auth.openai.com/codex/device",
+                                    userCode: "ABCD-1234",
+                                    acceptsCode: false,
+                                },
+                            },
                         }}
                     />
                 )}
             </Screens>
             <Screens
-                detail="A named provider someone created, with Rename"
-                label="Named provider"
-                step="06-named"
+                detail="Add token opens the form under the list: it goes to this provider, so only the way, its name and the key"
+                label="Add a token here"
+                step="09-add-token"
             >
                 {() => (
                     <AiProvidersSpecimen
-                        detail={{ id: "p-research", view: { kind: "credentials" } }}
+                        detail={{
+                            id: "p-research",
+                            add: { flow: { kind: "apiKey", vendor: "openai" }, phase: "idle" },
+                        }}
                     />
                 )}
             </Screens>
-            <Screens detail="Its name, on its own" label="Rename a provider" step="07-rename">
+            <Screens
+                detail="A named provider someone created is renamed in place"
+                label="Rename a provider"
+                step="10-rename-provider"
+            >
                 {() => (
-                    <AiProvidersSpecimen detail={{ id: "p-research", view: { kind: "rename" } }} />
+                    <AiProvidersSpecimen detail={{ id: "p-research", action: { kind: "name" } }} />
                 )}
             </Screens>
             <Screens
-                detail="Adding, step one: ChatGPT, Claude, Grok, Bedrock and Custom with their ways"
-                label="Add: what"
-                step="08-add-choose"
+                detail="Adding is one page: the vendor, how to connect, whose, which provider, the name, then the key or the sign-in"
+                label="Add a provider"
+                step="11-add"
             >
-                {() => <AiProvidersSpecimen add={{ flow: { kind: "choose" }, phase: "idle" }} />}
+                {() => <AiProvidersSpecimen add={{ flow: { kind: "chatgpt" }, phase: "idle" }} />}
             </Screens>
             <Screens
-                detail="Step two: whose it is, its name, and where it goes — a provider already there or a new one"
-                label="Add: name and where"
-                step="09-add-details"
+                detail="An Anthropic key kept in a new provider by name"
+                label="Add: to a new provider"
+                step="12-add-new-provider"
             >
                 {() => (
                     <AiProvidersSpecimen
                         add={{
                             flow: { kind: "apiKey", vendor: "anthropic" },
-                            step: "details",
                             phase: "idle",
                             label: "Prod key",
-                        }}
-                    />
-                )}
-            </Screens>
-            <Screens
-                detail="Step two, keeping it in a new provider"
-                label="Add: to a new provider"
-                step="10-add-new-provider"
-            >
-                {() => (
-                    <AiProvidersSpecimen
-                        add={{
-                            flow: { kind: "apiKey", vendor: "anthropic" },
-                            step: "details",
-                            phase: "idle",
                             destination: { kind: "new", name: "Evals" },
                         }}
                     />
                 )}
             </Screens>
             <Screens
-                detail="Step three: the Anthropic API key, which the vendor refused"
-                label="Add: the key"
-                step="11-add-key"
+                detail="The vendor refused the key: the page stays as it was, with why"
+                label="Add: refused"
+                step="13-add-error"
             >
                 {() => (
                     <AiProvidersSpecimen
                         add={{
                             flow: { kind: "apiKey", vendor: "anthropic" },
-                            step: "credential",
                             phase: "idle",
                             error: {
                                 title: "Couldn't add the key",
@@ -481,30 +588,25 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="An Amazon Bedrock key, with the region every team Bedrock key routes to"
+                detail="An Amazon Bedrock key: only the team's Bedrock provider takes it, with the region every team Bedrock key routes to"
                 label="Add: Bedrock"
-                step="12-add-bedrock"
+                step="14-add-bedrock"
             >
                 {() => (
                     <AiProvidersSpecimen
-                        add={{
-                            flow: { kind: "apiKey", vendor: "bedrock" },
-                            step: "credential",
-                            phase: "idle",
-                        }}
+                        add={{ flow: { kind: "apiKey", vendor: "bedrock" }, phase: "idle" }}
                     />
                 )}
             </Screens>
             <Screens
                 detail="ChatGPT's device sign-in, waiting for the code to be entered at OpenAI"
                 label="Add: ChatGPT sign-in"
-                step="13-add-chatgpt"
+                step="15-add-chatgpt"
             >
                 {() => (
                     <AiProvidersSpecimen
                         add={{
                             flow: { kind: "chatgpt" },
-                            step: "credential",
                             phase: "waiting",
                             signIn: {
                                 url: "https://auth.openai.com/codex/device",
@@ -516,24 +618,9 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="A Claude setup token"
-                label="Add: Claude setup token"
-                step="14-add-token"
-            >
-                {() => (
-                    <AiProvidersSpecimen
-                        add={{
-                            flow: { kind: "claude", setupToken: true },
-                            step: "credential",
-                            phase: "idle",
-                        }}
-                    />
-                )}
-            </Screens>
-            <Screens
                 detail="Added: the dialog says what was connected"
                 label="Added"
-                step="15-add-done"
+                step="16-add-done"
             >
                 {() => (
                     <AiProvidersSpecimen

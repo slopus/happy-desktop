@@ -68,6 +68,7 @@ import {
     happyAgentOnboardingSettingsStoreNoop,
     happyAgentPaymentsStoreNoop,
     happyAgentDailyUsageStoreNoop,
+    happyAgentCloudProviderAddFlows,
     happyAgentCloudProviderAddLabelDefault,
     happyAgentCloudProviderAddNewAllowed,
     happyAgentCloudProviderAddOptions,
@@ -114,6 +115,7 @@ import {
     type HappyAgentAiProviderRow,
     type HappyAgentAiProviderSheetProps,
     type HappyAgentProviderAddDialogProps,
+    type HappyAgentProviderAddFormProps,
     type IconTileProps,
     HappyAgentDangerSettings,
     HappyAgentMembersSettings,
@@ -879,7 +881,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
     );
     const cloudProviderDetail = cloudProvidersStore
-        ? providerDetailProps(cloudProviders, cloudProvidersStore)
+        ? providerDetailProps(cloudProviders, cloudProvidersStore, props.externalLinkOpen)
         : undefined;
     const credentialImport = useSyncExternalStore(
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).subscribe,
@@ -1519,7 +1521,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             {...(cloudProviders.saveError
                                 ? { saveError: cloudProviders.saveError.message }
                                 : {})}
-                            {...(cloudProviders.add
+                            {...(cloudProviders.add && !cloudProviders.add.anchor
                                 ? {
                                       add: {
                                           ...providerAddProps(
@@ -2653,6 +2655,7 @@ function cloudProviderRows(
 function providerDetailProps(
     snapshot: HappyAgentCloudProvidersSnapshot,
     store: HappyAgentCloudProvidersStore,
+    externalLinkOpen: ((url: string) => void) | undefined,
 ): HappyAgentAiProviderSheetProps | undefined {
     const detail = snapshot.detail;
     const connection = detail
@@ -2662,11 +2665,11 @@ function providerDetailProps(
     const allowed = connection.scope === "team" ? snapshot.teamAllowed : snapshot.privateAllowed;
     const editable =
         allowed && connection.source === "tenant" && connection.credentials !== undefined;
+    const add = snapshot.add?.anchor?.connectionId === connection.id ? snapshot.add : undefined;
     return {
         name: connection.name,
         tile: cloudConnectionTile(connection),
         meta: `${connection.scope === "team" ? "Team" : "Personal"} · ${tokensText(connection.credentialCount)}`,
-        view: detail.view,
         ...(connection.credentials
             ? {
                   credentials: connection.credentials.map((credential) => ({
@@ -2674,7 +2677,7 @@ function providerDetailProps(
                       label: credential.label,
                       meta:
                           credential.reason === "signin_missing"
-                              ? `${cloudVendorName(credential.vendor)} · Sign in again`
+                              ? `${cloudVendorName(credential.vendor)} · Signed out`
                               : `${cloudVendorName(credential.vendor)} · ${CLOUD_KIND_NAMES[credential.kind]}`,
                       enabled: credential.enabled,
                       state: credential.state,
@@ -2687,29 +2690,78 @@ function providerDetailProps(
                                 ),
                             }),
                       ...(snapshot.credentialsSaving.has(credential.id) ? { saving: true } : {}),
-                      replaceable: happyAgentCloudCredentialReplaceable(credential),
+                      ...(happyAgentCloudCredentialReplaceable(credential)
+                          ? { replaceWith: credential.kind === "api_key" ? "key" : "token" }
+                          : {}),
+                      ...(credential.kind === "oauth" &&
+                      ((credential.vendor === "codex" && snapshot.signIns.has("codex")) ||
+                          (credential.vendor === "claude-code" && snapshot.signIns.has("claude")))
+                          ? { reauth: true }
+                          : {}),
                   })),
               }
             : { credentialsHidden: "Only those who manage the team's providers see its tokens." }),
         editable,
+        ...(detail.action ? { action: detail.action } : {}),
         ...(detail.phase === "busy" ? { busy: true } : {}),
         ...(detail.error ? { error: detail.error } : {}),
-        onClose: () => store.detailClose(),
-        onBack: () => store.detailBack(),
-        onCredentialOpen: (credentialId) => store.credentialEditOpen(credentialId),
-        onCredentialSave: (changes) => store.credentialSave(changes),
-        onCredentialEnabledChange: (credentialId, enabled) =>
-            store.credentialEnabledUpdate(connection.id, credentialId, enabled),
-        onCredentialRemove: (credentialId) => store.credentialRemove(connection.id, credentialId),
-        ...(allowed && connection.source === "tenant"
+        ...(add
             ? {
-                  onAdd: () => store.addOpen({ to: connection.scope, connectionId: connection.id }),
+                  add: {
+                      ...(add.anchor?.credentialId === undefined
+                          ? {}
+                          : { credentialId: add.anchor.credentialId }),
+                      panel: {
+                          ...providerAddFormProps(snapshot, store, externalLinkOpen),
+                          onCancel: () => store.addClose(),
+                      },
+                  },
               }
             : {}),
+        onClose: () => store.detailClose(),
+        onCredentialEnabledChange: (credentialId, enabled) =>
+            store.credentialEnabledUpdate(connection.id, credentialId, enabled),
+        onCredentialRenameOpen: (credentialId) => store.credentialRenameOpen(credentialId),
+        onCredentialReplaceOpen: (credentialId) => store.credentialReplaceOpen(credentialId),
+        onCredentialRemoveOpen: (credentialId) => store.credentialRemoveOpen(credentialId),
+        onCredentialReauth: (credentialId) => store.credentialReauthStart(credentialId),
+        onActionCancel: () => store.detailActionCancel(),
+        onCredentialLabelSave: (label) => store.credentialLabelSave(label),
+        onCredentialSecretSave: (secret) => store.credentialSecretSave(secret),
+        onCredentialRemove: (credentialId) => store.credentialRemove(connection.id, credentialId),
+        ...(editable ? { onAdd: () => store.credentialAddOpen() } : {}),
         ...(editable && happyAgentCloudConnectionNamed(connection)
             ? { onRename: () => store.connectionRenameOpen() }
             : {}),
         onNameSave: (name) => store.connectionNameSave(name),
+    };
+}
+
+/** The token form's props from the AI providers store, while an add is open. */
+function providerAddFormProps(
+    snapshot: HappyAgentCloudProvidersSnapshot,
+    store: HappyAgentCloudProvidersStore,
+    externalLinkOpen: ((url: string) => void) | undefined,
+): HappyAgentProviderAddFormProps {
+    const add = snapshot.add!;
+    const labelPlaceholder = happyAgentCloudProviderAddLabelDefault(add.flow);
+    return {
+        flows: happyAgentCloudProviderAddFlows(snapshot),
+        flow: add.flow,
+        label: add.label,
+        ...(labelPlaceholder === undefined ? {} : { labelPlaceholder }),
+        phase: add.phase,
+        ...(add.signIn ? { signIn: add.signIn } : {}),
+        ...(add.error ? { error: add.error } : {}),
+        teamRoutingEditable: snapshot.teamAllowed,
+        onFlowSelect: (flow) => store.addFlowSelect(flow),
+        onLabelChange: (label) => store.addLabelUpdate(label),
+        onApiKeySubmit: (secret, region) => store.apiKeySubmit(secret, region),
+        onAwsKeysSubmit: (input) => store.awsKeysSubmit(input),
+        onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),
+        onSignInStart: () => store.signInStart(),
+        onSignInCodeSubmit: (code) => store.signInCodeSubmit(code),
+        ...(externalLinkOpen ? { onExternalOpen: externalLinkOpen } : {}),
     };
 }
 
@@ -2720,17 +2772,13 @@ export function providerAddProps(
     externalLinkOpen: ((url: string) => void) | undefined,
 ): HappyAgentProviderAddDialogProps {
     const add = snapshot.add!;
-    const labelPlaceholder = happyAgentCloudProviderAddLabelDefault(add.flow);
     return {
-        flow: add.flow,
-        step: add.step,
+        ...providerAddFormProps(snapshot, store, externalLinkOpen),
         to: add.to,
         scopeChoice:
             snapshot.privateAllowed &&
             snapshot.teamAllowed &&
             !happyAgentCloudProviderAddTeamOnly(add.flow),
-        label: add.label,
-        ...(labelPlaceholder === undefined ? {} : { labelPlaceholder }),
         destinations: happyAgentCloudProviderAddOptions(snapshot.connections, add.flow, add.to).map(
             (option) => ({ id: option.connectionId, name: option.name }),
         ),
@@ -2739,33 +2787,13 @@ export function providerAddProps(
                 ? add.destination
                 : { kind: "existing", id: add.destination.connectionId },
         newAllowed: happyAgentCloudProviderAddNewAllowed(add.flow),
-        keyVendors: snapshot.teamAllowed
-            ? ["openai", "anthropic", "grok", "bedrock"]
-            : ["openai", "anthropic", "grok"],
         teamOnly: happyAgentCloudProviderAddTeamOnly(add.flow),
-        phase: add.phase,
-        ...(add.signIn ? { signIn: add.signIn } : {}),
         ...(add.done === undefined ? {} : { done: add.done }),
-        ...(add.error ? { error: add.error } : {}),
-        teamRoutingEditable: snapshot.teamAllowed,
-        chatgptAvailable: snapshot.signIns.has("codex"),
-        claudeAvailable: snapshot.signIns.has("claude"),
-        setupTokenAvailable: snapshot.setupToken,
-        onFlowSelect: (flow) => store.addFlowSelect(flow),
-        onBack: () => store.addBack(),
         onClose: () => store.addClose(),
         onScopeChange: (to) => store.addScopeUpdate(to),
-        onLabelChange: (label) => store.addLabelUpdate(label),
         onDestinationSelect: (id) => store.addDestinationSelect(id),
         onDestinationNewSelect: () => store.addDestinationNewSelect(),
         onDestinationNameChange: (name) => store.addDestinationNameUpdate(name),
-        onDetailsSubmit: () => store.addDetailsSubmit(),
-        onApiKeySubmit: (secret, region) => store.apiKeySubmit(secret, region),
-        onAwsKeysSubmit: (input) => store.awsKeysSubmit(input),
-        onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),
-        onSignInStart: () => store.signInStart(),
-        onSignInCodeSubmit: (code) => store.signInCodeSubmit(code),
-        ...(externalLinkOpen ? { onExternalOpen: externalLinkOpen } : {}),
     };
 }
 
