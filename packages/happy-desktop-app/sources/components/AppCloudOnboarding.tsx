@@ -61,6 +61,7 @@ const SERVER_STEPS_EXPECTED: readonly HappyAgentOnboardingGate["kind"][] = [
     "plugins",
     "computer",
     "teammates",
+    "mobileApp",
 ];
 
 /** Step 0's bar: creating the server, then the steps it is expected to ask. */
