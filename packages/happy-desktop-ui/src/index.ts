@@ -659,13 +659,25 @@ export {
 export {
     CloudOnboardingScreen,
     type CloudOnboardingAmount,
-    type CloudOnboardingInferenceOption,
     type CloudOnboardingInvite,
     type CloudOnboardingPlugin,
     type CloudOnboardingScreenProps,
     type CloudOnboardingStep,
     type CloudOnboardingView,
 } from "./CloudOnboardingScreen";
+export {
+    CloudOnboardingProviderMark,
+    CloudOnboardingProviderRows,
+    cloudOnboardingProviderName,
+    type CloudOnboardingProvider,
+    type CloudOnboardingProviderRow,
+} from "./CloudOnboardingProviderRows";
+export {
+    CloudOnboardingProviderDialog,
+    type CloudOnboardingProviderDialogProps,
+    type CloudOnboardingProviderDialogProvider,
+    type CloudOnboardingProviderWay,
+} from "./CloudOnboardingProviderDialog";
 export {
     CloudConnectScreen,
     type CloudConnectAvailability,

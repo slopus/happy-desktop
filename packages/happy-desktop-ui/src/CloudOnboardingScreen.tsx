@@ -9,8 +9,10 @@ import { AvatarPlaceholder } from "./AvatarPlaceholder";
 import { OnboardingHelp } from "./OnboardingHelp";
 import { ProfileSetupForm, type ProfileSetupFormProps } from "./ProfileSetupScreen";
 import { SegmentedProgress } from "./SegmentedProgress";
-import { AssistantMark, type AssistantMarkName } from "./AssistantMark";
-import { Ionicon } from "./vectorIcons/VectorIcon";
+import {
+    CloudOnboardingProviderRows,
+    type CloudOnboardingProviderRow,
+} from "./CloudOnboardingProviderRows";
 import {
     SetupPage,
     type SetupPageAction,
@@ -32,17 +34,6 @@ export interface CloudOnboardingStep {
      * steps back sees the steps ahead they already finished.
      */
     readonly done: boolean;
-}
-
-/** A way to connect inference, as one tile of the row. */
-export interface CloudOnboardingInferenceOption {
-    /** `custom` is every other way in: an API key, or an endpoint of the team's own. */
-    readonly id: "claude" | "chatgpt" | "grok" | "custom";
-    /** Connected already, through the team or the reader's own account. */
-    readonly connected: boolean;
-    /** A sign-in or dialog this option opened is still going. */
-    readonly busy?: boolean;
-    readonly onSelect?: () => void;
 }
 
 /** One plugin offered on the plugins gate. */
@@ -101,7 +92,8 @@ export type CloudOnboardingView =
       }
     | {
           readonly kind: "inference";
-          readonly options: readonly CloudOnboardingInferenceOption[];
+          /** One row per provider, plans first. */
+          readonly rows: readonly CloudOnboardingProviderRow[];
           readonly error?: string;
       }
     | {
@@ -193,28 +185,6 @@ export interface CloudOnboardingScreenProps {
     onExternalOpen?(url: string): void;
 }
 
-const INFERENCE: Readonly<
-    Record<
-        CloudOnboardingInferenceOption["id"],
-        {
-            readonly name: string;
-            readonly mark: AssistantMarkName | "custom";
-            readonly action: string;
-            readonly detail: string;
-        }
-    >
-> = {
-    chatgpt: { name: "ChatGPT", mark: "openai", action: "Connect", detail: "Sign in or API key" },
-    claude: { name: "Claude", mark: "claude", action: "Connect", detail: "Setup token or API key" },
-    grok: { name: "Grok", mark: "grok", action: "Add key", detail: "xAI API key" },
-    custom: {
-        name: "Custom",
-        mark: "custom",
-        action: "Add",
-        detail: "Any endpoint that speaks OpenAI’s API",
-    },
-};
-
 /** A short sentence-case mark beside a row's title. */
 function Tag(props: { readonly label: string; readonly tone?: "attention" }) {
     return (
@@ -289,47 +259,6 @@ function AdminBotNote(props: { readonly text: string }) {
             </span>
             {props.text}
         </p>
-    );
-}
-
-function InferenceTile(props: { readonly option: CloudOnboardingInferenceOption }) {
-    const { option } = props;
-    const known = INFERENCE[option.id];
-    return (
-        <div
-            className="happy-cloud-onboarding__tile"
-            data-connected={option.connected ? "true" : undefined}
-            data-happy-desktop-ui="cloud-onboarding-tile"
-        >
-            <span className="happy-cloud-onboarding__tile-mark" aria-hidden>
-                {known.mark === "custom" ? (
-                    <Ionicon name="key-outline" size={32} />
-                ) : (
-                    <AssistantMark name={known.mark} size={32} tone="brand" />
-                )}
-            </span>
-            <span className="happy-cloud-onboarding__tile-text">
-                <span className="happy-cloud-onboarding__tile-name">{known.name}</span>
-                <span className="happy-cloud-onboarding__row-detail">{known.detail}</span>
-            </span>
-            {option.connected ? (
-                <span className="happy-cloud-onboarding__done" data-fill="true">
-                    <Icon name="check" size={14} />
-                    Connected
-                </span>
-            ) : (
-                <Button
-                    disabled={!option.onSelect}
-                    fullWidth
-                    loading={option.busy}
-                    onClick={option.onSelect}
-                    size="small"
-                    variant="secondary"
-                >
-                    {known.action}
-                </Button>
-            )}
-        </div>
     );
 }
 
@@ -425,19 +354,12 @@ function page(
         case "inference":
             return {
                 title: "Connect your AI",
-                copy: "Sign in to one you already use, or add a key. You can add more later.",
+                copy: "Use a plan you already pay for, or an API key.",
                 body: (
-                    <div
-                        className="happy-cloud-onboarding__inference"
-                        data-happy-desktop-ui="cloud-onboarding-inference"
-                    >
-                        <div className="happy-cloud-onboarding__tiles">
-                            {view.options.map((option) => (
-                                <InferenceTile key={option.id} option={option} />
-                            ))}
-                        </div>
-                        <Hint text={view.error} />
-                    </div>
+                    <>
+                        <CloudOnboardingProviderRows rows={view.rows} />
+                        {view.error ? <Hint text={view.error} /> : null}
+                    </>
                 ),
             };
         case "plugins":

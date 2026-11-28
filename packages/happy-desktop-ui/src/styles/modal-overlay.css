@@ -96,6 +96,38 @@
     pointer-events: auto;
 }
 
+/* An anchored card given `anchorHeight` has its top set once, by the window
+   and that height alone: the room above the card is half of what the flow's
+   tallest view leaves of the gutter box, so that view is centred and every
+   shorter one hangs from the same line. The card never moves that line: it is
+   as tall as its content, grows down to the gutter, and then its body
+   scrolls. */
+.happy-modal-overlay > .happy-modal[data-frame="anchored"][data-anchor-height] {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    align-self: stretch;
+    height: auto;
+    max-height: none;
+}
+
+/* A spacer, not content: the card's top is a computed offset from the gutter
+   box, which flexbox cannot express on its own. */
+.happy-modal-overlay > .happy-modal[data-frame="anchored"][data-anchor-height]::before {
+    content: "";
+    flex: none;
+    /* Whole pixels, so the card's hairlines land on physical pixels. */
+    height: max(0px, round(down, (100% - var(--happy-modal-frame-height)) / 2, 1px));
+}
+
+.happy-modal-overlay
+    > .happy-modal[data-frame="anchored"][data-anchor-height]
+    > .happy-modal__dialog {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
+}
+
 /* The hosted card owns its hit surface (app-shell.css, drag regions, rule 2).
    The overlay sits on the window's cover lane, outside the shell whose
    controls opt out of the title band, so a card that reaches up into that

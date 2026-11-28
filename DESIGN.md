@@ -283,9 +283,11 @@ A dialog's header and button row do not move while it is open.
 
 - Every step of a flow shows in the same `Modal`, at one width.
 - A dialog is as tall as its content. One whose height can change while it is
-  open uses `frame="anchored"`: its top edge holds and only its bottom edge
-  moves. Past its frame (280 / 560 / 720, clamped to the window) the body
-  scrolls. A `Modal` without a `frame` is centred on its own height and must
+  open uses `frame="anchored"` with `anchorHeight`, the height of the tallest
+  view its flow shows. The top edge is set once, so that view would be
+  centred, and holds; only the bottom edge moves. Without `anchorHeight` the
+  size's frame (280 / 560 / 720) stands in and the body scrolls past it; with
+  it, the body scrolls once the card reaches the window's gutter. A `Modal` without a `frame` is centred on its own height and must
   not change height while open.
 - A switch that swaps the fields under it is a segmented control at the top of
   the body. Switching is not a step and brings no Back.

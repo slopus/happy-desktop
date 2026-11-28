@@ -1,12 +1,14 @@
 import { useSyncExternalStore } from "react";
 import {
     HappyAgentPluginFieldsError,
+    type HappyAgentCloudProviderAddFlow,
     type HappyAgentCloudProvidersSnapshot,
     type HappyAgentCloudProvidersStore,
     type HappyAgentOnboardingGate,
     type HappyAgentOnboardingSnapshot,
     type HappyAgentOnboardingStore,
     type HappyAgentPaymentsStore,
+    type HappyAgentProvidersSnapshot,
     type HappyAgentProvidersStore,
     happyAgentMoneyExponent,
     type HappyAgentPluginsSnapshot,
@@ -16,14 +18,16 @@ import {
 } from "happy-desktop-state";
 import {
     CloudOnboardingPluginDialog,
+    CloudOnboardingProviderDialog,
     CloudOnboardingScreen,
-    HappyAgentProviderAddDialog,
-    type CloudOnboardingInferenceOption,
     type CloudOnboardingPlugin,
+    type CloudOnboardingProviderDialogProvider,
+    type CloudOnboardingProviderRow,
+    type CloudOnboardingProviderWay,
     type CloudOnboardingScreenProps,
     type ThemeMode,
 } from "happy-desktop-ui";
-import { AppCustomProviderDialog, providerAddProps } from "../views/AppHappyAgentSettingsView";
+import { AppCustomProviderDialog } from "../views/AppHappyAgentSettingsView";
 import { methodText, moneyText, PAYMENT_PRESETS } from "../views/AppPaymentsSettings";
 
 const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = {
@@ -39,13 +43,16 @@ const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = 
     unknown: "More",
 };
 
-/** Which credential vendors light which AI tile; anything else the team added is Custom. */
-const TILE_VENDORS: Readonly<
-    Record<Exclude<CloudOnboardingInferenceOption["id"], "custom">, string>
-> = {
-    claude: "claude-code",
-    chatgpt: "codex",
-    grok: "grok",
+/**
+ * The credential vendors each AI row counts as its accounts: a plan and an API
+ * key of the same family are one row. A custom endpoint is counted from the
+ * team's own providers instead.
+ */
+const ROW_VENDORS: Readonly<Record<CloudOnboardingProviderDialogProvider, readonly string[]>> = {
+    chatgpt: ["codex", "openai"],
+    claude: ["claude-code", "anthropic"],
+    xai: ["grok"],
+    bedrock: ["bedrock"],
 };
 
 /** How many plugins the plugins step offers: the required ones, then others to fill. */
@@ -68,60 +75,132 @@ function pluginsFootnote(
     return `Connect ${list} to continue.`;
 }
 
-function inferenceOptions(
+/** The ways this server offers to connect a provider, plan first. */
+function providerWays(
+    provider: CloudOnboardingProviderDialogProvider,
+    providers: HappyAgentCloudProvidersSnapshot,
+): readonly CloudOnboardingProviderWay[] {
+    switch (provider) {
+        case "chatgpt":
+            return providers.signIns.has("codex") ? ["plan", "key"] : ["key"];
+        case "claude":
+            return [
+                ...(providers.signIns.has("claude") ? (["plan"] as const) : []),
+                ...(providers.setupToken ? (["token"] as const) : []),
+                "key",
+            ];
+        case "xai":
+        case "bedrock":
+            return ["key"];
+    }
+}
+
+/** The store's flow for one way of one provider. */
+function providerFlow(
+    provider: CloudOnboardingProviderDialogProvider,
+    way: CloudOnboardingProviderWay,
+): HappyAgentCloudProviderAddFlow {
+    if (way === "plan")
+        return provider === "chatgpt" ? { kind: "chatgpt" } : { kind: "claude", setupToken: false };
+    if (way === "token") return { kind: "claude", setupToken: true };
+    const vendor = (
+        { chatgpt: "openai", claude: "anthropic", xai: "grok", bedrock: "bedrock" } as const
+    )[provider];
+    return { kind: "apiKey", vendor };
+}
+
+/** The provider and way an open flow is, or nothing for the store's chooser. */
+function flowProvider(flow: HappyAgentCloudProviderAddFlow):
+    | {
+          readonly provider: CloudOnboardingProviderDialogProvider;
+          readonly way: CloudOnboardingProviderWay;
+      }
+    | undefined {
+    switch (flow.kind) {
+        case "choose":
+            return undefined;
+        case "chatgpt":
+            return { provider: "chatgpt", way: "plan" };
+        case "claude":
+            return { provider: "claude", way: flow.setupToken ? "token" : "plan" };
+        case "apiKey":
+            return {
+                provider: (
+                    {
+                        openai: "chatgpt",
+                        anthropic: "claude",
+                        grok: "xai",
+                        bedrock: "bedrock",
+                    } as const
+                )[flow.vendor],
+                way: "key",
+            };
+    }
+}
+
+/**
+ * Opens one provider's dialog on a way, kept where `to` says. A plan's sign-in
+ * starts at once, so its code or page is there when the dialog is.
+ */
+function providerOpen(
+    store: HappyAgentCloudProvidersStore,
+    provider: CloudOnboardingProviderDialogProvider,
+    way: CloudOnboardingProviderWay,
+    to: "team" | "private",
+): void {
+    store.addOpen({ flow: providerFlow(provider, way), to });
+    if (way === "plan") store.signInStart();
+}
+
+/**
+ * The AI step's rows: each provider with how many of its accounts are
+ * connected, the reader's own and the team's. Bedrock's keys can only be the
+ * team's, so it is offered only to a reader who may add for the team.
+ */
+function providerRows(
     providers: HappyAgentCloudProvidersSnapshot | undefined,
     store: HappyAgentCloudProvidersStore | undefined,
+    custom: HappyAgentProvidersSnapshot | undefined,
     customCreate: (() => void) | undefined,
-): readonly CloudOnboardingInferenceOption[] {
-    const vendors = new Set(
-        (providers?.connections ?? [])
-            .filter((connection) => connection.source === "tenant")
-            .flatMap((connection) =>
-                connection.credentials
-                    ? connection.credentials.map((credential) => credential.vendor)
-                    : connection.vendors,
-            ),
+): readonly CloudOnboardingProviderRow[] {
+    const connections = (providers?.connections ?? []).filter(
+        (connection) => connection.source === "tenant",
     );
-    const known = new Set(Object.values(TILE_VENDORS));
+    const accounts = (vendors: readonly string[]): number =>
+        connections.reduce(
+            (count, connection) =>
+                count +
+                (connection.credentials
+                    ? connection.credentials.filter((credential) =>
+                          vendors.includes(credential.vendor),
+                      ).length
+                    : connection.vendors.some((vendor) => vendors.includes(vendor))
+                      ? 1
+                      : 0),
+            0,
+        );
     const to = providers?.teamAllowed ? "team" : "private";
-    const open = (flow: Parameters<HappyAgentCloudProvidersStore["addOpen"]>[0]) =>
-        store ? () => store.addOpen(flow) : undefined;
-    const options: readonly {
-        readonly id: CloudOnboardingInferenceOption["id"];
-        readonly connected: boolean;
-        readonly onSelect?: (() => void) | undefined;
-    }[] = [
-        // A family signs in where the server offers it, and takes an API key otherwise.
-        {
-            id: "chatgpt",
-            connected: vendors.has(TILE_VENDORS.chatgpt),
-            onSelect: open(
-                providers?.signIns.has("codex")
-                    ? { flow: { kind: "chatgpt" }, to }
-                    : { flow: { kind: "apiKey", vendor: "openai" }, to },
-            ),
-        },
-        {
-            id: "claude",
-            connected: vendors.has(TILE_VENDORS.claude),
-            onSelect: open(
-                providers?.signIns.has("claude") || providers?.setupToken
-                    ? { flow: { kind: "claude", setupToken: !providers.signIns.has("claude") }, to }
-                    : { flow: { kind: "apiKey", vendor: "anthropic" }, to },
-            ),
-        },
-        {
-            id: "grok",
-            connected: vendors.has(TILE_VENDORS.grok),
-            onSelect: open({ flow: { kind: "apiKey", vendor: "grok" }, to }),
-        },
+    const row = (provider: CloudOnboardingProviderDialogProvider): CloudOnboardingProviderRow => ({
+        id: provider,
+        accounts: accounts(ROW_VENDORS[provider]),
+        ...(store && providers
+            ? {
+                  onOpen: () =>
+                      providerOpen(store, provider, providerWays(provider, providers)[0]!, to),
+              }
+            : {}),
+    });
+    return [
+        row("chatgpt"),
+        row("claude"),
+        row("xai"),
+        ...(providers?.teamAllowed ? [row("bedrock")] : []),
         {
             id: "custom",
-            connected: [...vendors].some((vendor) => !known.has(vendor)),
-            onSelect: customCreate,
+            accounts: (custom?.providers ?? []).filter((provider) => provider.custom).length,
+            ...(customCreate ? { onOpen: customCreate } : {}),
         },
     ];
-    return options.map(({ onSelect, ...option }) => (onSelect ? { ...option, onSelect } : option));
 }
 
 function pluginRows(
@@ -358,7 +437,7 @@ export function AppCloudOnboarding(props: {
                 return {
                     view: {
                         kind: "inference",
-                        options: inferenceOptions(providers, providersStore, customCreate),
+                        rows: providerRows(providers, providersStore, custom, customCreate),
                         ...((flow.error ?? providers?.error?.message)
                             ? { error: flow.error ?? providers?.error?.message }
                             : {}),
@@ -556,12 +635,57 @@ export function AppCloudOnboarding(props: {
                     }}
                 />
             ) : null}
-            {providersStore && providers?.add ? (
-                <HappyAgentProviderAddDialog
-                    {...providerAddProps(providers, providersStore, props.onExternalOpen)}
-                    {...(customCreate ? { onCustomProviderCreate: customCreate } : {})}
-                />
-            ) : null}
+            {providersStore && providers?.add
+                ? ((add, opened) =>
+                      opened ? (
+                          <CloudOnboardingProviderDialog
+                              onAddAnother={() =>
+                                  providerOpen(
+                                      providersStore,
+                                      opened.provider,
+                                      providerWays(opened.provider, providers)[0]!,
+                                      add.to,
+                                  )
+                              }
+                              onApiKeySubmit={providersStore.apiKeySubmit}
+                              onAwsKeysSubmit={providersStore.awsKeysSubmit}
+                              onClose={providersStore.addClose}
+                              onSaveToChange={(to) =>
+                                  // A sign-in already started was asked for the other
+                                  // place: it is let go and started again for this one.
+                                  providerOpen(providersStore, opened.provider, opened.way, to)
+                              }
+                              onSetupTokenSubmit={providersStore.setupTokenSubmit}
+                              onSignInCodeSubmit={providersStore.signInCodeSubmit}
+                              onSignInStart={providersStore.signInStart}
+                              onWaySelect={(way) =>
+                                  providerOpen(providersStore, opened.provider, way, add.to)
+                              }
+                              phase={add.phase}
+                              provider={opened.provider}
+                              regionEditable={providers.teamAllowed}
+                              saveTo={add.to}
+                              saveToSwitchable={providers.privateAllowed && providers.teamAllowed}
+                              team={props.serverLabel ?? "this server"}
+                              way={opened.way}
+                              ways={providerWays(opened.provider, providers)}
+                              {...(add.signIn
+                                  ? {
+                                        signIn: {
+                                            url: add.signIn.url,
+                                            ...(add.signIn.userCode === undefined
+                                                ? {}
+                                                : { userCode: add.signIn.userCode }),
+                                        },
+                                    }
+                                  : {})}
+                              {...(add.error ? { error: add.error.message } : {})}
+                              {...(props.onExternalOpen
+                                  ? { onExternalOpen: props.onExternalOpen }
+                                  : {})}
+                          />
+                      ) : null)(providers.add, flowProvider(providers.add.flow))
+                : null}
             {customStore && custom ? (
                 <AppCustomProviderDialog snapshot={custom} store={customStore} />
             ) : null}
