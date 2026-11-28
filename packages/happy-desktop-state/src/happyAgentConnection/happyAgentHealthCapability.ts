@@ -2,7 +2,7 @@ import type { HappyAgentHealth } from "./happyAgentSync.js";
 
 /**
  * Capabilities a surface gates on: artifact covers, a feed read for some kinds
- * of subject only, Gen UI secret forms, plugins, payments, pipelines, feature
+ * of subject only, Gen UI secret forms, Gen UI plugin setup reports, plugins, payments, pipelines, feature
  * plugins, provider sign-in, the repositories of joined tasks, who else
  * views a target, and the team's handbook.
  */
@@ -10,6 +10,7 @@ export type HappyAgentHealthCapabilityName =
     | "artifactCovers"
     | "feedSubjectFilter"
     | "artifactSecretActions"
+    | "artifactPluginActions"
     | "plugins"
     | "payments"
     | "pipelines"

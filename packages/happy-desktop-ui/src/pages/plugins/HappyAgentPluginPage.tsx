@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type Ref } from "react";
 import type {
     HappyAgentPlugin,
     HappyAgentPluginAuthMethod,
@@ -57,6 +57,8 @@ export interface HappyAgentPluginPageProps {
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
+    /** The page's root element, while it is shown. */
+    ref?: Ref<HTMLDivElement>;
 }
 
 /**
@@ -197,6 +199,7 @@ export function HappyAgentPluginPage(props: HappyAgentPluginPageProps) {
         "data-happy-desktop-ui": "happy-agent-plugin",
         "data-testid": props["data-testid"],
         style: props.style,
+        ref: props.ref,
     };
     if (props.embedded) return <div {...rootProps}>{content}</div>;
     return (

@@ -205,6 +205,9 @@ export interface HappyAgentSession {
         | undefined;
     readonly plugins: () => import("happy-desktop-state").HappyAgentPluginsStore | undefined;
     readonly genUiActions: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
+    readonly genUiPluginReports: () =>
+        | import("happy-desktop-state").HappyAgentGenUiPluginReportsStore
+        | undefined;
     readonly dailyUsage: () => import("happy-desktop-state").HappyAgentDailyUsageStore | undefined;
     readonly cloudProviders: () =>
         | import("happy-desktop-state").HappyAgentCloudProvidersStore
@@ -806,6 +809,7 @@ export function happyAgentConnectionOpen(input: {
                     payments: () => client.payments(),
                     plugins: () => client.plugins(),
                     genUiActions: () => client.genUiActions(),
+                    genUiPluginReports: () => client.genUiPluginReports(),
                     dailyUsage: () => client.dailyUsage(),
                     members: () => client.members(),
                     userProfile: (userId) => client.userProfile(userId),

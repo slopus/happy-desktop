@@ -4,13 +4,17 @@ import type { GenUiActionType } from "./genUiRender";
 import { genUiMessageDocumentParse, genUiMessageLinkSafe } from "./genUiMessageDocument";
 import { GenUiRenderView, type GenUiActionHandler } from "./GenUiRenderView";
 
-/** Direct-message actions need no artifact authority or privileged form bridge. */
+/**
+ * Direct-message actions need no artifact authority or privileged form bridge.
+ * A `plugin` only opens its plugin's page: with no version to report against,
+ * nothing is sent when it is set up.
+ */
 export interface GenUiMessageHost {
     readonly actionsSupported: ReadonlySet<GenUiActionType>;
     readonly onAction: GenUiActionHandler;
 }
 
-const ACTIONS: ReadonlySet<GenUiActionType> = new Set(["message", "open", "copy"]);
+const ACTIONS: ReadonlySet<GenUiActionType> = new Set(["message", "open", "copy", "plugin"]);
 const NO_ACTIONS: ReadonlySet<GenUiActionType> = new Set();
 /* This presentation has no file namespace. Never resolve a document's paths or URLs. */
 const noFile = () => "data:,";

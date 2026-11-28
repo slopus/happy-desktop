@@ -56,6 +56,11 @@ export type GenUiRenderViewProps = {
      * form that was saved: drawn done and never offered again.
      */
     readonly settled?: ReadonlySet<string>;
+    /**
+     * Elements whose action the host reported done but still runs, such as a
+     * plugin that was set up: drawn done, and still opening what they open.
+     */
+    readonly reported?: ReadonlySet<string>;
     /** The address of one of the artifact's files, through the host's file route. */
     readonly fileUrl: (path: string) => string;
     /**
@@ -92,6 +97,7 @@ type Host = {
     readonly picked: ReadonlyMap<string, string>;
     readonly pick: (group: string, elementKey: string) => void;
     readonly settled: ReadonlySet<string>;
+    readonly reported: ReadonlySet<string>;
 };
 
 const HostContext = createContext<Host>({
@@ -104,6 +110,7 @@ const HostContext = createContext<Host>({
     picked: new Map(),
     pick: () => {},
     settled: new Set(),
+    reported: new Set(),
 });
 
 /** Whether a box is inside a card, so a nested card drops its frame. */
@@ -138,6 +145,7 @@ function keyRow(node: GenUiBox): boolean {
 
 const NOT_SUPPORTED = "Not supported yet";
 const NONE_SETTLED: ReadonlySet<string> = new Set();
+const NONE_REPORTED: ReadonlySet<string> = new Set();
 
 /* ---- Pressed state ---------------------------------------------------------- */
 
@@ -162,8 +170,10 @@ function useActivation(
     const picked = group === undefined ? undefined : host.picked.get(group);
     const chosen = (picked !== undefined && picked === elementKey) || host.settled.has(elementKey);
     const disabled = !supported || (picked !== undefined && !chosen);
+    const reported = host.reported.has(elementKey);
     const run = () => {
-        if (!action || disabled || press !== "idle" || chosen) return;
+        // A chosen plugin element still opens its page; every other choice is made once.
+        if (!action || disabled || press !== "idle" || (chosen && action.type !== "plugin")) return;
         if (group !== undefined) host.pick(group, elementKey);
         setPress("pending");
         host.act(elementKey, action).then(
@@ -174,7 +184,7 @@ function useActivation(
             () => setPress("idle"),
         );
     };
-    return { press, run, disabled, chosen, supported };
+    return { press, run, disabled, chosen, supported, reported };
 }
 
 /* ---- Text ------------------------------------------------------------------ */
@@ -536,13 +546,13 @@ const buttonVariants = {
 
 function ButtonView(props: { node: GenUiButton }) {
     const { node } = props;
-    const { press, run, disabled, chosen, supported } = useActivation(
+    const { press, run, disabled, chosen, supported, reported } = useActivation(
         node.key,
         node.action,
         node.group,
     );
     const chip = node.variant === "chip";
-    const glyph = press === "done" || chosen ? "check" : node.icon;
+    const glyph = press === "done" || chosen || reported ? "check" : node.icon;
     return (
         <Button
             aria-pressed={chosen || press !== "idle" ? true : undefined}
@@ -552,6 +562,7 @@ function ButtonView(props: { node: GenUiButton }) {
             data-gen-ui-key={node.key}
             data-picked={chosen ? "" : undefined}
             data-press={press}
+            data-reported={reported ? "" : undefined}
             disabled={disabled || press !== "idle"}
             onClick={run}
             size={chip ? "small" : "medium"}
@@ -598,7 +609,7 @@ function PressView(props: { node: GenUiPress }) {
 
 function ActivePress(props: { node: GenUiPress; action: GenUiAction }) {
     const { node } = props;
-    const { press, run, disabled, chosen, supported } = useActivation(
+    const { press, run, disabled, chosen, supported, reported } = useActivation(
         node.key,
         props.action,
         node.group,
@@ -608,7 +619,8 @@ function ActivePress(props: { node: GenUiPress; action: GenUiAction }) {
             aria-pressed={node.group === undefined ? undefined : chosen}
             className="gen-ui-press"
             data-gen-ui-key={node.key}
-            data-picked={chosen ? "" : undefined}
+            data-picked={chosen || reported ? "" : undefined}
+            data-reported={reported ? "" : undefined}
             data-role={node.role}
             data-press={press}
             disabled={disabled}
@@ -820,6 +832,7 @@ export function GenUiRenderView(props: GenUiRenderViewProps) {
             setPicked(new Map([...picked, [group, elementKey]]));
         },
         settled: props.settled ?? NONE_SETTLED,
+        reported: props.reported ?? NONE_REPORTED,
     };
     const shown = viewing ? viewing.items[viewing.index] : undefined;
     const step = (direction: 1 | -1) => {

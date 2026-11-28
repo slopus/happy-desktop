@@ -220,7 +220,9 @@ export type GenUiActionType = GenUiAction["type"];
  * to the origin agent, the one that wrote the version, so without a live one
  * they cannot run. Each backend serves only its own secret form, and only when
  * its health reports `artifactSecretActions`; `plugin` needs `plugins` the same
- * way. No host runs `tool` yet.
+ * way, and is served in direct Gen UI too. Reporting a plugin set up to the
+ * origin agent needs `artifactPluginActions` and an artifact version. No host
+ * runs `tool` yet.
  */
 export function genUiActionsServed(host: {
     readonly backend: "happyAgent" | "cluster";

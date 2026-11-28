@@ -7,6 +7,7 @@ import { ConversationMedia } from "../../ConversationMedia";
 import {
     GenUiArtifact,
     type GenUiClusterSecretHost,
+    type GenUiPluginHost,
     type GenUiSecretHost,
 } from "../../genUi/GenUiArtifact";
 import type { GenUiActionType } from "../../genUi/genUiRender";
@@ -36,6 +37,8 @@ export interface GenUiInlineHost {
     readonly secrets?: GenUiSecretHost;
     /** Opens and saves `cluster_secret` forms, on a Happy Cloud server. */
     readonly clusterSecrets?: GenUiClusterSecretHost;
+    /** Opens `plugin` elements' pages and reports their setup to the agent that asked. */
+    readonly plugins?: GenUiPluginHost;
 }
 
 /**
@@ -115,5 +118,6 @@ export function genUiArtifactHost(host: GenUiInlineHost) {
         onAction: host.onAction,
         ...(host.secrets ? { secrets: host.secrets } : {}),
         ...(host.clusterSecrets ? { clusterSecrets: host.clusterSecrets } : {}),
+        ...(host.plugins ? { plugins: host.plugins } : {}),
     };
 }

@@ -154,6 +154,10 @@ import {
     happyAgentGenUiDaemonActionsCreate,
     type HappyAgentGenUiActions,
 } from "./happyAgentGenUiActions.js";
+import {
+    happyAgentGenUiPluginReportsStoreCreate,
+    type HappyAgentGenUiPluginReportsStore,
+} from "./happyAgentGenUiPluginReportsStore.js";
 import { happyAgentDaemonPluginsStoreCreate } from "./happyAgentDaemonPluginsStore.js";
 import {
     happyAgentPluginsStoreCreate,
@@ -352,6 +356,12 @@ export interface HappyAgentWorkspaceClient {
      * such as secret forms. Undefined while its health does not say it serves them.
      */
     genUiActions(): HappyAgentGenUiActions | undefined;
+    /**
+     * Reports a Gen UI version's `plugin` elements set up to the agent that
+     * wrote it. Undefined anywhere but Happy Cloud, and while its health does
+     * not say it takes these reports or serves plugins.
+     */
+    genUiPluginReports(): HappyAgentGenUiPluginReportsStore | undefined;
     /** Settings › Compute on Happy Cloud: its machines and join requests; undefined anywhere else. */
     compute(): HappyAgentComputeStore | undefined;
     /** Settings › Permissions on Happy Cloud: the team's zones; undefined anywhere else. */
@@ -909,6 +919,7 @@ export function happyAgentWorkspaceClientCreate(
     let paymentsStore: HappyAgentPaymentsStore | undefined;
     let pluginsStore: HappyAgentPluginsStore | undefined;
     let genUiActions: HappyAgentGenUiActions | undefined;
+    let genUiPluginReports: HappyAgentGenUiPluginReportsStore | undefined;
     let computeStore: HappyAgentComputeStore | undefined;
     let featureAvailability:
         | { readonly store: FeatureAvailabilityStore; readonly writer: FeatureAvailabilityWriter }
@@ -1450,6 +1461,17 @@ export function happyAgentWorkspaceClientCreate(
                 : happyAgentGenUiDaemonActionsCreate({ client: deps.client });
             return genUiActions;
         },
+        genUiPluginReports() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "artifactPluginActions"))
+                return undefined;
+            const plugins = workspace.plugins();
+            if (!plugins) return undefined;
+            genUiPluginReports ??= happyAgentGenUiPluginReportsStoreCreate({ request, plugins });
+            return genUiPluginReports;
+        },
         compute() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1856,6 +1878,8 @@ export function happyAgentWorkspaceClientCreate(
             onboardingSettingsStore = undefined;
             paymentsStore?.[Symbol.dispose]();
             paymentsStore = undefined;
+            genUiPluginReports?.[Symbol.dispose]();
+            genUiPluginReports = undefined;
             pluginsStore?.[Symbol.dispose]();
             pluginsStore = undefined;
             computeStore?.[Symbol.dispose]();

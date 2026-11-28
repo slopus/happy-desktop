@@ -1509,6 +1509,7 @@ export {
     GenUiArtifact,
     type GenUiClusterSecretForm,
     type GenUiClusterSecretHost,
+    type GenUiPluginHost,
     type GenUiSecretForm,
     type GenUiSecretHost,
 } from "./genUi/GenUiArtifact";

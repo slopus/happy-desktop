@@ -1,5 +1,6 @@
 import { Suspense, use, useState } from "react";
 import type { GenUiAction } from "../../src/genUi/genUiRender";
+import { genUiRenderParse } from "../../src/genUi/genUiRender";
 import { GenUiRenderView } from "../../src/genUi/GenUiRenderView";
 import {
     GEN_UI_SCREEN_WIDTH,
@@ -13,6 +14,35 @@ import { ConversationView } from "../../src/ConversationView";
 import { genUiMessageEntry } from "../genUiMessageFixture";
 
 export const componentNumber = "C-342";
+
+const github = { type: "plugin", plugin: { id: "github" } } as const;
+const linear = { type: "plugin", plugin: { id: "linear" } } as const;
+
+/** A plugin button and a plugin choice, each before and after its setup was reported. */
+const pluginSetup = genUiRenderParse({
+    genuiRender: 1,
+    root: "root",
+    elements: {
+        root: { type: "box", props: { gap: "items" }, children: ["buttons", "choices"] },
+        buttons: {
+            type: "box",
+            props: { role: "actions", direction: "row" },
+            children: ["connect", "connected"],
+        },
+        connect: { type: "button", props: { label: "Connect GitHub", action: github } },
+        connected: { type: "button", props: { label: "Connect Linear", action: linear } },
+        choices: {
+            type: "box",
+            props: { divide: "inset" },
+            children: ["choice", "chosen"],
+        },
+        choice: { type: "press", props: { role: "item", action: github }, children: ["github"] },
+        chosen: { type: "press", props: { role: "item", action: linear }, children: ["linear"] },
+        github: { type: "text", props: { role: "item", spans: [{ text: "GitHub" }] } },
+        linear: { type: "text", props: { role: "item", spans: [{ text: "Linear" }] } },
+    },
+});
+const PLUGIN_REPORTED: ReadonlySet<string> = new Set(["connected", "chosen"]);
 
 type Reported = (elementKey: string, action: GenUiAction) => void;
 
@@ -97,12 +127,30 @@ export function GenUiPage() {
                         entries={[genUiMessageEntry]}
                         dock={null}
                         genUi={{
-                            actionsSupported: new Set(["message", "open", "copy"]),
+                            actionsSupported: new Set(["message", "open", "copy", "plugin"]),
                             onAction: (key, action) =>
                                 setReported(`${key} → ${JSON.stringify(action)}`),
                         }}
                     />
                 </div>
+            </Specimen>
+            <Specimen
+                label="Plugin set up"
+                detail="A plugin button and choice before and after the host reported the plugin set up: done, and still opening the plugin's page."
+                number="00b"
+                stage="surface"
+            >
+                <GenUiScreen name="plugin-setup">
+                    <GenUiRenderView
+                        document={pluginSetup}
+                        fileUrl={(path) => path}
+                        onAction={(key, action) =>
+                            setReported(`${key} → ${JSON.stringify(action)}`)
+                        }
+                        reported={PLUGIN_REPORTED}
+                        still
+                    />
+                </GenUiScreen>
             </Specimen>
             <Suspense fallback={<p>Loading documents…</p>}>
                 <Fixtures

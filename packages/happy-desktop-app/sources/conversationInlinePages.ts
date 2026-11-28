@@ -9,6 +9,7 @@ import type {
     GenUiAction,
     GenUiClusterSecretHost,
     GenUiInlineHost,
+    GenUiPluginHost,
     GenUiSecretHost,
     ArtifactLiveRenderer,
     BrowserContentRenderer,
@@ -153,7 +154,8 @@ export function conversationInlinePagesCreate(input: {
  * the text on the clipboard. The model wrote these actions, so nothing runs
  * that the person could not have done with the same tap, and anything but an
  * https address is refused. A `plugin` opens that plugin's page, where the
- * person may install it; the tap installs nothing. A `tool` call is shown as
+ * person may install it; the tap installs nothing, and with `plugins` an
+ * artifact reports the plugin set up to the agent that asked. A `tool` call is shown as
  * not supported yet, and so is a `message` where there is no conversation to
  * send it to. `secret` and `cluster_secret` open the artifact's own form, each
  * served on the kind of server that stores it.
@@ -162,6 +164,7 @@ export function genUiInlineHostCreate(input: {
     readonly messageSend?: (text: string) => Promise<void>;
     readonly linkOpen: (url: string) => void;
     readonly pluginOpen?: (pluginId: string) => void;
+    readonly plugins?: GenUiPluginHost;
     readonly secrets?: GenUiSecretHost;
     readonly clusterSecrets?: GenUiClusterSecretHost;
 }): GenUiInlineHost {
@@ -175,6 +178,7 @@ export function genUiInlineHostCreate(input: {
         actionsSupported: new Set(supported),
         ...(input.secrets ? { secrets: input.secrets } : {}),
         ...(input.clusterSecrets ? { clusterSecrets: input.clusterSecrets } : {}),
+        ...(input.pluginOpen && input.plugins ? { plugins: input.plugins } : {}),
         onAction: async (_elementKey, action) => {
             switch (action.type) {
                 case "message":

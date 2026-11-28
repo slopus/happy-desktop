@@ -280,6 +280,7 @@ export * from "./happyAgent/happyAgentPluginsStore.js";
 export * from "./happyAgent/happyAgentPluginJobs.js";
 export * from "./happyAgent/happyAgentDaemonPluginsStore.js";
 export * from "./happyAgent/happyAgentGenUiActions.js";
+export * from "./happyAgent/happyAgentGenUiPluginReportsStore.js";
 export * from "./happyAgent/happyAgentComputeStore.js";
 export * from "./features/featureAvailabilityStore.js";
 export * from "./happyAgent/happyAgentZonesStore.js";

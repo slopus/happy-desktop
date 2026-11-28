@@ -37,6 +37,9 @@ import {
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
     type HappyShareLinkRole,
+    happyAgentGenUiVersionKey,
+    type HappyAgentGenUiPluginReportsSnapshot,
+    type HappyAgentGenUiPluginReportsStore,
 } from "happy-desktop-state";
 import { AppGptLiveCallBar, AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { artifactBesideOpen } from "./artifactOpen";
@@ -379,6 +382,7 @@ import {
     happyAgentComposerModelUsageWatch,
     sidebarReorderMove,
     type GenUiClusterSecretHost,
+    type GenUiPluginHost,
     type GenUiSecretHost,
     type IconName,
     type MenuItem,
@@ -841,6 +845,10 @@ export interface AppHappyAgentSession {
     ) => import("happy-desktop-state").HappyAgentCheckoutsStore | undefined;
     /** The Gen UI actions a Happy Cloud server runs, such as secret forms; absent or undefined elsewhere. */
     readonly genUiActions?: () => import("happy-desktop-state").HappyAgentGenUiActions | undefined;
+    /** Reports Gen UI `plugin` elements set up, on a Happy Cloud server that takes it; absent or undefined elsewhere. */
+    readonly genUiPluginReports?: () =>
+        | import("happy-desktop-state").HappyAgentGenUiPluginReportsStore
+        | undefined;
     /** Settings › Administration, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly onboardingSettings?: () =>
         | import("happy-desktop-state").HappyAgentOnboardingSettingsStore
@@ -5941,11 +5949,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // A `plugin` button and the secret forms are offered only where the
     // machine's health says it serves them, known from when it connected.
     const genUiActions = active?.session?.genUiActions?.();
+    const genUiPluginReports = active?.session?.genUiPluginReports?.();
     const genUiMachine: GenUiMachineHost = active
         ? {
               ...(props.onPluginOpen && active.session?.plugins?.()
                   ? {
                         pluginOpen: (pluginId: string) => props.onPluginOpen?.(pluginId),
+                        ...(genUiPluginReports ? { pluginReports: genUiPluginReports } : {}),
                     }
                   : {}),
               ...(genUiActions ? genUiSecretHostsCreate(genUiActions) : {}),
@@ -8013,14 +8023,45 @@ function HappyAgentTodoSurface(props: {
  */
 interface GenUiMachineHost {
     readonly pluginOpen?: (pluginId: string) => void;
+    /** Where a tap on an artifact's `plugin` element is reported once that plugin is set up. */
+    readonly pluginReports?: HappyAgentGenUiPluginReportsStore;
     readonly secrets?: GenUiSecretHost;
     readonly clusterSecrets?: GenUiClusterSecretHost;
 }
 const GenUiMachineContext = createContext<GenUiMachineHost>({});
 
+const GEN_UI_PLUGIN_REPORTS_NONE: HappyAgentGenUiPluginReportsSnapshot = { reported: new Map() };
+const genUiPluginReportsNone = {
+    get: () => GEN_UI_PLUGIN_REPORTS_NONE,
+    subscribe: () => () => undefined,
+};
+const GEN_UI_NONE_REPORTED: ReadonlySet<string> = new Set();
+
+/**
+ * The machine's Gen UI reach for one surface, following which `plugin`
+ * elements were reported set up: a tap opens the plugin's page and, from an
+ * artifact version with a live origin agent, starts watching for its setup.
+ */
+function useGenUiMachine() {
+    const { pluginReports, ...machine } = use(GenUiMachineContext);
+    const reports = pluginReports ?? genUiPluginReportsNone;
+    const snapshot = useSyncExternalStore(reports.subscribe, reports.get, reports.get);
+    const pluginOpen = machine.pluginOpen;
+    if (!pluginOpen) return machine;
+    const plugins: GenUiPluginHost = {
+        open: (pluginId, tap) => {
+            if (tap) pluginReports?.pluginSetupWatch(tap.source, tap.element, pluginId);
+            pluginOpen(pluginId);
+        },
+        reported: (source) =>
+            snapshot.reported.get(happyAgentGenUiVersionKey(source)) ?? GEN_UI_NONE_REPORTED,
+    };
+    return { ...machine, plugins };
+}
+
 /** The Gen UI host of an artifact viewer, which has no conversation to send to. */
 function useGenUiViewerHost() {
-    return genUiInlineHostCreate({ ...use(GenUiMachineContext), linkOpen: openExternalLink });
+    return genUiInlineHostCreate({ ...useGenUiMachine(), linkOpen: openExternalLink });
 }
 
 function HappyAgentArtifactPanelViewerSurface(props: {
@@ -11638,7 +11679,7 @@ function HappyAgentConversationSurface(props: {
     viewerId: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
-    const genUiMachine = use(GenUiMachineContext);
+    const genUiMachine = useGenUiMachine();
     const { conversation, workspace } = props;
     const previewBindings = useConversationPreviews({
         workspace,
@@ -11821,6 +11862,7 @@ function HappyAgentConversationSurface(props: {
                     props.restarting !== true,
                 online: props.happyAgentOnline,
                 linkOpen: (url) => props.onLinkOpen(url, props.linkOpenDefault),
+                ...(genUiMachine.pluginOpen ? { pluginOpen: genUiMachine.pluginOpen } : {}),
             })}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}

@@ -21,6 +21,22 @@ export type {
     GenUiSecretHost,
 } from "./GenUiSecretForms";
 
+/**
+ * Where a `plugin` element opens its plugin's page. From a version with a live
+ * origin agent the tap names that element, so a setup seen after it is
+ * reported to the agent; `reported` names the elements of a version for which
+ * that already happened.
+ */
+export interface GenUiPluginHost {
+    open(
+        pluginId: string,
+        tap: { readonly source: HappyAgentGenUiSource; readonly element: string } | undefined,
+    ): void;
+    reported(source: HappyAgentGenUiSource): ReadonlySet<string>;
+}
+
+const NONE_REPORTED: ReadonlySet<string> = new Set();
+
 /* An address that never loads: a picture the version does not hold shows the
    failed placeholder rather than asking the app's own origin for the path. */
 const MISSING_FILE = "data:,";
@@ -40,7 +56,9 @@ function messageOf(reason: unknown): string {
  * It runs the secret forms itself: a `secret` or `cluster_secret` button opens
  * the Settings secret form filled with what the agent suggested, every field
  * editable and every value typed by the person. Saving it is the button's
- * action finishing, and a saved form is never offered again.
+ * action finishing, and a saved form is never offered again. A `plugin`
+ * button opens its plugin's page; once the host reports the plugin set up for
+ * it, it is drawn done and still opens the page.
  */
 export function GenUiArtifact(props: {
     /** The text of the version's `.genui/render.json`. */
@@ -55,11 +73,13 @@ export function GenUiArtifact(props: {
     readonly secrets?: GenUiSecretHost;
     /** Opens and saves `cluster_secret` forms; without it they are not served. */
     readonly clusterSecrets?: GenUiClusterSecretHost;
+    /** Opens a `plugin` element's page and reports its setup; without it the action goes to `onAction`. */
+    readonly plugins?: GenUiPluginHost;
 }) {
     const document = genUiRenderParseText(props.render);
     const [form, setForm] = useState<GenUiSecretFormOpen | null>(null);
     const [settled, setSettled] = useState<ReadonlySet<string>>(new Set());
-    const { source, secrets, clusterSecrets } = props;
+    const { source, secrets, clusterSecrets, plugins } = props;
     const supported =
         props.actionsSupported &&
         new Set(
@@ -126,6 +146,13 @@ export function GenUiArtifact(props: {
                 );
             });
         }
+        if (action.type === "plugin" && plugins) {
+            plugins.open(
+                action.plugin.id,
+                source?.origin === true ? { source, element: elementKey } : undefined,
+            );
+            return;
+        }
         return props.onAction?.(elementKey, action);
     };
     return (
@@ -135,6 +162,7 @@ export function GenUiArtifact(props: {
                 document={document}
                 fileUrl={(path) => props.files.get(path) ?? MISSING_FILE}
                 onAction={act}
+                reported={source && plugins ? plugins.reported(source) : NONE_REPORTED}
                 settled={settled}
             />
             {form ? (

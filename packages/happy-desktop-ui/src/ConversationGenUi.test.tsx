@@ -62,7 +62,7 @@ it("renders direct history without artifact services, measures it, and preserves
         ["Copy", false],
         ["Open", false],
         ["Run tool", true],
-        ["Plugin", true],
+        ["Plugin", false],
         ["Secret", true],
         ["Cluster secret", true],
     ]);

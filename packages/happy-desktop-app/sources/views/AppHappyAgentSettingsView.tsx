@@ -867,6 +867,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // Compute is on screen.
     const computeShown = section === "compute" ? computeStore : undefined;
     const pluginsShown = section === "plugins" ? pluginsStore : undefined;
+    const genUiPluginReports = pluginsShown ? host?.session?.genUiPluginReports?.() : undefined;
     const plugins = useSyncExternalStore(
         (pluginsShown ?? happyAgentPluginsStoreNone).subscribe,
         (pluginsShown ?? happyAgentPluginsStoreNone).get,
@@ -1756,6 +1757,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         onPluginOpen={(pluginId) => props.onPluginOpen?.(pluginId)}
                         onPluginsOpen={() => props.onCategorySelect("plugins")}
                         {...(pluginOpen === undefined ? {} : { pluginId: pluginOpen })}
+                        {...(genUiPluginReports ? { genUiPluginReports } : {})}
                         store={pluginsShown}
                     />
                 ) : null
