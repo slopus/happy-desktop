@@ -297,6 +297,17 @@ export function happyAgentOnboardingLandsInChiefOfStaff(input: {
 }
 
 /**
+ * Whether the flow walks any of the server's own steps, not only the
+ * reader's: the setup of someone setting the server up, who created it at
+ * step 0 before these.
+ */
+export function happyAgentOnboardingServerGateWalked(
+    flow: Pick<HappyAgentOnboardingFlow, "gates" | "sequence">,
+): boolean {
+    return flow.gates.some((gate) => gate.scope === "server" && flow.sequence.includes(gate.id));
+}
+
+/**
  * Whether the reader can stand on this gate: a step of the flow, which the
  * progress bar names and Back returns to whether or not it is finished. A gate
  * that holds them back always is one. Otherwise it is one they can act on and

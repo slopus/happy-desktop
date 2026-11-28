@@ -11,6 +11,7 @@ import {
     type HappyAgentProvidersSnapshot,
     type HappyAgentProvidersStore,
     happyAgentMoneyExponent,
+    happyAgentOnboardingServerGateWalked,
     type HappyAgentPluginsStore,
     type HappyAgentProfileSnapshot,
     type HappyAgentProfileStore,
@@ -394,11 +395,6 @@ export function AppCloudOnboarding(props: {
     readonly providers?: () => HappyAgentProvidersStore;
     readonly appearance: ThemeMode;
     readonly serverLabel?: string;
-    /**
-     * The reader created this server in this window and has not left its
-     * setup since: the bar leads with that step, done.
-     */
-    readonly serverCreated?: boolean;
     readonly placeholderSeed: string;
     readonly onExternalOpen?: (url: string) => void;
     /**
@@ -733,7 +729,11 @@ export function AppCloudOnboarding(props: {
                 appearance={props.appearance}
                 currentStep={gate.id}
                 steps={[
-                    ...(props.serverCreated ? [{ ...SERVER_STEP, done: true }] : []),
+                    // Someone setting the server up created it at step 0,
+                    // so their bar always leads with that step, done.
+                    ...(happyAgentOnboardingServerGateWalked(flow)
+                        ? [{ ...SERVER_STEP, done: true }]
+                        : []),
                     ...flow.sequence.map((id) => {
                         const entry = flow.gates.find((entry) => entry.id === id);
                         return {

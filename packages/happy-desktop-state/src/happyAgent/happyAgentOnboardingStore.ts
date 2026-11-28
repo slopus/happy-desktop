@@ -16,6 +16,7 @@ import {
     happyAgentOnboardingChiefOfStaffRead,
     happyAgentOnboardingGatesRead,
     happyAgentOnboardingLandsInChiefOfStaff,
+    happyAgentOnboardingServerGateWalked,
     happyAgentOnboardingSummaryRead,
     type HappyAgentOnboardingFlow,
     type HappyAgentOnboardingGate,
@@ -520,9 +521,7 @@ export function happyAgentOnboardingStoreCreate(
             .completeOnboarding({ signal: active.signal })
             .then(() => {
                 gatesCompleted = true;
-                const serverGateWalked = flow.gates.some(
-                    (gate) => gate.scope === "server" && flow.sequence.includes(gate.id),
-                );
+                const serverGateWalked = happyAgentOnboardingServerGateWalked(flow);
                 if (
                     happyAgentOnboardingLandsInChiefOfStaff({
                         walked,

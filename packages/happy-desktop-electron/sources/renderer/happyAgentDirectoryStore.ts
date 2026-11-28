@@ -159,12 +159,6 @@ export interface HappyAgentDirectoryEntry {
     readonly signIn?: HappyAgentDirectorySignIn;
     /** Why the picture chosen when this server was created was not kept; until dismissed. */
     readonly pictureFailure?: string;
-    /**
-     * This window created the server, in this run, and the person has not
-     * left its setup since: the setup's bar leads with the step that created
-     * it. Never kept past the run.
-     */
-    readonly created?: true;
 }
 
 export interface HappyAgentDirectorySnapshot {
@@ -196,10 +190,10 @@ export interface HappyAgentDirectoryStore {
     /**
      * Lists a Happy Cloud server the shell has added and signed in to, by its
      * connection ID, and selects it once the shell reports it signed in.
-     * Present only when the shell reaches Happy Cloud itself. `created` says
-     * this window just created the server; it is given `created.picture` once
-     * its creator's profile is saved, and a picture that does not arrive never
-     * undoes the server.
+     * Present only when the shell reaches Happy Cloud itself. A server this
+     * window just created is given `created.picture` once its creator's
+     * profile is saved, and a picture that does not arrive never undoes the
+     * server.
      */
     happyAgentCloudConnect?(
         connectionId: string,
@@ -355,7 +349,6 @@ interface LocalHappyAgent {
      */
     picturePending?: HappyAgentAvatarImage;
     pictureUnfollow?: () => void;
-    createdUnfollow?: () => void;
     url?: string;
     /** Opens this remote's connection afresh, with nothing carried over. */
     reopen?: () => void;
@@ -804,8 +797,6 @@ export function happyAgentDirectoryStoreCreate(
         happyAgent.nodeUnsubscribe = undefined;
         happyAgent.pictureUnfollow?.();
         happyAgent.pictureUnfollow = undefined;
-        happyAgent.createdUnfollow?.();
-        happyAgent.createdUnfollow = undefined;
         happyAgent.attentionUnfollow?.();
         happyAgent.attentionUnfollow = undefined;
         happyAgent.node?.[Symbol.dispose]();
@@ -876,29 +867,6 @@ export function happyAgentDirectoryStoreCreate(
             nodePictureSend(remote.entry.id, picture);
         };
         remote.pictureUnfollow = profile.subscribe(check);
-        check();
-    };
-
-    /**
-     * Takes back `created` once the person leaves the setup they began by
-     * creating the server, or finishes it: coming back later, the bar is the
-     * server's own.
-     */
-    const createdFollow = (remote: LocalHappyAgent): void => {
-        remote.createdUnfollow?.();
-        remote.createdUnfollow = undefined;
-        const onboarding = remote.connection?.setup?.onboarding;
-        if (!onboarding || remote.entry.created === undefined) return;
-        const check = (): void => {
-            const flow = onboarding.get().flow;
-            if (!flow || (flow.current !== undefined && flow.away === undefined)) return;
-            remote.createdUnfollow?.();
-            remote.createdUnfollow = undefined;
-            const { created: _left, ...entry } = remote.entry;
-            remote.entry = entry;
-            publish();
-        };
-        remote.createdUnfollow = onboarding.subscribe(check);
         check();
     };
 
@@ -1161,7 +1129,6 @@ export function happyAgentDirectoryStoreCreate(
         // mobile pairing must not wait on anything the workspace needs.
         happyAgent.entry = { ...happyAgent.entry, setup: happyAgent.connection.setup };
         pictureFollow(happyAgent);
-        createdFollow(happyAgent);
         // The installation's own name and picture ride the same sync feed as
         // the rest of this connection, so the rail tile follows a rename or a
         // new picture as soon as the daemon announces it.
@@ -1493,11 +1460,6 @@ export function happyAgentDirectoryStoreCreate(
                                     };
                                 roster?.connectionSelect(item.id);
                                 const remote = remotes.get(item.id);
-                                if (created && remote) {
-                                    remote.entry = { ...remote.entry, created: true };
-                                    createdFollow(remote);
-                                    publish();
-                                }
                                 if (created?.picture && remote) {
                                     remote.picturePending = created.picture;
                                     pictureFollow(remote);

@@ -34,8 +34,6 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly online: boolean;
     /** The server this window is joining, as its rail tile names it. */
     readonly serverLabel?: string;
-    /** The reader created this server in this window and is still in its setup. */
-    readonly serverCreated?: boolean;
     /**
      * What a new member's placeholder picture is picked by until their first
      * save gives them a user ID, which picks it from then on.
@@ -124,7 +122,6 @@ export function HappyAgentOnboardingBoundary(props: {
                     {...(props.payments ? { payments: props.payments } : {})}
                     {...(props.providers ? { providers: props.providers } : {})}
                     {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
-                    {...(props.serverCreated ? { serverCreated: true } : {})}
                     {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
                     {...(props.onServersShow ? { onServersShow: props.onServersShow } : {})}
                 />
