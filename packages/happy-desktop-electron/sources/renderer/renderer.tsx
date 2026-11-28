@@ -62,7 +62,6 @@ import {
     happyAgentAttentionConnection,
     happyAgentAttentionStoreOwnedCreate,
     happyAgentClockStoreCreate,
-    happyExternalLinkParse,
     happyLinkInboxStoreCreate,
     parseHappyUrl,
     serverSessionsStoreCreate,
@@ -72,6 +71,8 @@ import {
     type AppearanceStore,
     type HappyAgentChiefOfStaffRequest,
     type HappyAgentClockStore,
+    type HappyAgentAvatarImage,
+    type HappyCloudInviteStore,
     type HappyLinkInboxStore,
     type HappyAgentAttentionStore,
     type HappyAgentCompletionSound,
@@ -105,6 +106,7 @@ import {
     ZoomIndicator,
     ConnectionShell,
     CloudConnectScreen,
+    CloudInviteScreen,
     imageCropOpen,
     CloudSignInNoticeDialog,
     HappyLinkNoticeDialog,
@@ -177,6 +179,7 @@ import {
     desktopCloudConnectStoreCreate,
     type DesktopCloudConnectStore,
 } from "./desktopCloudConnectStore";
+import { desktopCloudInviteStoreCreate, desktopExternalLinkRoute } from "./desktopCloudInviteStore";
 import {
     desktopCloudSignInNoticeStoreCreate,
     type DesktopCloudSignInNoticeStore,
@@ -1497,6 +1500,32 @@ function DesktopCloudConnect(props: {
         />
     );
 }
+/** An invitation to a Happy Cloud server, opened from its link, over everything else. */
+function DesktopCloudInvite(props: {
+    store: HappyCloudInviteStore;
+    appearance: AppearanceStore;
+}): ReactNode {
+    const view = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
+    if (!view) return null;
+    return (
+        <CloudInviteScreen
+            appearance={appearance.mode}
+            onAccountSwitch={props.store.inviteAccountSwitch}
+            onClose={props.store.inviteClose}
+            onJoin={props.store.inviteJoin}
+            onRetry={props.store.inviteRetry}
+            onServerOpen={props.store.inviteServerOpen}
+            onSignIn={props.store.inviteSignIn}
+            onSignInCancel={props.store.inviteSignInCancel}
+            view={view}
+        />
+    );
+}
 /** Why a Happy link from outside was not opened, centered over everything else. */
 function DesktopHappyLinkNotice(props: { store: HappyLinkInboxStore }): ReactNode {
     const { notice } = useSyncExternalStore(
@@ -1935,6 +1964,29 @@ if (mediaPreviewBridge) {
             happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
         };
         const cloudConnectAction = happyAgents.happyAgentCloudConnect;
+        const cloudServerInApp = (connectionId: string): boolean =>
+            happyAgents.get().happyAgents.some((entry) => entry.remoteId === connectionId);
+        const cloudServerOpen = (connectionId: string): void => {
+            const entry = happyAgents
+                .get()
+                .happyAgents.find((candidate) => candidate.remoteId === connectionId);
+            if (entry) happyAgents.happyAgentActivate(entry.id);
+        };
+        // A start page left for Happy Cloud is acknowledged only once a team
+        // is connected; until then Back returns to it.
+        const cloudServerConnect =
+            (action: NonNullable<typeof cloudConnectAction>) =>
+            async (
+                connectionId: string,
+                created?: { readonly picture?: HappyAgentAvatarImage },
+            ): ReturnType<typeof action> => {
+                const connected = await action(connectionId, created);
+                if (connected.ok && !welcome.get().welcomeAcknowledged) {
+                    desktopBootSkip();
+                    welcome.welcomeAcknowledge();
+                }
+                return connected;
+            };
         const cloudConnect =
             cloudConnectAction && desktopBridge.happyCloud
                 ? desktopCloudConnectStoreCreate({
@@ -1942,26 +1994,24 @@ if (mediaPreviewBridge) {
                       bridge: desktopBridge,
                       chiefOfStaffAsk,
                       photoCodec: { open: imageCropOpen },
-                      inApp: (connectionId) =>
-                          happyAgents
-                              .get()
-                              .happyAgents.some((entry) => entry.remoteId === connectionId),
-                      open: (connectionId) => {
-                          const entry = happyAgents
-                              .get()
-                              .happyAgents.find((candidate) => candidate.remoteId === connectionId);
-                          if (entry) happyAgents.happyAgentActivate(entry.id);
-                      },
-                      // A start page left for Happy Cloud is acknowledged only
-                      // once a team is connected; until then Back returns to it.
-                      connect: async (connectionId, created) => {
-                          const connected = await cloudConnectAction(connectionId, created);
-                          if (connected.ok && !welcome.get().welcomeAcknowledged) {
-                              desktopBootSkip();
-                              welcome.welcomeAcknowledge();
-                          }
-                          return connected;
-                      },
+                      inApp: cloudServerInApp,
+                      open: cloudServerOpen,
+                      connect: cloudServerConnect(cloudConnectAction),
+                  })
+                : undefined;
+        // An invitation opened from its link: shown over whatever the window
+        // holds, the Cloud's own screens included, and finished here.
+        const cloudInvite =
+            cloudConnectAction && cloudConnect && desktopBridge.happyCloud
+                ? desktopCloudInviteStoreCreate({
+                      cloud: desktopBridge.happyCloud,
+                      bridge: desktopBridge,
+                      inApp: cloudServerInApp,
+                      open: cloudServerOpen,
+                      connect: cloudServerConnect(cloudConnectAction),
+                      // The server is open behind it: the Cloud's screen, if
+                      // one was up, has nothing left to ask.
+                      entered: cloudConnect.connectCancel,
                   })
                 : undefined;
         if (cloudConnect) {
@@ -2168,18 +2218,29 @@ if (mediaPreviewBridge) {
             else happyAgentRouterHappyLinkOpen(activeRouter(), url);
         });
         if (happyLinkUnsubscribe) appDisposers.push(happyLinkUnsubscribe);
-        // A share link clicked anywhere in the window opens in the app.
-        appDisposers.push(happyShareLinkClicksRoute(document, happyLinkInbox.linkReceive));
+        // A link from outside the conversation it would open in: the Cloud's
+        // servers, read afresh, for the browser's hand-back after an invite
+        // accepted there; an invitation, for its own link; and otherwise the
+        // server an instance link names.
+        const externalLinkReceive = (url: string): void =>
+            desktopExternalLinkRoute(url, {
+                ...(cloudConnect ? { cloudServers: cloudConnect.serversShow } : {}),
+                ...(cloudInvite ? { cloudInvite: cloudInvite.inviteOpen } : {}),
+                other: happyLinkInbox.linkReceive,
+            });
+        // A share link clicked anywhere in the window opens in the app, and
+        // so does an invite link where this shell can show one.
+        appDisposers.push(
+            happyShareLinkClicksRoute(document, externalLinkReceive, {
+                invites: cloudInvite !== undefined,
+            }),
+        );
         const happyLinksTake = async (): Promise<void> => {
             const take = desktopBridge.happyLinkExternalTake;
             if (!take) return;
-            for (let url = await take(); url !== undefined; url = await take()) {
-                // The browser's hand-back after an invite: the Cloud's servers,
-                // read afresh. The shell has already raised the window.
-                if (cloudConnect && happyExternalLinkParse(url).kind === "cloudServers")
-                    cloudConnect.serversShow();
-                else happyLinkInbox.linkReceive(url);
-            }
+            // The shell has already raised the window for each of these.
+            for (let url = await take(); url !== undefined; url = await take())
+                externalLinkReceive(url);
         };
         const happyLinksReceived = desktopBridge.happyLinkExternalSubscribe?.(() => {
             void happyLinksTake().catch(() => undefined);
@@ -2334,6 +2395,10 @@ if (mediaPreviewBridge) {
                                 ? {}
                                 : { externalOpen: desktopExternalLinkOpen(desktopBridge) })}
                         />
+                    ) : null}
+                    {/* Last, so an invitation stands over the Cloud's own screen. */}
+                    {cloudInvite ? (
+                        <DesktopCloudInvite appearance={appearance} store={cloudInvite} />
                     ) : null}
                 </DesktopAppearance>
             </RenderErrorBoundary>,

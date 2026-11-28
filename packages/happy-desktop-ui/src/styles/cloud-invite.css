@@ -1,0 +1,80 @@
+/*
+ * CloudInviteScreen — an invitation to a Happy Cloud server, full window on
+ * the onboarding sky. It is the sheet CloudConnectScreen is (cloud-connect.css
+ * draws the window, its rise and its sink); this file draws only what sits
+ * under an invitation's words: who invited, until when, and the line that
+ * says how signing in is going.
+ */
+
+/* Over the screen that adds a server, when an invitation arrives while that
+   one is open: the same layer, later in the window, and its own sky. */
+.happy-cloud-invite__window {
+    z-index: 1001;
+}
+
+/* The server's picture stands in the scene's square, never squeezed by it. */
+.happy-cloud-invite__server {
+    flex: none;
+}
+
+/* Three lines, each kept whether or not it says anything, so signing in and
+   joining change what the page says and never where anything sits. */
+.happy-cloud-invite__facts {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 400px;
+    align-self: center;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
+    line-height: 20px;
+    text-align: center;
+}
+
+.happy-cloud-invite__inviter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    min-height: 20px;
+}
+
+/* A person's name is theirs to choose: it ends in an ellipsis rather than
+   widening the page, and the words after it stay whole. */
+.happy-cloud-invite__inviter-name {
+    display: flex;
+    min-width: 0;
+    gap: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.happy-cloud-invite__inviter-name > :first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy-cloud-invite__inviter-name > :last-child {
+    flex: none;
+}
+
+.happy-cloud-invite__expiry {
+    min-height: 20px;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+}
+
+.happy-cloud-invite__note {
+    min-height: 32px;
+    margin: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-size: 13px;
+    line-height: 16px;
+}
+
+.happy-cloud-invite__note[data-tone="attention"] {
+    color: var(--onboarding-foreground);
+    font-weight: 600;
+}

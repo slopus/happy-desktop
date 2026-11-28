@@ -28,6 +28,8 @@ export * from "./projectsVisibility/projectsVisibilityStore.js";
 export * from "./statusBar/statusBarStore.js";
 export * from "./usageAnalytics/usageAnalyticsStore.js";
 export * from "./happyLinks/happyInstanceLink.js";
+export * from "./happyLinks/happyCloudInviteLink.js";
+export * from "./happyCloudInvite/happyCloudInviteStore.js";
 export * from "./happyLinks/happyShareLink.js";
 export * from "./happyLinks/happyLinkInboxStore.js";
 export * from "./servers/serverSource.js";

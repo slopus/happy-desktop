@@ -5,7 +5,11 @@ import type {
     DesktopReactDevtoolsCommand,
     DesktopReactDevtoolsMessage,
 } from "./desktopProfiler";
-import type { CustomTheme } from "happy-desktop-state";
+import type {
+    CustomTheme,
+    HappyCloudInviteAcceptResult,
+    HappyCloudInvitePreviewResult,
+} from "happy-desktop-state";
 import type { ServerSessionSnapshot } from "./serverRemoteAuthorization";
 
 export type DesktopMode = "local";
@@ -181,6 +185,18 @@ export interface DesktopHappyCloud {
      * like password sign-in's. Absent with `emailCodeStart`.
      */
     emailCodeVerify?(email: string, code: string): Promise<DesktopHappyCloudEmailCodeResult>;
+    /**
+     * What an invitation is to, asked of Happy Cloud by its token with no
+     * account. Absent on a shell from before invitations opened in the app,
+     * where the window says the app needs an update.
+     */
+    invitePreview?(token: string): Promise<HappyCloudInvitePreviewResult>;
+    /**
+     * Accepts an invitation as the signed-in account; the shell then knows the
+     * server as one of the account's, for `serverConnect`. Absent with
+     * `invitePreview`.
+     */
+    inviteAccept?(token: string): Promise<HappyCloudInviteAcceptResult>;
     /**
      * Looks for model provider credentials on this computer, where the
      * vendors' own tools keep them. The shell holds what it found for a few
@@ -1394,6 +1410,8 @@ export const desktopIpc = {
     happyCloudPasswordSignIn: "happy:happy-cloud:password-sign-in",
     happyCloudEmailCodeStart: "happy:happy-cloud:email-code-start",
     happyCloudEmailCodeVerify: "happy:happy-cloud:email-code-verify",
+    happyCloudInvitePreview: "happy:happy-cloud:invite-preview",
+    happyCloudInviteAccept: "happy:happy-cloud:invite-accept",
     happyCloudCredentialScan: "happy:happy-cloud:credential-scan",
     happyCloudCredentialImport: "happy:happy-cloud:credential-import",
     happyCloudComputeJoin: "happy:happy-cloud:compute-join",

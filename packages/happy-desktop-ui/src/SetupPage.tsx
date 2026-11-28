@@ -129,6 +129,12 @@ export interface SetupPageProps {
      */
     readonly scene?: LottieSceneName;
     /**
+     * A picture of the page's own in the scene's square, in place of an
+     * animation: whose page this is, such as the server an invitation is to.
+     * It takes the same reserved square, so the title does not move for it.
+     */
+    readonly art?: ReactNode;
+    /**
      * A press anywhere on the scene's square. It is not announced: it is for
      * flows that hide something behind the picture.
      */
@@ -226,6 +232,7 @@ export function SetupPage(props: SetupPageProps) {
         "decoration",
         "transitionKey",
         "scene",
+        "art",
         "onScenePress",
         "title",
         "copy",
@@ -323,7 +330,9 @@ export function SetupPage(props: SetupPageProps) {
                                 data-happy-desktop-ui="setup-page-stage"
                                 onClick={local.onScenePress}
                             >
-                                {local.scene ? (
+                                {local.art !== undefined ? (
+                                    local.art
+                                ) : local.scene ? (
                                     <LottieScene
                                         name={local.scene}
                                         // The picture repeats what the title already says, so

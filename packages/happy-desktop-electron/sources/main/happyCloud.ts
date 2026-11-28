@@ -15,6 +15,12 @@ import type {
     DesktopServerSignInResult,
 } from "../shared/desktopContract";
 import { completeOAuthSignIn, type OAuthCredential } from "@slopus/happy-agent-client";
+import type {
+    HappyCloudInviteAcceptResult,
+    HappyCloudInviteClosedCode,
+    HappyCloudInvitePreview,
+    HappyCloudInvitePreviewResult,
+} from "happy-desktop-state";
 import type { ServerSessions, ServerSessionsDeps } from "./serverSessions";
 import type { HappyCloudVault } from "./happyCloudVault";
 
@@ -52,6 +58,17 @@ export interface HappyCloud {
      * is held like one from password sign-in.
      */
     emailCodeVerify(email: string, code: string): Promise<DesktopHappyCloudEmailCodeResult>;
+    /**
+     * What an invitation is to, by its token. Asked with no account session
+     * and no cookies: anyone holding the link may read it.
+     */
+    invitePreview(token: string): Promise<HappyCloudInvitePreviewResult>;
+    /**
+     * Accepts an invitation as the signed-in account. The server it answers
+     * with is one of the account's from then on, so `serverConnect` takes it.
+     * The token goes to the account API in the request's body and nowhere else.
+     */
+    inviteAccept(token: string): Promise<HappyCloudInviteAcceptResult>;
 }
 
 type Failure = { readonly ok: false; readonly message: string; readonly code: string };
@@ -470,6 +487,61 @@ export function happyCloudCreate(input: {
                     return signedIn.ok ? { ok: true } : signedIn;
                 },
             ),
+        async invitePreview(token) {
+            let response: Response;
+            try {
+                response = await input.fetch(new URL("v1/invites/preview", HAPPY_CLOUD_API_URL), {
+                    method: "POST",
+                    headers: { accept: "application/json", "content-type": "application/json" },
+                    body: JSON.stringify({ token }),
+                    credentials: "omit",
+                    redirect: "error",
+                });
+            } catch {
+                return { kind: "failed", message: UNREACHABLE.message };
+            }
+            const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+            if (response.status === 410) return inviteClosedRead(json);
+            const invite = response.status === 200 ? invitePreviewRead(json) : undefined;
+            if (invite) return { kind: "invite", invite };
+            return {
+                kind: "failed",
+                message:
+                    response.status >= 500
+                        ? UNREACHABLE.message
+                        : "Happy Cloud couldn't read this invitation.",
+            };
+        },
+        async inviteAccept(token) {
+            const answer = await accountsCall(
+                "POST",
+                "v1/invites/accept",
+                { token },
+                (status, json): HappyCloudInviteAcceptResult => {
+                    if (status === 410) return inviteClosedRead(json);
+                    if (
+                        status === 403 &&
+                        json.code === "email_mismatch" &&
+                        typeof json.emailHint === "string"
+                    )
+                        return { kind: "emailMismatch", emailHint: json.emailHint };
+                    const server = status === 200 ? serverSeen(json.server, seen) : undefined;
+                    if (server)
+                        return { kind: "joined", server: { id: server.id, name: server.name } };
+                    return {
+                        kind: "failed",
+                        message:
+                            status >= 500
+                                ? UNREACHABLE.message
+                                : "Happy Cloud couldn't accept this invitation.",
+                    };
+                },
+            );
+            if (!("ok" in answer)) return answer;
+            return answer.code === SIGN_IN_REQUIRED.code
+                ? { kind: "signInRequired" }
+                : { kind: "failed", message: answer.message };
+        },
         async serverConnect(serverId) {
             const server = known.get(serverId);
             if (!server)
@@ -505,6 +577,84 @@ export function happyCloudCreate(input: {
             }
             return { ok: true, value: connectionId };
         },
+    };
+}
+
+const INVITE_CLOSED_CODES: readonly HappyCloudInviteClosedCode[] = [
+    "invalid",
+    "expired",
+    "revoked",
+    "exhausted",
+    "accepted",
+];
+/** The longest picture an invitation may carry inline, as a `data:` URL. */
+const INVITE_IMAGE_LENGTH_MAX = 2 * 1024 * 1024;
+
+/** Why Happy Cloud will not take an invitation; a reason it does not name reads as invalid. */
+function inviteClosedRead(json: Record<string, unknown>): {
+    readonly kind: "closed";
+    readonly code: HappyCloudInviteClosedCode;
+    readonly detail: string;
+} {
+    return {
+        kind: "closed",
+        code: INVITE_CLOSED_CODES.find((code) => code === json.code) ?? "invalid",
+        detail:
+            typeof json.error === "string" && json.error !== ""
+                ? json.error
+                : "This invitation can't be used.",
+    };
+}
+
+/**
+ * An invitation as the account API describes it, or nothing for an answer
+ * that is not one. A picture is taken only as inline image data: this answer
+ * needs no account, so nothing in it is ever fetched.
+ */
+function invitePreviewRead(json: Record<string, unknown>): HappyCloudInvitePreview | undefined {
+    const text = (value: unknown): string | undefined =>
+        typeof value === "string" && value.trim() !== "" ? value : undefined;
+    const image = (value: unknown): string | undefined =>
+        typeof value === "string" &&
+        value.length <= INVITE_IMAGE_LENGTH_MAX &&
+        /^data:image\/(?:png|jpeg|webp|gif);base64,/u.test(value)
+            ? value
+            : undefined;
+    const record = (value: unknown): Record<string, unknown> | undefined =>
+        typeof value === "object" && value !== null
+            ? (value as Record<string, unknown>)
+            : undefined;
+    const server = record(json.server);
+    const roleName = text(json.roleName);
+    if (
+        typeof server?.name !== "string" ||
+        !happyCloudServerNameValid(server.name) ||
+        roleName === undefined ||
+        typeof json.expiresAt !== "string" ||
+        Number.isNaN(Date.parse(json.expiresAt))
+    )
+        return undefined;
+    const displayName = text(server.displayName);
+    const serverImage = image(server.image);
+    const inviter = record(json.inviter);
+    const inviterName = text(inviter?.name);
+    const inviterImage = image(inviter?.image);
+    return {
+        server: {
+            name: server.name,
+            ...(displayName === undefined ? {} : { displayName }),
+            ...(serverImage === undefined ? {} : { image: serverImage }),
+        },
+        ...(inviter
+            ? {
+                  inviter: {
+                      ...(inviterName === undefined ? {} : { name: inviterName }),
+                      ...(inviterImage === undefined ? {} : { image: inviterImage }),
+                  },
+              }
+            : {}),
+        roleName,
+        expiresAt: json.expiresAt,
     };
 }
 

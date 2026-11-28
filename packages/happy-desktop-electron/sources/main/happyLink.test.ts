@@ -12,6 +12,28 @@ it("takes only happy:// from the system, and leaves reading it to the window", (
     expect(happyLinkUrl("happy-file://agents/a1/Foo.tsx")).toBe("happy-file://agents/a1/Foo.tsx");
 });
 
+it("hands a Happy Cloud invite link to the window whole, fragment and all", () => {
+    // The token is only ever in the fragment, and reading it is the window's.
+    const invite = "happy://cloud/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6GoV5iNy_-Xt";
+    expect(happyExternalLinkUrl(invite)).toBe(invite);
+    // A misshapen one still arrives, so the window can say it is invalid.
+    expect(happyExternalLinkUrl("happy://cloud/join#short")).toBe("happy://cloud/join#short");
+    expect(happyExternalLinkUrl("happy://cloud/join?token=x")).toBe("happy://cloud/join?token=x");
+    // An over-long one is dropped before it reaches anything.
+    expect(happyExternalLinkUrl(`happy://cloud/join#${"a".repeat(4096)}`)).toBeUndefined();
+    // The web form is not delivered by the system: this app claims no link on that host.
+    expect(
+        happyExternalLinkUrl(
+            "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6GoV5iNy_-Xt",
+        ),
+    ).toBeUndefined();
+    expect(
+        happyUniversalLinkUrl("NSUserActivityTypeBrowsingWeb", {
+            webpageURL: "https://happybases.com/join#q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6GoV5iNy_-Xt",
+        }),
+    ).toBeUndefined();
+});
+
 it("takes a link.happy.page Universal Link, and leaves reading its fragment to the window", () => {
     const web = "NSUserActivityTypeBrowsingWeb";
     const share =

@@ -9,6 +9,7 @@ import {
     HAPPY_CLOUD_IDENTITY_URL,
 } from "../shared/happyCloud";
 import { happyCloudCreate } from "./happyCloud";
+import { fakeHappyCloudAccountCreate } from "../testing/fakeHappyCloudAccount";
 import type { ServerSessions } from "./serverSessions";
 
 /*
@@ -314,4 +315,230 @@ it("says Happy Cloud is unreachable when the request fails", async () => {
         code: "remote_unavailable",
         message: "Happy Cloud isn't reachable right now.",
     });
+});
+
+/*
+ * Invitations. A preview is asked with no session and no cookies; an accept
+ * is asked as the account. The token goes in each request's body and nowhere
+ * else, and Happy Cloud's refusals come back as what they mean.
+ */
+
+const INVITE = "q3T9vYk2mLx8RfA0pWn4cZs7HbE1uJd6GoV5iNy_-Xt";
+const PICTURE = "data:image/png;base64,iVBORw0KGgo=";
+
+/** The shell against the fake account API, signed in as `email` unless told otherwise. */
+function inviteCloudCreate(email: string | null = "steve@acme.com") {
+    const account = fakeHappyCloudAccountCreate();
+    account.serverAdd({ id: "s1", name: "acme", displayName: "Acme Corp", image: PICTURE });
+    let accessToken = email === null ? undefined : account.sessionOpen(email);
+    const directSignIn = vi.fn();
+    const signInRequire = vi.fn(() => {
+        accessToken = undefined;
+    });
+    const cloud = happyCloudCreate({
+        listPath: join(mkdtempSync(join(tmpdir(), "happy-cloud-")), "servers.json"),
+        fetch: account.fetch,
+        sessions: () =>
+            ({
+                directSignIn,
+                directChanged: () => undefined,
+                signInRequire,
+                credential: () => (accessToken === undefined ? undefined : { accessToken }),
+            }) as unknown as ServerSessions,
+    });
+    return { account, cloud, directSignIn, signInRequire, accessToken: () => accessToken };
+}
+
+it("previews an invitation with no session and no cookies", async () => {
+    const { account, cloud } = inviteCloudCreate();
+    account.inviteAdd({
+        token: INVITE,
+        serverId: "s1",
+        roleName: "Member",
+        inviter: { name: "Steve", image: PICTURE },
+        expiresAt: "2099-12-05T18:00:00.000Z",
+    });
+    expect(await cloud.invitePreview(INVITE)).toEqual({
+        kind: "invite",
+        invite: {
+            server: { name: "acme", displayName: "Acme Corp", image: PICTURE },
+            inviter: { name: "Steve", image: PICTURE },
+            roleName: "Member",
+            expiresAt: "2099-12-05T18:00:00.000Z",
+        },
+    });
+    expect(account.requests).toEqual([
+        {
+            method: "POST",
+            url: "https://api.happy-clusters.com/v1/invites/preview",
+            path: "/v1/invites/preview",
+            credentials: "omit",
+            body: JSON.stringify({ token: INVITE }),
+        },
+    ]);
+});
+
+it("reads an invitation with no inviter, no display name and no picture", async () => {
+    const { account, cloud } = inviteCloudCreate(null);
+    account.serverAdd({ id: "s2", name: "guild" });
+    account.inviteAdd({ token: INVITE, serverId: "s2", roleName: "Admin" });
+    expect(await cloud.invitePreview(INVITE)).toEqual({
+        kind: "invite",
+        invite: {
+            server: { name: "guild" },
+            roleName: "Admin",
+            expiresAt: expect.any(String),
+        },
+    });
+});
+
+it("takes a preview's pictures only as inline image data", async () => {
+    const preview = (server: unknown, inviter: unknown) =>
+        cloudCreate(
+            () => new Response("", { status: 404 }),
+            () =>
+                Response.json({
+                    server,
+                    inviter,
+                    roleName: "Member",
+                    expiresAt: "2099-12-05T18:00:00Z",
+                }),
+        ).cloud.invitePreview(INVITE);
+    // An address to fetch, a script, or a page is never a picture.
+    expect(
+        await preview(
+            { name: "acme", displayName: null, image: "https://example.com/tracker.png" },
+            { name: null, image: "data:text/html;base64,PGI+" },
+        ),
+    ).toEqual({
+        kind: "invite",
+        invite: {
+            server: { name: "acme" },
+            inviter: {},
+            roleName: "Member",
+            expiresAt: "2099-12-05T18:00:00Z",
+        },
+    });
+    // An answer that names no server this app could hold is not an invitation.
+    for (const server of [null, { name: "Not A Name" }, { name: 7 }])
+        expect(await preview(server, null)).toEqual({
+            kind: "failed",
+            message: "Happy Cloud couldn't read this invitation.",
+        });
+});
+
+it("says why Happy Cloud will not take an invitation", async () => {
+    const { account, cloud } = inviteCloudCreate();
+    expect(await cloud.invitePreview(INVITE)).toEqual({
+        kind: "closed",
+        code: "invalid",
+        detail: "This invitation link isn't valid.",
+    });
+    account.inviteAdd({ token: INVITE, serverId: "s1", roleName: "Member" });
+    account.inviteRevoke(INVITE);
+    const revoked = { kind: "closed", code: "revoked", detail: "This invitation was revoked." };
+    expect(await cloud.invitePreview(INVITE)).toEqual(revoked);
+    expect(await cloud.inviteAccept(INVITE)).toEqual(revoked);
+    account.inviteAdd({
+        token: INVITE,
+        serverId: "s1",
+        roleName: "Member",
+        expiresAt: "2020-01-01T00:00:00Z",
+    });
+    expect(await cloud.invitePreview(INVITE)).toMatchObject({ kind: "closed", code: "expired" });
+    // A reason this app does not know reads as invalid, with the sentence given.
+    const unknown = cloudCreate(
+        () => new Response("", { status: 404 }),
+        () => Response.json({ code: "paused", error: "Invitations are paused." }, { status: 410 }),
+    );
+    expect(await unknown.cloud.invitePreview(INVITE)).toEqual({
+        kind: "closed",
+        code: "invalid",
+        detail: "Invitations are paused.",
+    });
+});
+
+it("accepts an invitation as the account, after which the server is one of its own", async () => {
+    const { account, cloud, directSignIn, accessToken } = inviteCloudCreate();
+    account.inviteAdd({ token: INVITE, serverId: "s1", roleName: "Member" });
+    // Not one of the account's until the invitation is accepted.
+    expect(await cloud.serverConnect("s1")).toMatchObject({ ok: false, code: "not_found" });
+    expect(await cloud.inviteAccept(INVITE)).toEqual({
+        kind: "joined",
+        server: { id: "s1", name: "acme" },
+    });
+    expect(account.requests.at(-1)).toEqual({
+        method: "POST",
+        url: "https://api.happy-clusters.com/v1/invites/accept",
+        path: "/v1/invites/accept",
+        authorization: `Bearer ${String(accessToken())}`,
+        body: JSON.stringify({ token: INVITE }),
+    });
+    expect(await cloud.serverConnect("s1")).toEqual({ ok: true, value: "cloud-acme" });
+    expect(directSignIn).toHaveBeenCalledWith(
+        "cloud-acme",
+        expect.objectContaining({ accessToken: "server-access-s1" }),
+    );
+    // Accepting again while the link still stands changes nothing and is not refused.
+    expect(await cloud.inviteAccept(INVITE)).toMatchObject({ kind: "joined" });
+    // The token was in two bodies and in no address.
+    for (const request of account.requests) expect(request.url).not.toContain(INVITE);
+});
+
+it("says which address an email invitation was sent to", async () => {
+    const { account, cloud } = inviteCloudCreate("other@example.com");
+    account.inviteAdd({
+        token: INVITE,
+        serverId: "s1",
+        roleName: "Member",
+        email: "steve@acme.com",
+    });
+    expect(await cloud.inviteAccept(INVITE)).toEqual({
+        kind: "emailMismatch",
+        emailHint: "s•••@acme.com",
+    });
+    // The invitation still stands for the address it was sent to, once.
+    const invited = inviteCloudCreate("steve@acme.com");
+    invited.account.inviteAdd({
+        token: INVITE,
+        serverId: "s1",
+        roleName: "Member",
+        email: "steve@acme.com",
+    });
+    expect(await invited.cloud.inviteAccept(INVITE)).toMatchObject({ kind: "joined" });
+    expect(await invited.cloud.inviteAccept(INVITE)).toMatchObject({
+        kind: "closed",
+        code: "accepted",
+    });
+});
+
+it("asks for a sign-in when the account has no session, or one Happy Cloud refuses", async () => {
+    const signedOut = inviteCloudCreate(null);
+    signedOut.account.inviteAdd({ token: INVITE, serverId: "s1", roleName: "Member" });
+    expect(await signedOut.cloud.inviteAccept(INVITE)).toEqual({ kind: "signInRequired" });
+    // Nothing was sent: there was no one to send it as.
+    expect(signedOut.account.requests).toEqual([]);
+
+    const ended = inviteCloudCreate();
+    ended.account.inviteAdd({ token: INVITE, serverId: "s1", roleName: "Member" });
+    const held = String(ended.accessToken());
+    ended.account.sessionEnd(held);
+    expect(await ended.cloud.inviteAccept(INVITE)).toEqual({ kind: "signInRequired" });
+    expect(ended.signInRequire).toHaveBeenCalledWith(HAPPY_CLOUD_ACCOUNT_ID, held);
+});
+
+it("fails an invitation's preview and accept when Happy Cloud cannot be reached", async () => {
+    const { account, cloud } = inviteCloudCreate();
+    account.inviteAdd({ token: INVITE, serverId: "s1", roleName: "Member" });
+    const unreachable = { kind: "failed", message: "Happy Cloud isn't reachable right now." };
+    account.offline = true;
+    expect(await cloud.invitePreview(INVITE)).toEqual(unreachable);
+    expect(await cloud.inviteAccept(INVITE)).toEqual(unreachable);
+    account.offline = false;
+    account.failing = true;
+    expect(await cloud.invitePreview(INVITE)).toEqual(unreachable);
+    expect(await cloud.inviteAccept(INVITE)).toEqual(unreachable);
+    account.failing = false;
+    // Neither failure spent or closed anything.
+    expect(await cloud.inviteAccept(INVITE)).toMatchObject({ kind: "joined" });
 });
