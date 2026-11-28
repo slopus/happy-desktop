@@ -417,6 +417,7 @@ const shots: readonly Shot[] = [
         id: "b02-servers-one",
         label: "B · Your servers, one to join",
         round2: true,
+        small: true,
         render: (mode) => <Sheet mode={mode} view={servers([GUILD])} />,
     },
     {
@@ -442,6 +443,35 @@ const shots: readonly Shot[] = [
         round2: true,
         render: (mode) => (
             <Sheet mode={mode} view={servers([ACME, GUILD], { account: ACCOUNT_NAMED })} />
+        ),
+    },
+    {
+        id: "g01-servers-none-no-account",
+        label: "G · none, account unknown: Use another account closes the column",
+        round2: true,
+        small: true,
+        render: (mode) => <Sheet mode={mode} view={servers([], { account: undefined })} />,
+    },
+    {
+        id: "g02-servers-one-no-account",
+        label: "G · one, account unknown",
+        round2: true,
+        small: true,
+        render: (mode) => <Sheet mode={mode} view={servers([GUILD], { account: undefined })} />,
+    },
+    {
+        id: "g03-servers-six-no-account",
+        label: "G · six, account unknown: the list scrolls, the column stays centred",
+        round2: true,
+        small: true,
+        render: (mode) => (
+            <Sheet
+                mode={mode}
+                view={servers(SIX, {
+                    account: undefined,
+                    joins: new Map([[GUILD.id, "joined"]]),
+                })}
+            />
         ),
     },
     {
