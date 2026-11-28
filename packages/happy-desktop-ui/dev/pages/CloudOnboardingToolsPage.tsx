@@ -412,11 +412,13 @@ const JOBS: readonly {
 
 /** The owner's steps as the round 4 flow has them. */
 const STEPS = [
+    { id: "server", label: "Server" },
     { id: "profile", label: "Profile" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Tools" },
     { id: "compute", label: "Computer" },
     { id: "teammates", label: "Team" },
+    { id: "mobileApp", label: "Phone" },
 ] as const;
 
 const BAR: readonly CloudOnboardingStep[] = STEPS.map((step, index) => ({

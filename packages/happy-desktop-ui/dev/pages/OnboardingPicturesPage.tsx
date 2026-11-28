@@ -126,8 +126,6 @@ function Gate(props: {
     readonly mode: ThemeMode;
     readonly flow: typeof OWNER;
     readonly props: Omit<CloudOnboardingScreenProps, "appearance" | "steps">;
-    /** Created in this window a moment ago: the bar leads with that step, done. */
-    readonly created?: boolean;
 }) {
     const steps = bar(props.flow, props.props.currentStep);
     return (
@@ -142,7 +140,12 @@ function Gate(props: {
                 <SetupCover>
                     <CloudOnboardingScreen
                         appearance={props.mode}
-                        steps={props.created ? [{ ...SERVER_STEP, done: true }, ...steps] : steps}
+                        // An admin's bar always leads with the step that created the server.
+                        steps={
+                            props.flow === OWNER
+                                ? [{ ...SERVER_STEP, done: true }, ...steps]
+                                : steps
+                        }
                         {...props.props}
                         // Every step has Back; the first one's goes to Your servers.
                         back={{ onSelect: noop }}
@@ -451,22 +454,20 @@ const shots: readonly Shot[] = [
         id: "c01-profile-no-name",
         label: "C · Profile, nothing typed: the person's placeholder picture alone",
         round2: true,
-        render: (mode) => <Gate created flow={OWNER} mode={mode} props={profile("")} />,
+        render: (mode) => <Gate flow={OWNER} mode={mode} props={profile("")} />,
     },
     {
         id: "c02-profile-initials",
         label: "C · Profile, a name typed: its initials over the picture",
         round2: true,
-        render: (mode) => (
-            <Gate created flow={OWNER} mode={mode} props={profile("Steve Korshakov")} />
-        ),
+        render: (mode) => <Gate flow={OWNER} mode={mode} props={profile("Steve Korshakov")} />,
     },
     {
         id: "d01-first-step-back",
         label: "D · the first step after Bootstrap: Back, to Your servers",
         round2: true,
         render: (mode) => (
-            <Gate created flow={OWNER} mode={mode} props={profile("Steve Korshakov", photoUrl)} />
+            <Gate flow={OWNER} mode={mode} props={profile("Steve Korshakov", photoUrl)} />
         ),
     },
     {
@@ -519,9 +520,7 @@ const shots: readonly Shot[] = [
         id: "o03c-profile-after-bootstrap",
         label: "Profile · just after Bootstrap, the Server step done",
         light: true,
-        render: (mode) => (
-            <Gate created flow={OWNER} mode={mode} props={profile("Steve Korshakov")} />
-        ),
+        render: (mode) => <Gate flow={OWNER} mode={mode} props={profile("Steve Korshakov")} />,
     },
     {
         id: "o03a-profile-photo",
@@ -539,7 +538,7 @@ const shots: readonly Shot[] = [
         id: "o20-phone-after-bootstrap",
         label: "Phone · the owner's last step, seven segments with Server",
         light: true,
-        render: (mode) => <Gate created flow={OWNER} mode={mode} props={phone} />,
+        render: (mode) => <Gate flow={OWNER} mode={mode} props={phone} />,
     },
     {
         id: "m13-next-phone",

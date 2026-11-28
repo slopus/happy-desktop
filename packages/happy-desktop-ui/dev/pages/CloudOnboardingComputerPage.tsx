@@ -155,16 +155,20 @@ function Window(props: { readonly chrome?: Chrome; readonly children: ReactNode 
     );
 }
 
+/** An admin's bar leads with the step that created the server. */
 const OWNER_STEPS = [
+    { id: "server", label: "Server" },
     { id: "profile", label: "Profile" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Tools" },
     { id: "computer", label: "Computer" },
     { id: "teammates", label: "Team" },
+    { id: "mobileApp", label: "Phone" },
 ] as const;
 const MEMBER_STEPS = [
     { id: "profile", label: "Profile" },
     { id: "computer", label: "Computer" },
+    { id: "mobileApp", label: "Phone" },
 ] as const;
 
 function bar(reader: CloudOnboardingComputerReader): readonly CloudOnboardingStep[] {

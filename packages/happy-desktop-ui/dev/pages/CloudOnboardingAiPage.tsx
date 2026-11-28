@@ -25,11 +25,13 @@ const WINDOWS = [
 type Window = (typeof WINDOWS)[number];
 
 const STEPS = [
+    { id: "server", label: "Server", done: true },
     { id: "profile", label: "Profile", done: true },
     { id: "inference", label: "AI", done: false },
     { id: "plugins", label: "Tools", done: false },
     { id: "compute", label: "Computer", done: false },
     { id: "teammates", label: "Team", done: false },
+    { id: "mobileApp", label: "Phone", done: false },
 ];
 
 const connections: readonly ConnectionShellItem[] = [
