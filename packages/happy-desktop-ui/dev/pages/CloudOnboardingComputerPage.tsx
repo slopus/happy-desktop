@@ -241,7 +241,11 @@ function Step(props: { readonly mode: ThemeMode; readonly state: State }) {
                             state.command === "minting"
                                 ? { kind: "minting" }
                                 : state.command === "failed"
-                                  ? { kind: "failed", error: "You can't add computers on Acme." }
+                                  ? {
+                                        kind: "failed",
+                                        // Two lines: they fit the command box, so the card keeps its drawn top and height.
+                                        error: "You can't add computers on Acme. Ask an owner to add one for you or to give you access.",
+                                    }
                                   : { kind: "ready", text: COMMAND }
                         }
                         onClose={noop}
