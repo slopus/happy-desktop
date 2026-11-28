@@ -8,6 +8,7 @@ import {
 } from "../onboarding/happyMobileOnboardingStore.js";
 import {
     happyAgentOnboardingComputerCreate,
+    type HappyAgentOnboardingComputerJoinHost,
     type HappyAgentOnboardingComputerStore,
 } from "./happyAgentOnboardingComputer.js";
 import {
@@ -335,6 +336,8 @@ export function happyAgentOnboardingStoreCreate(
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
         /** Happy Cloud's own routes, which skip gates and make invites. */
         readonly cloudRequest?: HappyCloudRequest;
+        /** The desktop shell's own installer run for "Connect this Mac", on macOS and Linux. */
+        readonly computerJoin?: HappyAgentOnboardingComputerJoinHost;
         /** The server's plugins, which the plugins gate installs. */
         readonly plugins?: () => HappyAgentPluginsStore | undefined;
         /** The reader left this server's setup to finish later, on an earlier run. */
@@ -371,7 +374,10 @@ export function happyAgentOnboardingStoreCreate(
         onOutput: options.onMobileSkip,
         ...(options.mobileConnector ? { mobileConnector: options.mobileConnector } : {}),
     });
-    const computer = happyAgentOnboardingComputerCreate({ request: options.cloudRequest });
+    const computer = happyAgentOnboardingComputerCreate({
+        request: options.cloudRequest,
+        join: options.computerJoin,
+    });
     /** The gate on screen, held until the reader leaves it. */
     let pinned: string | undefined;
     /** Gates the reader left in this flow; the server may still show a blocking one again. */

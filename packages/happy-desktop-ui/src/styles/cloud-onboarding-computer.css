@@ -374,6 +374,28 @@
     line-height: 15px;
 }
 
+/* What the installer said when it stopped reads in full, up to five lines:
+   the failed row grows down for it, and the list scrolls. */
+.happy-computer-step__computer[data-state="failed"]:has(.happy-computer-step__computer-note) {
+    height: auto;
+    min-height: var(--cs-row);
+    padding-block: 6px;
+}
+
+.happy-computer-step__computer[data-state="failed"]:has(.happy-computer-step__computer-note)
+    .happy-computer-step__computer-state {
+    width: auto;
+}
+
+.happy-computer-step__computer[data-state="failed"] .happy-computer-step__computer-note {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 /* The state's one box at the row's end: a small spinner while a machine
    joins, the check online, a failure's mark, or a quiet word. */
 .happy-computer-step__computer-state {

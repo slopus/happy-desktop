@@ -246,6 +246,13 @@ const THIS_COMPUTER: Readonly<Record<CloudOnboardingComputerOs, string>> = {
     windows: "this PC",
 };
 
+/** This machine's row while the shell sets it up. */
+const THIS_COMPUTER_ROW: Readonly<Record<CloudOnboardingComputerOs, string>> = {
+    mac: "This Mac",
+    linux: "This machine",
+    windows: "This PC",
+};
+
 /** Where to paste the copied command on this machine. */
 const PASTE_INTO: Readonly<Record<CloudOnboardingComputerOs, string>> = {
     mac: "Terminal",
@@ -273,9 +280,10 @@ function computerRow(entry: ComputerGate["computers"][number]): CloudOnboardingC
 
 /**
  * The list and the first button, from the gate and "Connect this Mac". The
- * app cannot run the command here, so the press copies it; the first computer
- * of the reader's that shows up after it is this one, and takes the row this
- * machine held, at the end of the list.
+ * desktop shell runs the installer itself where it can, and the row says how
+ * far it got; elsewhere the press copies the command. Either way the first
+ * computer of the reader's that shows up after it is this one, and takes the
+ * row this machine held, at the end of the list.
  */
 function computerStep(
     gate: ComputerGate,
@@ -310,6 +318,21 @@ function computerStep(
                     },
                 ],
             };
+        case "downloading":
+        case "installing":
+            return {
+                connect: { kind: "working" },
+                computers: [
+                    ...rows,
+                    {
+                        id: "this",
+                        name: THIS_COMPUTER_ROW[os],
+                        os,
+                        state: { kind: "joining" },
+                        note: mine.step === "downloading" ? "Downloading" : "Installing",
+                    },
+                ],
+            };
         case "joined": {
             if (!joined) return { connect: { kind: "working" }, computers: rows };
             const row = computerRow(joined);
@@ -323,7 +346,7 @@ function computerStep(
         }
         case "failed":
             return {
-                connect: { kind: "failed" },
+                connect: { kind: "failed", ...(mine.copyNext ? { copyNext: true } : {}) },
                 computers: [
                     ...rows,
                     {
@@ -331,6 +354,7 @@ function computerStep(
                         name: here,
                         os,
                         state: { kind: "failed", reason: mine.error },
+                        ...(mine.detail ? { note: mine.detail } : {}),
                     },
                 ],
             };
