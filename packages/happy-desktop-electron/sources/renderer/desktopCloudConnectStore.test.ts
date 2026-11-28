@@ -8,9 +8,16 @@ import { desktopCloudConnectStoreCreate } from "./desktopCloudConnectStore";
  * kept in the screen's state; a refusal is said inline.
  */
 
+/** An account that is signed out until a sign-in on the welcome succeeds. */
 function cloudCreate(passwordSignIn: DesktopHappyCloud["passwordSignIn"]) {
-    const cloud: DesktopHappyCloud = {
-        serversList: vi.fn(async () => ({ ok: true as const, value: [] })),
+    const account = { signedIn: false };
+    const cloud: DesktopHappyCloud & { readonly account: typeof account } = {
+        account,
+        serversList: vi.fn(async () =>
+            account.signedIn
+                ? { ok: true as const, value: [] }
+                : { ok: false as const, code: "sign_in_required", message: "Sign in." },
+        ),
         availability: vi.fn(),
         serverCreate: vi.fn(),
         serverJoin: vi.fn(),
@@ -18,7 +25,11 @@ function cloudCreate(passwordSignIn: DesktopHappyCloud["passwordSignIn"]) {
         imageRead: vi.fn(async () => undefined),
         serverRemove: vi.fn(),
         accountSignOut: vi.fn(),
-        passwordSignIn: vi.fn(passwordSignIn),
+        passwordSignIn: vi.fn(async (login: string, password: string) => {
+            const answer = await passwordSignIn(login, password);
+            if (answer.ok) account.signedIn = true;
+            return answer;
+        }),
         credentialScan: vi.fn(async () => []),
         credentialImport: vi.fn(async () => ({ ok: true as const, value: [] })),
         serverSignOut: vi.fn(async () => undefined),
@@ -27,7 +38,16 @@ function cloudCreate(passwordSignIn: DesktopHappyCloud["passwordSignIn"]) {
     return cloud;
 }
 
-function storeCreate(cloud: DesktopHappyCloud) {
+/** The sidebar's "+" on a signed-out account lands on the welcome. */
+async function welcomeOpen(store: ReturnType<typeof desktopCloudConnectStoreCreate>) {
+    store.connectOpen();
+    await vi.waitFor(() => expect(store.get()?.kind).toBe("welcome"));
+}
+
+/** The account's servers, none yet: where signing in lands. */
+const NO_SERVERS = { kind: "servers", servers: { status: "ready", servers: [] }, joins: new Map() };
+
+async function storeCreate(cloud: DesktopHappyCloud) {
     let clock = 0;
     const store = desktopCloudConnectStoreCreate({
         cloud,
@@ -36,9 +56,8 @@ function storeCreate(cloud: DesktopHappyCloud) {
         connect: async () => ({ ok: true }),
         now: () => clock,
     });
-    store.connectOpen();
-    // The test sign-in lives on Happy Cloud's welcome, past the choices.
-    store.cloudOpen();
+    // The test sign-in lives on Happy Cloud's welcome.
+    await welcomeOpen(store);
     return {
         store,
         press(times: number, every: number) {
@@ -50,12 +69,14 @@ function storeCreate(cloud: DesktopHappyCloud) {
     };
 }
 
-it("reveals test sign-in only after ten presses within four seconds", () => {
+it("reveals test sign-in only after ten presses within four seconds", async () => {
     // Presses spread wider than the window never add up.
-    const spread = storeCreate(cloudCreate(async () => ({ ok: true, value: undefined })));
+    const spread = await storeCreate(cloudCreate(async () => ({ ok: true, value: undefined })));
     spread.press(30, 450);
     expect(spread.store.get()).toEqual({ kind: "welcome" });
-    const { store, press } = storeCreate(cloudCreate(async () => ({ ok: true, value: undefined })));
+    const { store, press } = await storeCreate(
+        cloudCreate(async () => ({ ok: true, value: undefined })),
+    );
     press(9, 100);
     expect(store.get()).toEqual({ kind: "welcome" });
     press(1, 100);
@@ -64,25 +85,18 @@ it("reveals test sign-in only after ten presses within four seconds", () => {
 
 it("sends the password once, keeps none of it, and lists the servers", async () => {
     const cloud = cloudCreate(async () => ({ ok: true, value: undefined }));
-    const { store, press } = storeCreate(cloud);
+    const { store, press } = await storeCreate(cloud);
     press(10, 10);
     store.testLoginUpdate(" qa-desktop ");
     store.testPasswordUpdate("hunter2");
     store.testSignIn();
     expect(cloud.passwordSignIn).toHaveBeenCalledWith("qa-desktop", "hunter2");
     expect(JSON.stringify(store.get())).not.toContain("hunter2");
-    await vi.waitFor(() =>
-        expect(store.get()).toEqual({
-            kind: "create",
-            name: "",
-            availability: "idle",
-            back: false,
-        }),
-    );
+    await vi.waitFor(() => expect(store.get()).toEqual(NO_SERVERS));
 });
 
 it("says why a test sign-in was refused, with the password cleared", async () => {
-    const { store, press } = storeCreate(
+    const { store, press } = await storeCreate(
         cloudCreate(async () => ({
             ok: false,
             code: "invalid_credentials",
@@ -119,14 +133,19 @@ function emailCloudCreate(
     start: NonNullable<DesktopHappyCloud["emailCodeStart"]>,
     verify: NonNullable<DesktopHappyCloud["emailCodeVerify"]> = async () => ({ ok: true }),
 ) {
+    const cloud = cloudCreate(async () => ({ ok: true, value: undefined }));
     return {
-        ...cloudCreate(async () => ({ ok: true, value: undefined })),
+        ...cloud,
         emailCodeStart: vi.fn(start),
-        emailCodeVerify: vi.fn(verify),
+        emailCodeVerify: vi.fn(async (email: string, code: string) => {
+            const answer = await verify(email, code);
+            if (answer.ok) cloud.account.signedIn = true;
+            return answer;
+        }),
     };
 }
 
-function emailStoreCreate(cloud: DesktopHappyCloud) {
+async function emailStoreCreate(cloud: DesktopHappyCloud) {
     const store = desktopCloudConnectStoreCreate({
         cloud,
         bridge: {},
@@ -134,17 +153,16 @@ function emailStoreCreate(cloud: DesktopHappyCloud) {
         connect: async () => ({ ok: true }),
         now: () => Date.now(),
     });
-    store.connectOpen();
-    store.cloudOpen();
+    await welcomeOpen(store);
     return store;
 }
 
-it("offers email sign-in only where the shell has it", () => {
-    const old = emailStoreCreate(cloudCreate(async () => ({ ok: true, value: undefined })));
+it("offers email sign-in only where the shell has it", async () => {
+    const old = await emailStoreCreate(cloudCreate(async () => ({ ok: true, value: undefined })));
     expect(old.get()).toEqual({ kind: "welcome" });
     old.emailOpen();
     expect(old.get()).toEqual({ kind: "welcome" });
-    const store = emailStoreCreate(emailCloudCreate(async () => ({ ok: true })));
+    const store = await emailStoreCreate(emailCloudCreate(async () => ({ ok: true })));
     expect(store.get()).toEqual({ kind: "welcome", emailSignIn: true });
     store.emailOpen();
     expect(store.get()).toEqual({ kind: "email", email: "" });
@@ -153,7 +171,7 @@ it("offers email sign-in only where the shell has it", () => {
 it("sends a code, signs in with it, and lists the servers", async () => {
     vi.useFakeTimers();
     const cloud = emailCloudCreate(async () => ({ ok: true }));
-    const store = emailStoreCreate(cloud);
+    const store = await emailStoreCreate(cloud);
     store.emailOpen();
     store.emailUpdate(" steve@example.com ");
     store.emailCodeSend();
@@ -170,20 +188,13 @@ it("sends a code, signs in with it, and lists the servers", async () => {
     store.emailCodeUpdate(" 123456 ");
     store.emailCodeVerify();
     expect(cloud.emailCodeVerify).toHaveBeenCalledWith("steve@example.com", "123456");
-    await vi.waitFor(() =>
-        expect(store.get()).toEqual({
-            kind: "create",
-            name: "",
-            availability: "idle",
-            back: false,
-        }),
-    );
+    await vi.waitFor(() => expect(store.get()).toEqual(NO_SERVERS));
 });
 
 it("offers Resend after a minute, and Change email keeps the address", async () => {
     vi.useFakeTimers();
     const cloud = emailCloudCreate(async () => ({ ok: true }));
-    const store = emailStoreCreate(cloud);
+    const store = await emailStoreCreate(cloud);
     store.emailOpen();
     store.emailUpdate("steve@example.com");
     store.emailCodeSend();
@@ -212,7 +223,7 @@ it("says why a code was refused and keeps it to correct", async () => {
             message: "That code is wrong or has expired.",
         }),
     );
-    const store = emailStoreCreate(cloud);
+    const store = await emailStoreCreate(cloud);
     store.emailOpen();
     store.emailUpdate("steve@example.com");
     store.emailCodeSend();
@@ -243,7 +254,7 @@ it("counts down after too many tries and holds Send until it is over", async () 
         message: "Too many tries.",
         retryAfter: 3,
     }));
-    const store = emailStoreCreate(cloud);
+    const store = await emailStoreCreate(cloud);
     store.emailOpen();
     store.emailUpdate("steve@example.com");
     store.emailCodeSend();

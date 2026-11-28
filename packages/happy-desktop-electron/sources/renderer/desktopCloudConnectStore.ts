@@ -15,6 +15,7 @@ import type {
 import type { DesktopHappyCloud, HappyDesktopBridge } from "../shared/desktopContract";
 import {
     HAPPY_CLOUD_ACCOUNT_ID,
+    happyCloudConnectionId,
     happyCloudServerNameValid,
     type HappyCloudServer,
 } from "../shared/happyCloud";
@@ -29,7 +30,10 @@ export interface DesktopCloudConnectStore {
      * pictures.
      */
     readonly picture?: HappyAgentPicturePickStore;
-    /** The sidebar's "+": Happy Cloud's welcome, with a close button. */
+    /**
+     * The sidebar's "+": the account's servers, or Happy Cloud's welcome when
+     * the account is not signed in, with a close button.
+     */
     connectOpen(): void;
     /**
      * The start page's way to Happy Cloud: straight to its welcome, whose Back
@@ -46,6 +50,8 @@ export interface DesktopCloudConnectStore {
     connectConfirm(): void;
     /** Joins one of the account's servers on its row; several can be joined. */
     serverPick(id: string): void;
+    /** A server already in this app, from its row: the screen goes, onto it. */
+    serverOpen(id: string): void;
     /** Into the app, once at least one server is joined. */
     serversContinue(): void;
     createOpen(): void;
@@ -126,6 +132,10 @@ export function desktopCloudConnectStoreCreate(input: {
      * conversation; nothing is sent. Rejects with a displayable `UserError`.
      */
     readonly chiefOfStaffAsk: (request: HappyAgentChiefOfStaffRequest) => Promise<void>;
+    /** Whether a server, by its connection ID, is already in this app. */
+    readonly inApp?: (connectionId: string) => boolean;
+    /** Shows a server already in this app, by its connection ID. */
+    readonly open?: (connectionId: string) => void;
     readonly now?: () => number;
 }): DesktopCloudConnectStore {
     const now = input.now ?? Date.now;
@@ -184,6 +194,7 @@ export function desktopCloudConnectStoreCreate(input: {
             id: server.id,
             displayName: server.displayName,
             name: server.name,
+            ...(input.inApp?.(happyCloudConnectionId(server.name)) ? { inApp: true as const } : {}),
             ...(server.image
                 ? {
                       image: {
@@ -198,6 +209,7 @@ export function desktopCloudConnectStoreCreate(input: {
         kind: "servers",
         servers: { status: "ready", servers: servers.map(serverView) },
         joins,
+        ...(fromStart ? { start: true as const } : {}),
         ...(error === undefined ? {} : { error }),
     });
     const imagesRead = (asked: number): void => {
@@ -214,11 +226,8 @@ export function desktopCloudConnectStoreCreate(input: {
             });
         }
     };
-    /** Where create goes back to, and where a first look lands. */
-    const home = (): CloudConnectView =>
-        servers.length > 0
-            ? serversView()
-            : { kind: "create", name: "", availability: "idle", back: false };
+    /** Where create goes back to, and where a first look lands: the account's servers. */
+    const home = (): CloudConnectView => serversView();
 
     const list = async (asked: number): Promise<"signInRequired" | "done"> => {
         const answer = await cloud.serversList();
@@ -230,6 +239,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 kind: "servers",
                 servers: { status: "error", message: answer.message },
                 joins,
+                ...(fromStart ? { start: true as const } : {}),
             });
             return "done";
         }
@@ -328,11 +338,10 @@ export function desktopCloudConnectStoreCreate(input: {
     };
 
     const serversRefresh = (): void => {
-        // The servers, listed or failed, or a first server with none
-        // behind it: the screens a newly joined server belongs on.
+        // The servers, listed or failed: the screen a newly joined server
+        // belongs on. A name being typed is left alone; Back shows it.
         const listed = view?.kind === "servers" && view.servers.status !== "loading";
-        const first = view?.kind === "create" && !view.back && !view.busy;
-        if (refreshing || (!listed && !first)) return;
+        if (refreshing || !listed) return;
         refreshing = true;
         const asked = generation;
         void cloud
@@ -343,12 +352,6 @@ export function desktopCloudConnectStoreCreate(input: {
                 if (view?.kind === "servers") {
                     servers = answer.value;
                     set(serversView(view.error));
-                    imagesRead(asked);
-                } else if (view?.kind === "create" && answer.value.length > 0) {
-                    // A name being typed for a first server gives way to
-                    // the server the account now has.
-                    servers = answer.value;
-                    set(serversView());
                     imagesRead(asked);
                 }
             })
@@ -449,6 +452,28 @@ export function desktopCloudConnectStoreCreate(input: {
             });
     };
 
+    /**
+     * Opens on the account's servers. Signed out, the welcome comes first:
+     * signing in is the person's step there, not this one's.
+     */
+    const serversOpen = (): void => {
+        fromStart = false;
+        generation += 1;
+        const asked = generation;
+        logoPresses = [];
+        images.clear();
+        servers = [];
+        joins = new Map();
+        set({ kind: "servers", servers: { status: "loading" }, joins });
+        void (async () => {
+            await signedOut;
+            if ((await list(asked)) === "signInRequired" && current(asked)) set(welcome());
+        })().catch(() => {
+            if (current(asked))
+                set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
+        });
+    };
+
     return {
         ...(picture ? { picture } : {}),
         get: () => view,
@@ -457,14 +482,7 @@ export function desktopCloudConnectStoreCreate(input: {
             return () => listeners.delete(listener);
         },
         connectOpen() {
-            if (view !== undefined) return;
-            fromStart = false;
-            generation += 1;
-            logoPresses = [];
-            images.clear();
-            servers = [];
-            joins = new Map();
-            set(welcome());
+            if (view === undefined) serversOpen();
         },
         welcomeConnectOpen() {
             if (view !== undefined) return;
@@ -545,6 +563,14 @@ export function desktopCloudConnectStoreCreate(input: {
                         set(answer.ok ? { ...view, joins } : serversView(answer.message));
                 });
         },
+        serverOpen(id) {
+            const server = servers.find((entry) => entry.id === id);
+            if (!server || view?.kind !== "servers" || !input.open) return;
+            if (!input.inApp?.(happyCloudConnectionId(server.name))) return;
+            generation += 1;
+            input.open(happyCloudConnectionId(server.name));
+            set(undefined);
+        },
         serversContinue() {
             if (view?.kind !== "servers" || ![...joins.values()].includes("joined")) return;
             // The last server joined is already selected behind the screen,
@@ -554,31 +580,19 @@ export function desktopCloudConnectStoreCreate(input: {
         },
         serversRefresh,
         serversShow() {
-            if (view !== undefined) {
-                serversRefresh();
-                return;
-            }
-            fromStart = false;
-            generation += 1;
-            const asked = generation;
-            logoPresses = [];
-            images.clear();
-            servers = [];
-            joins = new Map();
-            set({ kind: "servers", servers: { status: "loading" }, joins });
-            void (async () => {
-                await signedOut;
-                // Signing in is the person's step on the welcome, not the link's.
-                if ((await list(asked)) === "signInRequired" && current(asked)) set(welcome());
-            })().catch(() => {
-                if (current(asked))
-                    set({ kind: "failed", message: "Happy Cloud isn't reachable right now." });
-            });
+            if (view !== undefined) serversRefresh();
+            else serversOpen();
         },
         createOpen() {
             if (view?.kind !== "servers") return;
             picture?.pictureClear();
-            set({ kind: "create", name: "", availability: "idle", back: servers.length > 0 });
+            set({
+                kind: "create",
+                name: "",
+                availability: "idle",
+                back: servers.length > 0,
+                ...(fromStart ? { start: true as const } : {}),
+            });
         },
         back() {
             // Leaving the browser sign-in, an email step, or a failure lands
@@ -600,12 +614,10 @@ export function desktopCloudConnectStoreCreate(input: {
                 set(welcome());
                 return;
             }
-            // The servers, or a first one with none behind it, belong to the
-            // account; leaving them signs it out, so Continue can use another.
-            // Servers already joined stay in the app.
-            if (view?.kind === "servers" || (view?.kind === "create" && !view.back)) {
-                if (view.kind === "create" ? view.busy : [...joins.values()].includes("joining"))
-                    return;
+            // The servers belong to the account; "Use another account" signs
+            // it out for the welcome. Servers already joined stay in the app.
+            if (view?.kind === "servers") {
+                if ([...joins.values()].includes("joining")) return;
                 generation += 1;
                 if (availabilityTimer) clearTimeout(availabilityTimer);
                 logoPresses = [];

@@ -27,6 +27,8 @@ export interface CloudConnectServer {
      * over it once `url` is known. Absent: the generated initials tile.
      */
     readonly image?: { readonly thumbhash: string; readonly url?: string };
+    /** Already in this app: its row opens it rather than joining. */
+    readonly inApp?: true;
 }
 
 /** What the accounts service said about a new server's name. */
@@ -115,17 +117,18 @@ export type CloudConnectView =
            * joined at once; Continue appears once one is in.
            */
           readonly joins: ReadonlyMap<string, CloudConnectJoin>;
+          /** Opened from the start page: nothing is behind it, so there is no close button. */
+          readonly start?: true;
           readonly error?: string;
       }
     | {
           readonly kind: "create";
           readonly name: string;
           readonly availability: CloudConnectAvailability;
-          /**
-           * The account already has servers to go back to; otherwise create
-           * leads, and Back leaves the account for the welcome.
-           */
+          /** The account already has servers; otherwise this is its first. Back lists them either way. */
           readonly back: boolean;
+          /** Opened from the start page: nothing is behind it, so there is no close button. */
+          readonly start?: true;
           readonly busy?: boolean;
           readonly error?: string;
       }
@@ -159,13 +162,15 @@ export interface CloudConnectScreenProps {
     onContinue(): void;
     /** A server row's Join. */
     onServerPick(id: string): void;
+    /** A server row's Open, for a server already in this app. */
+    onServerOpen(id: string): void;
     /** Continue, once a server is joined: into the app. */
     onServersContinue(): void;
     onCreateOpen(): void;
     /**
-     * From create back to the servers; from the servers or a first
-     * server back to the welcome, signed out so Continue can use another
-     * account; and from signing in or a failure back to the welcome.
+     * From create back to the servers; from the servers, as "Use another
+     * account", back to the welcome, signed out; and from signing in or a
+     * failure back to the welcome.
      */
     onBack(): void;
     onCreateNameChange(name: string): void;
@@ -722,9 +727,18 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                               },
                                           }
                                         : {})}
-                                    copy="Join the servers your account is on, as many as you like."
+                                    copy={
+                                        view.servers.status === "ready" &&
+                                        view.servers.servers.length === 0
+                                            ? "Your account isn’t on a server yet. Create your own, or open an invite link."
+                                            : "Open a server, join one your account is on, or create your own."
+                                    }
                                     placement="top"
-                                    secondary={back(joins.includes("joining"))}
+                                    secondary={{
+                                        label: "Use another account",
+                                        onSelect: props.onBack,
+                                        ...(joins.includes("joining") ? { disabled: true } : {}),
+                                    }}
                                     {...(view.servers.status === "loading"
                                         ? { status: { busy: true, label: "Loading your servers…" } }
                                         : view.servers.status === "error"
@@ -732,7 +746,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                           : view.error
                                             ? { status: { label: view.error } }
                                             : {})}
-                                    title="Join a server"
+                                    title="Your servers"
                                 >
                                     <div className="happy-cloud-connect__column">
                                         {view.servers.status === "ready" ? (
@@ -757,29 +771,46 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                                                     @{server.name}
                                                                 </span>
                                                             </span>
-                                                            <Button
-                                                                aria-label={`Join ${server.displayName}`}
-                                                                // eslint-disable-next-line jsx-a11y/no-autofocus -- the first server is where a keyboard starts on this screen
-                                                                autoFocus={index === 0}
-                                                                disabled={join === "joined"}
-                                                                {...(join === "joined"
-                                                                    ? { icon: "check" as const }
-                                                                    : {})}
-                                                                loading={join === "joining"}
-                                                                onClick={() =>
-                                                                    props.onServerPick(server.id)
-                                                                }
-                                                                variant={
-                                                                    join === "joined"
-                                                                        ? "ghost"
-                                                                        : "secondary"
-                                                                }
-                                                                width={104}
-                                                            >
-                                                                {join === "joined"
-                                                                    ? "Joined"
-                                                                    : "Join"}
-                                                            </Button>
+                                                            {server.inApp && join === undefined ? (
+                                                                <Button
+                                                                    aria-label={`Open ${server.displayName}`}
+                                                                    autoFocus={index === 0}
+                                                                    onClick={() =>
+                                                                        props.onServerOpen(
+                                                                            server.id,
+                                                                        )
+                                                                    }
+                                                                    variant="secondary"
+                                                                    width={104}
+                                                                >
+                                                                    Open
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    aria-label={`Join ${server.displayName}`}
+                                                                    autoFocus={index === 0}
+                                                                    disabled={join === "joined"}
+                                                                    {...(join === "joined"
+                                                                        ? { icon: "check" as const }
+                                                                        : {})}
+                                                                    loading={join === "joining"}
+                                                                    onClick={() =>
+                                                                        props.onServerPick(
+                                                                            server.id,
+                                                                        )
+                                                                    }
+                                                                    variant={
+                                                                        join === "joined"
+                                                                            ? "ghost"
+                                                                            : "secondary"
+                                                                    }
+                                                                    width={104}
+                                                                >
+                                                                    {join === "joined"
+                                                                        ? "Joined"
+                                                                        : "Join"}
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -791,7 +822,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                                 onClick={props.onCreateOpen}
                                                 variant="secondary"
                                             >
-                                                Bootstrap a new one
+                                                Create your own
                                             </Button>
                                         </div>
                                     </div>
@@ -922,7 +953,8 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                             );
                     }
                 })()}
-                {view.kind === "welcome" && view.start ? null : (
+                {(view.kind === "welcome" || view.kind === "servers" || view.kind === "create") &&
+                view.start ? null : (
                     <Button
                         aria-label="Close"
                         className="happy-cloud-connect__close"

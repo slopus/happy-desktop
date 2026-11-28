@@ -1481,6 +1481,7 @@ function DesktopCloudConnect(props: {
             onEmailCodeResend={props.store.emailCodeResend}
             onEmailChangeOpen={props.store.emailChangeOpen}
             onServerPick={props.store.serverPick}
+            onServerOpen={props.store.serverOpen}
             onServersContinue={props.store.serversContinue}
             view={view}
         />
@@ -1931,6 +1932,16 @@ if (mediaPreviewBridge) {
                       bridge: desktopBridge,
                       chiefOfStaffAsk,
                       photoCodec: { open: imageCropOpen },
+                      inApp: (connectionId) =>
+                          happyAgents
+                              .get()
+                              .happyAgents.some((entry) => entry.remoteId === connectionId),
+                      open: (connectionId) => {
+                          const entry = happyAgents
+                              .get()
+                              .happyAgents.find((candidate) => candidate.remoteId === connectionId);
+                          if (entry) happyAgents.happyAgentActivate(entry.id);
+                      },
                       // A start page left for Happy Cloud is acknowledged only
                       // once a team is connected; until then Back returns to it.
                       connect: async (connectionId, created) => {
