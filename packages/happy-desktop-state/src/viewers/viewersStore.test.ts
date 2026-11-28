@@ -7,6 +7,7 @@ import {
 } from "@slopus/happy-agent-client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
+    HappyAgentHealth,
     HappyAgentSync,
     HappyAgentSyncInput,
 } from "../happyAgentConnection/happyAgentSync.js";
@@ -31,7 +32,8 @@ function streamCreate() {
                 else await new Promise<void>((resolve) => (wake = resolve));
             }
         },
-        health: () => undefined,
+        // The published protocol does not name `viewers` yet.
+        health: () => ({ capabilities: { viewers: true } }) as unknown as HappyAgentHealth,
     };
     const push = (update: HappyAgentUpdate): void => {
         queue.push({ kind: "update", update });

@@ -4,6 +4,7 @@ import {
     type ViewerRequestTarget,
     type ViewerTarget,
 } from "@slopus/happy-agent-client";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type { HappyAgentTeamRoster } from "../happyAgentConnection/types.js";
 import { happyAgentSurfacePeopleReaderCreate } from "../surfaces/surfacePeople.js";
@@ -108,8 +109,9 @@ function notFound(error: unknown): boolean {
  * seconds after the last answer while anything is, with at most one request
  * in flight on a stream. A new stream abandons the old stream's request. Each
  * answer replaces the lists for the targets it names, and frames change them
- * in between. A server that answers 404 has no viewers for this stream, and is
- * asked again only on the next stream.
+ * in between. Nothing is sent to a server whose health does not say
+ * `viewers`. A server that answers 404 anyway has no viewers for this stream,
+ * and is asked again only on the next stream.
  */
 export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgentViewers {
     const clock = deps.now ?? Date.now;
@@ -149,7 +151,9 @@ export function happyAgentViewersCreate(deps: HappyAgentViewersDeps): HappyAgent
 
     const teamMode = (): boolean => deps.team().viewerId !== undefined;
     const available = (): boolean =>
-        teamMode() && (streamId === undefined || streamId !== refusedOn);
+        teamMode() &&
+        happyAgentHealthCapability(deps.sync.health(), "viewers") &&
+        (streamId === undefined || streamId !== refusedOn);
 
     const wanted = (): ViewerTarget[] => {
         if (!available() || !(deps.activity?.active() ?? true)) return [];
