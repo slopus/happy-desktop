@@ -12,27 +12,20 @@ import {
 } from "./happyAgentOnboardingComputer.js";
 import {
     happyAgentOnboardingFlowDerive,
+    happyAgentOnboardingChiefOfStaffRead,
     happyAgentOnboardingGatesRead,
+    happyAgentOnboardingLandsInChiefOfStaff,
     happyAgentOnboardingSummaryRead,
     type HappyAgentOnboardingFlow,
     type HappyAgentOnboardingGate,
 } from "./happyAgentOnboardingGates.js";
-import {
-    HappyCloudRequestRefusal,
-    type HappyCloudRequest,
-} from "./happyAgentProviderCredentials.js";
+import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import { HAPPY_AGENT_PLUGIN_GITHUB, type HappyAgentPluginJob } from "./happyAgentPluginJobs.js";
 import {
     HappyAgentPluginFieldsError,
     type HappyAgentPluginConnectTarget,
     type HappyAgentPluginsStore,
 } from "./happyAgentPluginsStore.js";
-import {
-    happyAgentPicturePickStoreCreate,
-    type HappyAgentPicturePickStore,
-} from "./happyAgentPicturePickStore.js";
-import type { HappyAgentProfilePhotoCodec } from "./happyAgentProfilePhoto.js";
-import type { HappyAgentAvatarImage } from "./happyAgentTypes.js";
 import { UserError } from "../types.js";
 import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
 
@@ -154,8 +147,6 @@ export type HappyAgentOnboardingPluginDialog =
 
 export interface HappyAgentOnboardingSnapshot {
     readonly state?: HappyAgentOnboardingState;
-    /** The admin bot's name as typed; absent until edited, when the server's stands. */
-    readonly adminBotName?: string;
     readonly invites: HappyAgentOnboardingInvites;
     /** The plugin the plugins gate is installing or signing in. */
     readonly pluginConnecting?: string;
@@ -166,11 +157,6 @@ export interface HappyAgentOnboardingSnapshot {
      * `current` gate.
      */
     readonly flow?: HappyAgentOnboardingFlow;
-    /**
-     * The reader finished, and the admin bot they would be taken to works only
-     * with the people who manage bots: a last page says so before the app opens.
-     */
-    readonly finale?: { readonly botName: string };
     readonly pending: boolean;
     /** Authenticated setup endpoints are ready even before protected sync starts. */
     readonly available: boolean;
@@ -179,11 +165,6 @@ export interface HappyAgentOnboardingSnapshot {
 
 export interface HappyAgentOnboardingStore {
     readonly mobile: HappyMobileOnboardingStore;
-    /**
-     * The admin bot gate's picture, sent as soon as it is cropped. Absent
-     * without a way to crop pictures or reach Happy Cloud's routes.
-     */
-    readonly adminBotPicture?: HappyAgentPicturePickStore;
     /** The computer gate's dialogs, its setup command and "Connect this Mac". */
     readonly computer: HappyAgentOnboardingComputerStore;
     get(): HappyAgentOnboardingSnapshot;
@@ -208,9 +189,6 @@ export interface HappyAgentOnboardingStore {
     onboardingResume(): void;
     /** The card that opened as the reader left setup was closed; it no longer opens by itself. */
     awayCardClose(): void;
-    adminBotNameUpdate(value: string): void;
-    /** Names the server's admin bot with the typed name, or keeps its own, then leaves its gate. */
-    adminBotNameSubmit(): void;
     inviteEmailUpdate(value: string): void;
     /** Emails an invite to the typed address; a server without email makes a link instead. */
     inviteEmailSend(): void;
@@ -245,8 +223,6 @@ export interface HappyAgentOnboardingStore {
      * it opens the page again.
      */
     pluginSignInOpen(pluginId: string, target: HappyAgentPluginConnectTarget): void;
-    /** Leaves the last page for the app. */
-    finaleDismiss(): void;
     /** Reads the gates again, as when the window comes back to the front. */
     onboardingRead(): void;
     [Symbol.dispose](): void;
@@ -340,10 +316,8 @@ export function happyAgentOnboardingStoreCreate(
         readonly guidedMobileSetup?: boolean;
         /** The connection's direct connector, whose code the phone step offers. */
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
-        /** Happy Cloud's own routes, which skip gates and name the admin bot. */
+        /** Happy Cloud's own routes, which skip gates and make invites. */
         readonly cloudRequest?: HappyCloudRequest;
-        /** Decodes and crops the pictures the admin bot gate is given. */
-        readonly photoCodec?: HappyAgentProfilePhotoCodec;
         /** The server's plugins, which the plugins gate installs. */
         readonly plugins?: () => HappyAgentPluginsStore | undefined;
         /** The reader left this server's setup to finish later, on an earlier run. */
@@ -351,9 +325,9 @@ export function happyAgentOnboardingStoreCreate(
         /** The reader left setup for later, or came back to it. */
         readonly onAwayChange?: (away: boolean) => void;
         /**
-         * The reader finished a flow that showed them at least one gate and
-         * included the admin bot gate, and the server took the completion; the
-         * Chief of Staff opens its first conversation.
+         * The reader finished a flow that showed them at least one of the
+         * server's own gates, may talk to the Chief of Staff, and the server
+         * took the completion: its first conversation, which greets them, opens.
          */
         readonly onFinished?: () => void;
     } = {},
@@ -403,7 +377,7 @@ export function happyAgentOnboardingStoreCreate(
     const flowOf = (
         state: HappyAgentOnboardingState | undefined,
     ): HappyAgentOnboardingFlow | undefined => {
-        const gates = state ? happyAgentOnboardingGatesRead(state, client.endpoint) : undefined;
+        const gates = state ? happyAgentOnboardingGatesRead(state) : undefined;
         if (!gates) return undefined;
         const { finished, owners } = happyAgentOnboardingSummaryRead(state);
         const flow = happyAgentOnboardingFlowDerive({
@@ -507,8 +481,7 @@ export function happyAgentOnboardingStoreCreate(
     /**
      * Once no gate is left to show, the server is told the reader finished.
      * The call is idempotent, so a reader who had nothing to do sends it too;
-     * only one who walked through gates and was sent the admin bot gate is
-     * taken to the Chief of Staff after.
+     * where they go after is `happyAgentOnboardingLandsInChiefOfStaff`.
      */
     function gatesSynchronize(): void {
         const flow = snapshot.flow;
@@ -524,15 +497,17 @@ export function happyAgentOnboardingStoreCreate(
             .completeOnboarding({ signal: active.signal })
             .then(() => {
                 gatesCompleted = true;
-                if (!walked) return;
-                // A reader sent no admin bot gate, as a plain member is, lands
-                // home. One the server says may not talk to the admin bot is
-                // told so; one whose server does not say is taken to it.
-                const adminBot = flow.gates.find((gate) => gate.kind === "adminBot");
-                if (adminBot?.kind !== "adminBot") return;
-                if (adminBot.canTalk === false)
-                    publish({ ...snapshot, finale: { botName: adminBot.name } }, true);
-                else options.onFinished?.();
+                const serverGateWalked = flow.gates.some(
+                    (gate) => gate.scope === "server" && flow.sequence.includes(gate.id),
+                );
+                if (
+                    happyAgentOnboardingLandsInChiefOfStaff({
+                        walked,
+                        serverGateWalked,
+                        chiefOfStaff: happyAgentOnboardingChiefOfStaffRead(snapshot.state),
+                    })
+                )
+                    options.onFinished?.();
             })
             .catch(() => {
                 // Nothing blocks the reader any more, so they are already in;
@@ -886,56 +861,8 @@ export function happyAgentOnboardingStoreCreate(
         if (retry) clearTimeout(retry);
         retry = undefined;
     };
-    /**
-     * Gives the admin bot the picture just cropped for it, off to one side of
-     * the gate: Continue never waits on it. Its version is read again and the
-     * picture sent once more if someone changed the bot in the meantime, and
-     * the gates are read after, so the picture the server keeps is shown.
-     */
-    const adminBotPictureSend = async (image: HappyAgentAvatarImage): Promise<void> => {
-        const gate = snapshot.flow?.current;
-        if (gate?.kind !== "adminBot" || gate.botId === "") return;
-        const signal = controller?.signal ?? new AbortController().signal;
-        const send = (version: string) =>
-            cloud()(
-                "PUT",
-                `v0/bots/${encodeURIComponent(gate.botId)}/avatar`,
-                new Blob([image.data], { type: image.contentType }),
-                {
-                    "content-type": image.contentType,
-                    ...(version === "" ? {} : { "if-match": version }),
-                },
-            );
-        try {
-            try {
-                await send(gate.version);
-            } catch (error) {
-                if (!(error instanceof HappyCloudRequestRefusal) || error.status !== 409)
-                    throw error;
-                await gatesRead(signal);
-                const current = snapshot.flow?.gates.find((item) => item.id === gate.id);
-                if (current?.kind !== "adminBot") return;
-                await send(current.version);
-            }
-        } catch (error) {
-            throw new UserError(
-                "The picture didn't upload. You can change it later.",
-                undefined,
-                error,
-            );
-        }
-        await gatesRead(signal).catch(() => undefined);
-    };
-    const adminBotPicture =
-        options.photoCodec && options.cloudRequest
-            ? happyAgentPicturePickStoreCreate({
-                  codec: options.photoCodec,
-                  onPicked: adminBotPictureSend,
-              })
-            : undefined;
     return {
         mobile,
-        ...(adminBotPicture ? { adminBotPicture } : {}),
         computer,
         get: () => snapshot,
         onboardingBegin() {
@@ -975,9 +902,6 @@ export function happyAgentOnboardingStoreCreate(
             awaySet(undefined);
             publish(snapshot, true);
             setupSynchronize();
-        },
-        adminBotNameUpdate(value) {
-            publish({ ...snapshot, adminBotName: value }, true);
         },
         inviteEmailUpdate(value) {
             const { error: _cleared, ...invites } = snapshot.invites;
@@ -1157,43 +1081,9 @@ export function happyAgentOnboardingStoreCreate(
                     publish(rest, true);
                 });
         },
-        finaleDismiss() {
-            if (!snapshot.finale) return;
-            const { finale: _left, ...rest } = snapshot;
-            publish(rest, true);
-        },
         onboardingRead() {
             const active = controller;
             if (active && !disposed) void reconcile(active.signal).catch(() => undefined);
-        },
-        adminBotNameSubmit() {
-            const gate = snapshot.flow?.current;
-            if (gate?.kind !== "adminBot") return;
-            const trimmed = (snapshot.adminBotName ?? gate.name).trim();
-            if (gate?.kind !== "adminBot" || trimmed === "" || gate.botId === "") return;
-            gateRun(gate.id, async (signal) => {
-                const rename = (version: string) =>
-                    cloud()(
-                        "PATCH",
-                        `v0/bots/${encodeURIComponent(gate.botId)}`,
-                        { name: trimmed },
-                        version === "" ? undefined : { "if-match": version },
-                    );
-                try {
-                    await rename(gate.version);
-                } catch (error) {
-                    // Someone else changed the bot since this screen read it:
-                    // read its version again and rename that one, once.
-                    if (!(error instanceof HappyCloudRequestRefusal) || error.status !== 409)
-                        throw error;
-                    await gatesRead(signal);
-                    const current = snapshot.flow?.gates.find((item) => item.id === gate.id);
-                    if (current?.kind !== "adminBot") return;
-                    await rename(current.version);
-                }
-                await gatesRead(signal);
-                if (!signal.aborted) gateLeave(gate.id);
-            });
         },
         subscribe(listener) {
             listeners.add(listener);
@@ -1207,7 +1097,6 @@ export function happyAgentOnboardingStoreCreate(
             disposed = true;
             stop();
             mobile[Symbol.dispose]();
-            adminBotPicture?.[Symbol.dispose]();
             computer[Symbol.dispose]();
             listeners.clear();
         },

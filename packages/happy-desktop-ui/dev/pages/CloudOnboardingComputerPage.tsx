@@ -157,7 +157,6 @@ function Window(props: { readonly chrome?: Chrome; readonly children: ReactNode 
 
 const OWNER_STEPS = [
     { id: "profile", label: "Profile" },
-    { id: "adminBot", label: "Admin bot" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Tools" },
     { id: "computer", label: "Computer" },

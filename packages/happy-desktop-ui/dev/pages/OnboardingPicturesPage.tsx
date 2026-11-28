@@ -23,12 +23,9 @@ const MINIMUM: WindowSize = { height: 670, width: 760 };
 const noop = () => undefined;
 
 const photoUrl = new URL("../assets/profile-photo.webp", import.meta.url).href;
-/** The admin bot's default picture, as happy-agent gives the Chief of Staff. */
-const chiefOfStaffAvatarUrl = new URL("../assets/chief-of-staff-avatar.webp", import.meta.url).href;
 
 const OWNER: readonly { readonly id: string; readonly label: string }[] = [
     { id: "profile", label: "Profile" },
-    { id: "adminBot", label: "Admin bot" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Tools" },
     { id: "compute", label: "Computer" },
@@ -205,30 +202,6 @@ function profile(
     };
 }
 
-const adminBot: Omit<CloudOnboardingScreenProps, "appearance" | "steps"> = {
-    currentStep: "adminBot",
-    serverLabel: "Acme",
-    action: { label: "Continue", onSelect: noop },
-    view: {
-        kind: "adminBot",
-        title: "Name your admin bot",
-        description: "It has extra powers, so it can shape Happy around your team.",
-        points: [
-            "Changes this server's settings when you ask",
-            "Connects your tools and creates the bots you need",
-            "Builds a system around how your team works",
-        ],
-        note: "Only people who manage bots can talk to it.",
-        name: "Chief of Staff",
-        avatarUrl: chiefOfStaffAvatarUrl,
-        placeholderSeed: "chief-of-staff",
-        picture: { opening: false, onChoose: noop, onCropCancel: noop, onCropConfirm: noop },
-        busy: false,
-        onNameChange: noop,
-        onSubmit: noop,
-    },
-};
-
 interface Shot {
     /** The round 4 mockup's file name, without appearance and size. */
     readonly id: string;
@@ -274,12 +247,6 @@ const shots: readonly Shot[] = [
         render: (mode) => <Gate flow={OWNER} mode={mode} props={profile("")} />,
     },
     {
-        id: "o04-admin-bot",
-        label: "Admin bot · the bot's picture with the picker",
-        light: true,
-        render: (mode) => <Gate flow={OWNER} mode={mode} props={adminBot} />,
-    },
-    {
         id: "m03-next-profile",
         label: "Member · profile, the initials",
         render: (mode) => <Gate flow={MEMBER} mode={mode} props={profile("Sam Lee")} />,
@@ -311,8 +278,8 @@ function releaseUnaskedFocus(element: HTMLDivElement | null) {
 }
 
 /**
- * The pictures of Happy Cloud onboarding: the new server's, the person's and
- * the admin bot's, each with nothing uploaded and with an upload, named as
+ * The pictures of Happy Cloud onboarding: the new server's and the person's,
+ * each with nothing uploaded and with an upload, named as
  * the round 4 mockups so the two can be laid side by side.
  */
 export function OnboardingPicturesPage() {
@@ -328,7 +295,7 @@ export function OnboardingPicturesPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The server's, the person's and the admin bot's pictures in Happy Cloud onboarding, in the real frame."
+            summary="The server's and the person's pictures in Happy Cloud onboarding, in the real frame."
             title="Onboarding pictures"
         >
             <div ref={releaseUnaskedFocus} style={{ display: "contents" }}>

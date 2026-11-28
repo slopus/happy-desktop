@@ -37,7 +37,6 @@ import { cloudOnboardingToolsDialog, cloudOnboardingToolsView } from "./AppCloud
 const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = {
     profile: "Profile",
     avatar: "Photo",
-    adminBot: "Admin bot",
     inference: "AI",
     plugins: "Tools",
     computer: "Computer",
@@ -386,12 +385,6 @@ export function AppCloudOnboarding(props: {
         paymentsStore?.get ?? noSnapshot,
         paymentsStore?.get ?? noSnapshot,
     );
-    const pictureStore = gate.kind === "adminBot" ? props.store.adminBotPicture : undefined;
-    const picture = useSyncExternalStore(
-        pictureStore?.subscribe ?? noopSubscribe,
-        pictureStore?.get ?? noSnapshot,
-        pictureStore?.get ?? noSnapshot,
-    );
     const computerStore = gate.kind === "computer" ? props.store.computer : undefined;
     const computer = useSyncExternalStore(
         computerStore?.subscribe ?? noopSubscribe,
@@ -508,49 +501,6 @@ export function AppCloudOnboarding(props: {
                     action: proceed,
                     ...(skip ? { skip } : {}),
                     footnote: "Add a photo to continue.",
-                };
-            case "adminBot":
-                return {
-                    view: {
-                        kind: "adminBot",
-                        title: gate.title,
-                        description: gate.description,
-                        points: gate.points,
-                        note: gate.note,
-                        name: props.snapshot.adminBotName ?? gate.name,
-                        avatarUrl: gate.avatarUrl,
-                        placeholderSeed: gate.botId || "chief-of-staff",
-                        ...(pictureStore && picture && gate.botId !== ""
-                            ? {
-                                  picture: {
-                                      opening: picture.opening,
-                                      ...(picture.picked ? { url: picture.picked.imageUrl } : {}),
-                                      ...(picture.crop ? { crop: picture.crop } : {}),
-                                      ...(picture.error ? { error: picture.error } : {}),
-                                      onChoose: (file: File) =>
-                                          void pictureStore.pictureChoose(file),
-                                      onCropCancel: pictureStore.pictureCropCancel,
-                                      onCropConfirm: (
-                                          region: Parameters<
-                                              typeof pictureStore.pictureCropConfirm
-                                          >[0],
-                                      ) => void pictureStore.pictureCropConfirm(region),
-                                  },
-                              }
-                            : {}),
-                        busy: pending,
-                        ...(flow.error ? { error: flow.error } : {}),
-                        onNameChange: store.adminBotNameUpdate,
-                        onSubmit: store.adminBotNameSubmit,
-                    },
-                    action: {
-                        label: "Continue",
-                        busy: pending,
-                        disabled: (props.snapshot.adminBotName ?? gate.name).trim() === "",
-                        onSelect: store.adminBotNameSubmit,
-                    },
-                    ...(skip ? { skip } : {}),
-                    footnote: "Give it a name to continue.",
                 };
             case "inference":
                 return {

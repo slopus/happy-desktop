@@ -12,9 +12,7 @@ import {
 import { QRCode } from "./QRCode";
 import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
-import { AvatarPlaceholder } from "./AvatarPlaceholder";
 import { OnboardingHelp } from "./OnboardingHelp";
-import { PicturePicker, type PictureChoice } from "./PicturePicker";
 import { ProfileSetupForm, type ProfileSetupFormProps } from "./ProfileSetupScreen";
 import { SegmentedProgress } from "./SegmentedProgress";
 import {
@@ -63,29 +61,6 @@ export type CloudOnboardingView =
           /** `photo` asks only for the picture, from someone who already has a name. */
           readonly ask: "profile" | "photo";
       } & ProfileSetupFormProps)
-    | {
-          readonly kind: "adminBot";
-          /** The server's words for the step; the defaults stand in when it sends none. */
-          readonly title: string;
-          readonly description: string;
-          /** What the bot can do for the team, one short line each, when the server lists them. */
-          readonly points: readonly string[];
-          /** Who may talk to it, said quietly under the rest. */
-          readonly note: string;
-          readonly name: string;
-          readonly avatarUrl: string | null;
-          readonly placeholderSeed: string;
-          /**
-           * A new picture for the bot, sent as soon as it is cropped; Continue
-           * never waits on it. Absent, the picture is only shown.
-           */
-          readonly picture?: PictureChoice;
-          readonly busy: boolean;
-          readonly error?: string;
-          onNameChange(value: string): void;
-          /** Enter in the name field. */
-          onSubmit(): void;
-      }
     | {
           readonly kind: "inference";
           /** One row per provider, plans first. */
@@ -144,11 +119,6 @@ export type CloudOnboardingView =
           readonly error?: string;
       }
     | {
-          /** The last page, for a reader the admin bot does not work with. */
-          readonly kind: "finished";
-          readonly botName: string;
-      }
-    | {
           readonly kind: "notice";
           /**
            * `waitForAdmin`: only someone else can complete this step. `update`:
@@ -194,9 +164,6 @@ function Tag(props: { readonly label: string; readonly tone?: "attention" }) {
     );
 }
 
-/** The admin bot's picture beside its name, in CSS pixels. */
-const BOT_PICTURE_SIDE = 56;
-
 /** Invite lists that have opened, so a row can tell arriving later from arriving with them. */
 const inviteListsOpened = new WeakSet<Element>();
 
@@ -241,18 +208,6 @@ function Hint(props: {
     );
 }
 
-/** Who may talk to the admin bot, said once under what it can do. */
-function AdminBotNote(props: { readonly text: string }) {
-    return (
-        <p className="happy-cloud-onboarding__footnote">
-            <span className="happy-cloud-onboarding__footnote-mark" aria-hidden>
-                <Icon name="shield" size={14} />
-            </span>
-            {props.text}
-        </p>
-    );
-}
-
 function page(
     view: CloudOnboardingView,
     serverLabel: string | undefined,
@@ -271,108 +226,6 @@ function page(
                       copy: `This is how your team and agents see you on ${server}.`,
                       body: <ProfileSetupForm {...view} />,
                   };
-        case "adminBot":
-            return {
-                title: view.title || "Name your admin bot",
-                // With the points listed, the server's long description would
-                // say them twice; the line under the title only introduces them.
-                copy:
-                    view.points.length > 0
-                        ? "It has extra powers, so it can shape Happy around your team."
-                        : `Your admin bot runs ${server} with you.`,
-                body: (
-                    <div
-                        className="happy-cloud-onboarding__admin-bot"
-                        data-happy-desktop-ui="cloud-onboarding-admin-bot"
-                    >
-                        <div className="happy-cloud-onboarding__bot-row">
-                            {view.picture ? (
-                                <PicturePicker
-                                    {...(view.picture.crop ? { crop: view.picture.crop } : {})}
-                                    data-testid="cloud-onboarding-bot-picture"
-                                    disabled={view.busy}
-                                    layout="compact"
-                                    noun="picture"
-                                    onChoose={view.picture.onChoose}
-                                    onCropCancel={view.picture.onCropCancel}
-                                    onCropConfirm={view.picture.onCropConfirm}
-                                    opening={view.picture.opening}
-                                    {...((view.picture.url ?? view.avatarUrl)
-                                        ? { pictureUrl: view.picture.url ?? view.avatarUrl! }
-                                        : {})}
-                                    placeholder={
-                                        <AvatarPlaceholder
-                                            className="happy-picture-picker__image"
-                                            seed={view.placeholderSeed}
-                                            side={BOT_PICTURE_SIDE}
-                                        />
-                                    }
-                                    shape="circle"
-                                    side={BOT_PICTURE_SIDE}
-                                />
-                            ) : (
-                                <span className="happy-cloud-onboarding__bot-avatar">
-                                    {view.avatarUrl ? (
-                                        <img
-                                            alt=""
-                                            className="happy-cloud-onboarding__bot-photo"
-                                            draggable={false}
-                                            src={view.avatarUrl}
-                                        />
-                                    ) : (
-                                        <AvatarPlaceholder
-                                            className="happy-cloud-onboarding__bot-photo"
-                                            seed={view.placeholderSeed}
-                                            side={BOT_PICTURE_SIDE}
-                                        />
-                                    )}
-                                </span>
-                            )}
-                            <TextField
-                                aria-label="Admin bot name"
-                                autoFocus
-                                className="happy-cloud-onboarding__name"
-                                disabled={view.busy}
-                                fullWidth
-                                onSubmit={view.onSubmit}
-                                onValueChange={view.onNameChange}
-                                placeholder="Chief of Staff"
-                                size="large"
-                                value={view.name}
-                            />
-                        </div>
-                        {view.picture ? (
-                            <p className="happy-cloud-onboarding__picture-hint">
-                                Click the picture or drag one onto it to change it.
-                            </p>
-                        ) : null}
-                        <Hint text={view.error ?? view.picture?.error} />
-                        {view.points.length > 0 ? (
-                            <div className="happy-cloud-onboarding__about">
-                                <ul className="happy-cloud-onboarding__points">
-                                    {view.points.map((point) => (
-                                        <li className="happy-cloud-onboarding__point" key={point}>
-                                            <span
-                                                className="happy-cloud-onboarding__point-mark"
-                                                aria-hidden
-                                            >
-                                                <Icon name="check" size={18} />
-                                            </span>
-                                            {point}
-                                        </li>
-                                    ))}
-                                </ul>
-                                {view.note ? <AdminBotNote text={view.note} /> : null}
-                            </div>
-                        ) : (
-                            <>
-                                <p className="happy-cloud-onboarding__lead">{view.description}</p>
-                                {view.note ? <AdminBotNote text={view.note} /> : null}
-                            </>
-                        )}
-                    </div>
-                ),
-            };
         case "inference":
             return {
                 title: "Connect your AI",
@@ -650,17 +503,6 @@ function page(
                             }
                         />
                     </div>
-                ),
-            };
-        case "finished":
-            return {
-                title: "You're all set",
-                copy: `${view.botName || "The admin bot"} works with the people who manage bots.`,
-                body: (
-                    <NoticeMark
-                        icon="check"
-                        next="Your team's chats and tasks are waiting for you."
-                    />
                 ),
             };
         case "notice":

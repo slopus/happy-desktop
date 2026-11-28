@@ -7,10 +7,6 @@ import { HappyAgentOnboardingSettings, type HappyAgentOnboardingStepRow } from "
 /** What each step the server names is called here; a step this build does not know shows its ID. */
 const STEPS: Readonly<Record<string, { readonly label: string; readonly description: string }>> = {
     avatar: { label: "Photo", description: "Each person adds a profile picture." },
-    adminBot: {
-        label: "Admin bot",
-        description: "An owner names the admin bot that can change this server.",
-    },
     inference: { label: "AI", description: "The team connects an AI account of its own." },
     plugins: { label: "Plugins", description: "The team connects the tools agents work in." },
     computer: {

@@ -9,7 +9,6 @@ import {
     type HappyAgentProfilePhotoCropSource,
 } from "./happyAgentProfilePhoto.js";
 import type { HappyAgentProfilePhotoCropView } from "./happyAgentProfileStore.js";
-import { happyAgentUserError } from "./happyAgentSupport.js";
 import type { HappyAgentAvatarImage } from "./happyAgentTypes.js";
 
 export interface HappyAgentPicturePickSnapshot {
@@ -28,7 +27,7 @@ export interface HappyAgentPicturePickStore {
     subscribe(listener: () => void): () => void;
     /** Opens a picked file for cropping, refusing first what cannot be opened. */
     pictureChoose(file: Blob): Promise<void>;
-    /** Draws the chosen square and holds it in `picked`, then hands it to the owner. */
+    /** Draws the chosen square and holds it in `picked`. */
     pictureCropConfirm(region: HappyAgentProfilePhotoCropRegion): Promise<void>;
     pictureCropCancel(): void;
     /** Lets go of the held picture, and any crop, for a fresh start. */
@@ -42,15 +41,12 @@ const IDLE: HappyAgentPicturePickSnapshot = { opening: false };
 
 /**
  * A picture chosen for something other than the reader's own profile, such as
- * a new server or its admin bot: picked, cropped to a square like a profile
- * photo, and held on this device. An owner whose target already exists sends
- * each crop through `onPicked` as it is held; one whose target does not exist
- * yet takes it with `pictureTake` once it does.
+ * a new server: picked, cropped to a square like a profile photo, and held on
+ * this device until its owner takes it with `pictureTake`, once the target
+ * exists.
  */
 export function happyAgentPicturePickStoreCreate(deps: {
     readonly codec: HappyAgentProfilePhotoCodec;
-    /** Sends a held crop straight away; a rejection is said in `error`. */
-    readonly onPicked?: (image: HappyAgentAvatarImage) => Promise<void>;
 }): HappyAgentPicturePickStore {
     const store = createStore<HappyAgentPicturePickSnapshot>()(() => IDLE);
     let disposed = false;
@@ -99,10 +95,10 @@ export function happyAgentPicturePickStoreCreate(deps: {
             const source = cropSource;
             if (source === undefined) return;
             let image: Blob;
-            let read: HappyAgentAvatarImage;
             try {
                 image = await source.crop(region, HAPPY_AGENT_PROFILE_PHOTO_SIZE);
-                read = await happyAgentProfilePhotoRead(image);
+                // Refused here, not later when the server would take it.
+                await happyAgentProfilePhotoRead(image);
             } catch (error) {
                 if (disposed) return;
                 store.setState({
@@ -120,11 +116,6 @@ export function happyAgentPicturePickStoreCreate(deps: {
                 crop: undefined,
                 error: undefined,
                 picked: { imageUrl: picked.imageUrl },
-            });
-            const held = picked;
-            void deps.onPicked?.(read).catch((error: unknown) => {
-                if (disposed || picked !== held) return;
-                store.setState({ ...store.getState(), error: happyAgentUserError(error).message });
             });
         },
         pictureCropCancel() {

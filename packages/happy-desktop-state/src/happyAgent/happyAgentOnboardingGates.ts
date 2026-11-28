@@ -1,5 +1,3 @@
-import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
-
 /** Whose step a gate is: each member's own, or done once for the whole server. */
 export type HappyAgentOnboardingGateScope = "member" | "server";
 export type HappyAgentOnboardingGateRequirement = "optional" | "required";
@@ -47,26 +45,6 @@ export type HappyAgentOnboardingGate = HappyAgentOnboardingGateCommon &
     (
         | { readonly kind: "profile" }
         | { readonly kind: "avatar" }
-        | {
-              readonly kind: "adminBot";
-              readonly botId: string;
-              /** The bot's version, sent as `If-Match` when renaming it. */
-              readonly version: string;
-              readonly name: string;
-              readonly avatarUrl: string | null;
-              /** The server's own words for this step. */
-              readonly title: string;
-              readonly description: string;
-              /** What the bot can do for the team, a line each; empty when the server sends none. */
-              readonly points: readonly string[];
-              /** Who may talk to it; empty when the server sends none. */
-              readonly note: string;
-              /**
-               * Whether this reader may talk to it, which decides where they go
-               * after the last step; absent from a server that does not say.
-               */
-              readonly canTalk: boolean | undefined;
-          }
         | {
               readonly kind: "inference";
               /** The connections the team or reader already has, by provider. */
@@ -147,7 +125,7 @@ const COMPUTER_STATUSES: readonly HappyAgentOnboardingComputerStatus[] = [
     "draining",
 ];
 
-function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | undefined {
+function gateRead(value: unknown): HappyAgentOnboardingGate | undefined {
     const gate = recordOf(value);
     const id = textOf(gate?.id);
     if (!gate || id === "") return undefined;
@@ -172,35 +150,6 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
         case "paymentMethod":
         case "payment":
             return { ...common, kind: id };
-        case "adminBot": {
-            const botId = textOf(data.botId);
-            // happy-cluster sends the bot's default picture as `{ kind, source,
-            // thumbhash }` with no digest; any avatar it describes is the bot's
-            // `/v0/bots/:id/avatar`, and whichever token it gives keys the cache.
-            const avatar = recordOf(data.avatar);
-            const version =
-                textOf(avatar?.thumbhash) || textOf(avatar?.digest) || textOf(data.version);
-            return {
-                ...common,
-                kind: "adminBot",
-                botId,
-                version: textOf(data.version),
-                name: textOf(data.name),
-                avatarUrl:
-                    botId !== "" && avatar !== undefined
-                        ? happyAgentImageUrl(
-                              endpoint,
-                              `/v0/bots/${encodeURIComponent(botId)}/avatar`,
-                              version,
-                          )
-                        : null,
-                title: textOf(data.title),
-                description: textOf(data.description),
-                points: textsOf(data.points),
-                note: textOf(data.note),
-                canTalk: typeof data.canTalk === "boolean" ? data.canTalk : undefined,
-            };
-        }
         case "inference":
             return {
                 ...common,
@@ -284,12 +233,11 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
  */
 export function happyAgentOnboardingGatesRead(
     onboarding: unknown,
-    endpoint: string,
 ): readonly HappyAgentOnboardingGate[] | undefined {
     const gates = recordOf(onboarding)?.gates;
     if (!Array.isArray(gates)) return undefined;
     return gates.flatMap((gate) => {
-        const read = gateRead(gate, endpoint);
+        const read = gateRead(gate);
         return read ? [read] : [];
     });
 }
@@ -311,6 +259,41 @@ export function happyAgentOnboardingSummaryRead(onboarding: unknown): {
             return name ? [name] : [];
         }),
     };
+}
+
+/**
+ * What `GET /v0/onboarding` says about the reader and the Chief of Staff, under
+ * `steps.chiefOfStaff`: whether they may talk to it, and its conversation.
+ * A server that predates either says neither: `false` and `""`.
+ */
+export function happyAgentOnboardingChiefOfStaffRead(onboarding: unknown): {
+    readonly canTalk: boolean;
+    readonly agentId: string;
+} {
+    const chiefOfStaff = recordOf(recordOf(recordOf(onboarding)?.steps)?.chiefOfStaff);
+    return {
+        canTalk: chiefOfStaff?.canTalk === true,
+        agentId: textOf(chiefOfStaff?.agentId),
+    };
+}
+
+/**
+ * Where a reader who finished goes: into the Chief of Staff's conversation,
+ * whose greeting is sent once, to whoever set the server up, or home. Only a
+ * reader who walked the steps, walked at least one of the server's own among
+ * them, and may talk to the bot is taken there.
+ */
+export function happyAgentOnboardingLandsInChiefOfStaff(input: {
+    readonly walked: boolean;
+    readonly serverGateWalked: boolean;
+    readonly chiefOfStaff: { readonly canTalk: boolean; readonly agentId: string };
+}): boolean {
+    return (
+        input.walked &&
+        input.serverGateWalked &&
+        input.chiefOfStaff.canTalk &&
+        input.chiefOfStaff.agentId !== ""
+    );
 }
 
 /**

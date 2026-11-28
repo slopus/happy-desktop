@@ -12,7 +12,6 @@ import {
     type WelcomeStore,
 } from "happy-desktop-state";
 import {
-    CloudOnboardingScreen,
     EmptyState,
     LocalOnboardingScreen,
     ProfileSetupScreen,
@@ -81,24 +80,6 @@ export function HappyAgentOnboardingBoundary(props: {
     if (snapshot.flow) {
         // Setup takes the whole window, the connection rail included, and
         // gives it back when the reader finishes or leaves.
-        if (snapshot.finale)
-            return (
-                <SetupCover>
-                    <CloudOnboardingScreen
-                        action={{
-                            label: "Go to Happy",
-                            autoFocus: true,
-                            onSelect: props.store.finaleDismiss,
-                        }}
-                        appearance={appearance.mode}
-                        currentStep=""
-                        steps={[]}
-                        view={{ kind: "finished", botName: snapshot.finale.botName }}
-                        {...(props.serverLabel ? { serverLabel: props.serverLabel } : {})}
-                        {...(props.onExternalOpen ? { onExternalOpen: props.onExternalOpen } : {})}
-                    />
-                </SetupCover>
-            );
         if (!snapshot.flow.current) return props.children;
         if (snapshot.flow.away) {
             // With only optional steps left the reader is in; the workspace

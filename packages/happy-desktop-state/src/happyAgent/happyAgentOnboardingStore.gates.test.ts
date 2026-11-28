@@ -98,6 +98,16 @@ const mobileOpen = {
     data: {},
 };
 
+const teammatesOpen = {
+    id: "teammates",
+    scope: "server",
+    requirement: "optional",
+    status: "open",
+    blocking: false,
+    canComplete: true,
+    data: { invited: false, members: 1 },
+};
+
 it("shows an open optional gate while finished is false, though completed is true", async () => {
     const { store, calls, unsubscribe } = storeCreate({
         finished: false,
@@ -138,11 +148,11 @@ it("shows nothing once the server says finished", async () => {
     unsubscribe();
 });
 
-/* Organization gates, the admin bot among them, are sent only to owners. A
- * member who walks through their own gates is sent home, never to a Chief of
- * Staff they cannot talk to, and is not told why. */
+/* Server gates are sent only to owners. A member who walks through their own
+ * gates is sent home, never into the Chief of Staff's greeting to someone
+ * else, and is not told why. */
 
-it("sends a reader with no admin bot gate home once they finish", async () => {
+it("sends a reader who walked no server gate home once they finish", async () => {
     let finished = 0;
     const { store, calls, unsubscribe } = storeCreate(
         { finished: false, completed: false, blocking: [], gates: [mobileOpen], steps },
@@ -154,48 +164,49 @@ it("sends a reader with no admin bot gate home once they finish", async () => {
     expect(calls).toContain("POST v0/onboarding/gates/mobileApp/skip");
     expect(calls).toContain("POST v0/onboarding/complete");
     expect(finished).toBe(0);
-    expect(store.get().finale).toBeUndefined();
     unsubscribe();
 });
 
-it("takes a reader with an admin bot gate they may talk to to the Chief of Staff", async () => {
+it("takes a reader who walked a server gate and may talk to the Chief of Staff to it", async () => {
     let finished = 0;
-    const adminBot = {
-        id: "adminBot",
-        scope: "server",
-        requirement: "required",
-        status: "open",
-        blocking: false,
-        canComplete: true,
-        data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
-    };
     const { store, unsubscribe } = storeCreate(
-        { finished: false, completed: false, blocking: [], gates: [mobileOpen, adminBot], steps },
+        {
+            finished: false,
+            completed: false,
+            blocking: [],
+            gates: [mobileOpen, teammatesOpen],
+            steps: {
+                ...steps,
+                chiefOfStaff: {
+                    done: false,
+                    name: "Chief",
+                    botId: "bot",
+                    agentId: "agent",
+                    canTalk: true,
+                },
+            },
+        },
         () => finished++,
     );
     await settle();
     store.gateContinue("mobileApp");
     await settle();
-    store.gateContinue("adminBot");
+    store.gateContinue("teammates");
     await settle();
     expect(finished).toBe(1);
-    expect(store.get().finale).toBeUndefined();
     unsubscribe();
 });
 
 it("leaves a reader at work when their last step is finished elsewhere while they are away", async () => {
     let finished = 0;
-    const adminBot = {
-        id: "adminBot",
-        scope: "server",
-        requirement: "optional",
-        status: "open",
-        blocking: false,
-        canComplete: true,
-        data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
-    };
     const { store, calls, unsubscribe, writer } = storeCreate(
-        { finished: false, completed: false, blocking: [], gates: [mobileOpen, adminBot], steps },
+        {
+            finished: false,
+            completed: false,
+            blocking: [],
+            gates: [mobileOpen, teammatesOpen],
+            steps,
+        },
         () => finished++,
     );
     await settle();
@@ -209,7 +220,7 @@ it("leaves a reader at work when their last step is finished elsewhere while the
             blocking: [],
             gates: [
                 { ...mobileOpen, status: "skipped" },
-                { ...adminBot, status: "done" },
+                { ...teammatesOpen, status: "done" },
             ],
             steps,
         } as never,
@@ -218,23 +229,13 @@ it("leaves a reader at work when their last step is finished elsewhere while the
     await settle();
     expect(calls).toContain("POST v0/onboarding/complete");
     expect(finished).toBe(0);
-    expect(store.get().finale).toBeUndefined();
     unsubscribe();
 });
 
 it("completes at once, without leaving the app, when the reader exits on a last step already done", async () => {
     let finished = 0;
-    const adminBot = {
-        id: "adminBot",
-        scope: "server",
-        requirement: "optional",
-        status: "open",
-        blocking: false,
-        canComplete: true,
-        data: { botId: "bot", version: "1", name: "Chief", canTalk: true },
-    };
     const { store, calls, unsubscribe, writer } = storeCreate(
-        { finished: false, completed: false, blocking: [], gates: [adminBot], steps },
+        { finished: false, completed: false, blocking: [], gates: [teammatesOpen], steps },
         () => finished++,
     );
     await settle();
@@ -243,13 +244,13 @@ it("completes at once, without leaving the app, when the reader exits on a last 
             finished: true,
             completed: true,
             blocking: [],
-            gates: [{ ...adminBot, status: "done" }],
+            gates: [{ ...teammatesOpen, status: "done" }],
             steps,
         } as never,
         profile: null as never,
     });
     await settle();
-    expect(store.get().flow?.current?.id).toBe("adminBot");
+    expect(store.get().flow?.current?.id).toBe("teammates");
     expect(calls).not.toContain("POST v0/onboarding/complete");
     store.onboardingExit();
     await settle();

@@ -19,7 +19,6 @@ const photoUrl = new URL("../assets/profile-photo.webp", import.meta.url).href;
 
 const STEPS = [
     { id: "profile", label: "Profile" },
-    { id: "adminBot", label: "Admin bot" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Plugins" },
     { id: "teammates", label: "Team" },
@@ -34,18 +33,6 @@ function stepsBefore(current: string): readonly CloudOnboardingStep[] {
 }
 const APP_STORE = "https://apps.apple.com/us/app/happy-claude-code-client/id6748571505";
 const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.ex3ndr.happy";
-
-/** The admin bot's default picture, as happy-agent gives the Chief of Staff. */
-const chiefOfStaffAvatarUrl = new URL("../assets/chief-of-staff-avatar.webp", import.meta.url).href;
-
-const ADMIN_BOT_DESCRIPTION =
-    "This is your server's admin bot. It has expanded capabilities: it can change the server's settings, connect tools and create other bots, so it can adapt Happy and build a system around how your team works. Only owners can talk to it.";
-const ADMIN_BOT_LEAD = "It has expanded capabilities, so it can shape Happy around your team.";
-const ADMIN_BOT_POINTS = [
-    "Changes this server's settings when you ask",
-    "Connects your tools and creates the bots you need",
-    "Builds a system around how your team works",
-];
 
 type Screen = {
     readonly id: string;
@@ -75,57 +62,6 @@ const screens: readonly Screen[] = [
                 onPhotoChoose: noop,
                 onPhotoCropCancel: noop,
                 onPhotoCropConfirm: noop,
-            },
-        },
-    },
-    {
-        id: "admin-bot",
-        label: "Admin bot",
-        props: {
-            currentStep: "adminBot",
-            serverLabel: "Acme",
-            action: { label: "Continue", onSelect: noop },
-            view: {
-                kind: "adminBot",
-                title: "Name your admin bot",
-                description: ADMIN_BOT_LEAD,
-                points: ADMIN_BOT_POINTS,
-                note: "Only owners can talk to it.",
-                name: "Chief of Staff",
-                avatarUrl: chiefOfStaffAvatarUrl,
-                placeholderSeed: "chief-of-staff",
-                picture: {
-                    opening: false,
-                    onChoose: noop,
-                    onCropCancel: noop,
-                    onCropConfirm: noop,
-                },
-                busy: false,
-                onNameChange: noop,
-                onSubmit: noop,
-            },
-        },
-    },
-    {
-        id: "admin-bot-plain",
-        label: "Admin bot · one description",
-        props: {
-            currentStep: "adminBot",
-            serverLabel: "Acme",
-            action: { label: "Continue", onSelect: noop },
-            skip: { onSelect: noop },
-            view: {
-                kind: "adminBot",
-                title: "Name your admin bot",
-                description: ADMIN_BOT_DESCRIPTION,
-                points: [],
-                note: "",
-                name: "Chief of Staff",
-                avatarUrl: null,
-                placeholderSeed: "chief-of-staff",
-                busy: false,
-                onNameChange: noop,
-                onSubmit: noop,
             },
         },
     },
@@ -348,16 +284,6 @@ const screens: readonly Screen[] = [
         },
     },
     {
-        id: "finished-member",
-        label: "Finished, the admin bot works with owners",
-        props: {
-            currentStep: "",
-            serverLabel: "Acme",
-            action: { label: "Go to Happy", onSelect: noop },
-            view: { kind: "finished", botName: "Atlas" },
-        },
-    },
-    {
         id: "unavailable",
         label: "Not checkable yet",
         props: {
@@ -413,11 +339,8 @@ export function CloudOnboardingFlowPage() {
                                         <CloudOnboardingScreen
                                             appearance={mode}
                                             steps={stepsBefore(screen.props.currentStep)}
-                                            {...(screen.props.view.kind === "finished"
-                                                ? {}
-                                                : { exit: { onSelect: noop } })}
-                                            {...(screen.props.currentStep === STEPS[0].id ||
-                                            screen.props.view.kind === "finished"
+                                            exit={{ onSelect: noop }}
+                                            {...(screen.props.currentStep === STEPS[0].id
                                                 ? {}
                                                 : { back: { onSelect: noop } })}
                                             {...screen.props}

@@ -413,7 +413,6 @@ const JOBS: readonly {
 /** The owner's steps as the round 4 flow has them. */
 const STEPS = [
     { id: "profile", label: "Profile" },
-    { id: "adminBot", label: "Admin bot" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Tools" },
     { id: "compute", label: "Computer" },
