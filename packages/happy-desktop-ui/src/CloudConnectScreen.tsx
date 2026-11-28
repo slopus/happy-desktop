@@ -725,9 +725,24 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                         }
                         case "servers": {
                             const joins = [...view.joins.values()];
+                            const accountLeave = (
+                                <div className="happy-cloud-connect__links">
+                                    <Button
+                                        disabled={joins.includes("joining")}
+                                        onClick={props.onBack}
+                                        variant="ghost"
+                                    >
+                                        Use another account
+                                    </Button>
+                                </div>
+                            );
                             return (
                                 <SetupPage
                                     {...frame}
+                                    // The words, who is signed in, the servers and the
+                                    // way to a new one: one column, centred in the
+                                    // window as a block.
+                                    className="happy-cloud-connect happy-cloud-connect--servers"
                                     {...(joins.includes("joined")
                                         ? {
                                               action: {
@@ -755,8 +770,6 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                             ? "Your account isn’t on a server yet. Create your own."
                                             : "Open a server, join one your account is on, or create your own."
                                     }
-                                    // Who is signed in, the servers and the way to a
-                                    // new one are one group, centred in the window.
                                     placement="centered"
                                     {...(view.servers.status === "loading"
                                         ? { status: { busy: true, label: "Loading your servers…" } }
@@ -768,8 +781,11 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     title="Your servers"
                                 >
                                     <div className="happy-cloud-connect__column">
-                                        <div className="happy-cloud-connect__account">
-                                            {view.account ? (
+                                        {/* Who is signed in, with the way to another
+                                            account right under it. Unknown, that way is
+                                            the column's last, quiet line instead. */}
+                                        {view.account ? (
+                                            <div className="happy-cloud-connect__account">
                                                 <div
                                                     className="happy-cloud-connect__server"
                                                     data-happy-desktop-ui="cloud-connect-account"
@@ -794,17 +810,9 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                                         </span>
                                                     </span>
                                                 </div>
-                                            ) : null}
-                                            <div className="happy-cloud-connect__links">
-                                                <Button
-                                                    disabled={joins.includes("joining")}
-                                                    onClick={props.onBack}
-                                                    variant="ghost"
-                                                >
-                                                    Use another account
-                                                </Button>
+                                                {accountLeave}
                                             </div>
-                                        </div>
+                                        ) : null}
                                         {view.servers.status === "ready" ? (
                                             <div className="happy-cloud-connect__servers">
                                                 {view.servers.servers.map((server, index) => {
@@ -881,6 +889,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                                 Create your own
                                             </Button>
                                         </div>
+                                        {view.account ? null : accountLeave}
                                     </div>
                                 </SetupPage>
                             );

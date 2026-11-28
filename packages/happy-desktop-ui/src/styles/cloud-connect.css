@@ -155,15 +155,47 @@
     gap: 4px;
 }
 
-/* Many servers scroll here, in the bar every scrollport keeps, while who is
-   signed in and the way to a new server stay where they are. The room is the
-   page's own height (the setup page is the size container), less what the
-   group and the footer take around the list. */
+/*
+ * Your servers is one column, its words included, centred in the window as a
+ * block: no step bar above it, so its own layout rather than the centred
+ * page's, which centres the words in a band of their own above the content.
+ * Equal free room above the words and under the column (auto margins), with
+ * the footer's 68px (Continue's reserved slot and its 24px foot; the page
+ * offers no second way out, so that slot is dropped) matched by as much at
+ * the top, so the block sits in the middle of the window.
+ */
+.happy-setup-page.happy-cloud-connect--servers[data-placement="centered"] .happy-setup-page__body {
+    padding-top: 68px;
+}
+
+.happy-setup-page.happy-cloud-connect--servers[data-placement="centered"]
+    .happy-setup-page__header {
+    flex: none;
+    margin-top: auto;
+    padding: 0 0 24px;
+}
+
+.happy-setup-page.happy-cloud-connect--servers[data-placement="centered"]
+    .happy-setup-page__balance {
+    flex: none;
+    min-height: 0;
+    margin-top: auto;
+}
+
+.happy-setup-page.happy-cloud-connect--servers .happy-setup-page__footer-secondary {
+    display: none;
+}
+
+/* Many servers scroll here, in the bar every scrollport keeps, while
+   everything else in the column stays where it is. The room is the page's
+   own height (the setup page is the size container), less the top and footer
+   bands (136px), the rest of the column with its account row (316px), and
+   30px more so a row cut at the edge shows there is more to scroll. */
 .happy-cloud-connect__servers {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: max(152px, calc(100cqh - 460px));
+    max-height: max(144px, calc(100cqh - 482px));
     overflow-y: auto;
 }
 
