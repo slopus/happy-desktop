@@ -21,12 +21,37 @@ export type HappyAgentProviderAddFlow =
     | { readonly kind: "chatgpt" }
     | { readonly kind: "claude"; readonly setupToken: boolean };
 
+/** One provider the dialog offers to keep what it adds in. */
+export interface HappyAgentProviderAddDestinationOption {
+    readonly id: string;
+    readonly name: string;
+}
+
+/** Where what is added is kept: a provider already listed, or a new one by this name. */
+export type HappyAgentProviderAddDestination =
+    | { readonly kind: "existing"; readonly id: string }
+    | { readonly kind: "new"; readonly name: string };
+
 export interface HappyAgentProviderAddDialogProps {
     readonly flow: HappyAgentProviderAddFlow;
-    /** Where what is added is kept. */
+    /**
+     * Once a flow is chosen: `details` asks for a name and where it goes,
+     * then `credential` takes the key or runs the sign-in.
+     */
+    readonly step: "details" | "credential";
+    /** Whose it is: the team's, or the reader's own. */
     readonly to: "private" | "team";
-    /** Whether the reader may choose: both "My account" and "Team" are allowed. */
-    readonly destinationChoice: boolean;
+    /** Whether the reader may choose: both Team and Personal are allowed. */
+    readonly scopeChoice: boolean;
+    /** The name typed for what is added. */
+    readonly label: string;
+    /** The name it gets when none is typed; a sign-in is named after its account. */
+    readonly labelPlaceholder?: string;
+    /** The providers of `to` that can take it, the default first. */
+    readonly destinations: readonly HappyAgentProviderAddDestinationOption[];
+    readonly destination: HappyAgentProviderAddDestination;
+    /** Whether it may go in a new provider; Bedrock's keys may not. */
+    readonly newAllowed: boolean;
     /** The vendors offered for a key; Bedrock only to those who manage the team's. */
     readonly keyVendors: readonly HappyAgentProviderKeyVendor[];
     /** Whether the chosen key can only be kept for the team, as Bedrock's is. */
@@ -56,7 +81,13 @@ export interface HappyAgentProviderAddDialogProps {
     onFlowSelect: (flow: HappyAgentProviderAddFlow) => void;
     onBack: () => void;
     onClose: () => void;
-    onDestinationChange: (to: "private" | "team") => void;
+    onScopeChange: (to: "private" | "team") => void;
+    onLabelChange: (label: string) => void;
+    onDestinationSelect: (id: string) => void;
+    onDestinationNewSelect: () => void;
+    onDestinationNameChange: (name: string) => void;
+    /** From the name and destination on to the credential. */
+    onDetailsSubmit: () => void;
     /** A Bedrock key may name the region every team Bedrock key routes to. */
     onApiKeySubmit: (secret: string, region?: string) => void;
     onAwsKeysSubmit: (input: {
@@ -73,23 +104,11 @@ export interface HappyAgentProviderAddDialogProps {
     onCustomProviderCreate?: () => void;
 }
 
-const KEY_VENDORS: readonly HappyAgentProviderKeyVendor[] = [
-    "openai",
-    "anthropic",
-    "grok",
-    "bedrock",
-];
-
 const VENDOR_NAMES: Record<HappyAgentProviderKeyVendor, string> = {
     openai: "OpenAI",
     anthropic: "Anthropic",
     grok: "Grok",
     bedrock: "Amazon Bedrock",
-};
-
-const VENDOR_SHORT_NAMES: Record<HappyAgentProviderKeyVendor, string> = {
-    ...VENDOR_NAMES,
-    bedrock: "Bedrock",
 };
 
 const KEY_PLACEHOLDERS: Record<HappyAgentProviderKeyVendor, string> = {
@@ -98,10 +117,6 @@ const KEY_PLACEHOLDERS: Record<HappyAgentProviderKeyVendor, string> = {
     grok: "xai-…",
     bedrock: "ABSK…",
 };
-
-function vendorOf(value: string): HappyAgentProviderKeyVendor {
-    return KEY_VENDORS.find((vendor) => vendor === value) ?? "openai";
-}
 
 /** AWS access keys while they are typed. */
 interface AwsDraft {
@@ -114,7 +129,7 @@ const AWS_EMPTY: AwsDraft = { accessKeyId: "", secretAccessKey: "", region: "" }
 
 /** A row of the chooser: one vendor, with every way this server and role offer to add it. */
 interface ProviderFamily {
-    readonly id: "chatgpt" | "claude" | "grok" | "custom";
+    readonly id: "chatgpt" | "claude" | "grok" | "bedrock" | "custom";
     readonly name: string;
     readonly tile: IconTileProps;
     /** The line under the name; Custom says what it takes instead. */
@@ -143,7 +158,7 @@ function waysOf(family: ProviderFamily): string {
 
 /**
  * The families in the native clients' order and words: ChatGPT, Claude,
- * Grok, Custom, each only with a way to add it.
+ * Grok, then Bedrock for the team and Custom, each only with a way to add it.
  */
 function familiesOf(
     props: HappyAgentProviderAddDialogProps,
@@ -229,6 +244,15 @@ function familiesOf(
                   ]
                 : [],
         },
+        {
+            id: "bedrock",
+            name: "Amazon Bedrock",
+            tile: { ionicon: "cloud-outline", tone: "orange" },
+            ways: "API key or AWS access keys, for the team",
+            methods: keys("bedrock")
+                ? [key("bedrock", "Amazon Bedrock key", "Billed to your AWS account")]
+                : [],
+        },
     ];
     const custom = props.onCustomProviderCreate;
     if (custom)
@@ -255,7 +279,7 @@ function titleOf(flow: HappyAgentProviderAddFlow): string {
         case "choose":
             return "Add a provider";
         case "apiKey":
-            return "Add API key";
+            return `${VENDOR_NAMES[flow.vendor]} key`;
         case "chatgpt":
             return "Sign in with ChatGPT";
         case "claude":
@@ -264,11 +288,13 @@ function titleOf(flow: HappyAgentProviderAddFlow): string {
 }
 
 /**
- * Adds an AI provider on Happy Cloud. It opens on the families; one with two
- * ways or more asks which next, and a way is a ChatGPT or Claude sign-in that
- * the server finishes itself, an API key, a Claude setup token, or a custom
- * provider. Which family is open is held here, so Back from a way returns to
- * it; what the person types is held here only until it is sent.
+ * Adds an AI provider on Happy Cloud, one step at a time. It opens on the
+ * families; one with two ways or more asks which next, and a way is a ChatGPT
+ * or Claude sign-in that the server finishes itself, an API key, a Claude
+ * setup token, or a custom provider. Then it asks what to call it and where
+ * it goes — a provider already there or a new one — and only then for the
+ * key or the sign-in. Which family is open is held here, so Back from a way
+ * returns to it; a secret the person types is held here only until it is sent.
  */
 export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogProps) {
     const [familyId, setFamilyId] = useState<ProviderFamily["id"] | undefined>(undefined);
@@ -307,6 +333,7 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
     };
     const flow = props.flow;
     const done = props.phase === "done";
+    const details = flow.kind !== "choose" && props.step === "details";
     const families = familiesOf(props, flowSelect);
     const family =
         flow.kind === "choose"
@@ -314,6 +341,12 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
             : undefined;
     const primary = ((): { label: string; onClick: () => void; disabled?: boolean } | undefined => {
         if (done) return { label: "Done", onClick: props.onClose };
+        if (details)
+            return {
+                label: "Continue",
+                onClick: props.onDetailsSubmit,
+                disabled: props.destination.kind === "new" && props.destination.name.trim() === "",
+            };
         if (flow.kind === "apiKey" && aws)
             return {
                 label: "Add",
@@ -390,26 +423,9 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                     {props.error.message}
                                 </Banner>
                             ) : null}
-                            {props.destinationChoice && props.phase === "idle" ? (
-                                <Box className="happy-agent-provider-add__field">
-                                    <span className="happy-agent-provider-add__label">Save to</span>
-                                    <SegmentedControl
-                                        aria-label="Save to"
-                                        onChange={(to) =>
-                                            props.onDestinationChange(
-                                                to === "team" ? "team" : "private",
-                                            )
-                                        }
-                                        segments={[
-                                            { value: "private", label: "My account" },
-                                            { value: "team", label: "Team" },
-                                        ]}
-                                        size="small"
-                                        value={props.to}
-                                    />
-                                </Box>
-                            ) : null}
-                            {flow.kind === "choose" && family ? (
+                            {details ? (
+                                <HappyAgentProviderAddDetails {...props} />
+                            ) : flow.kind === "choose" && family ? (
                                 <Box
                                     className="happy-agent-provider-add__choices"
                                     data-happy-desktop-ui="happy-agent-provider-add-methods"
@@ -467,24 +483,6 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                 </Box>
                             ) : flow.kind === "apiKey" ? (
                                 <>
-                                    <SegmentedControl
-                                        aria-label="Vendor"
-                                        disabled={busy}
-                                        onChange={(vendor) =>
-                                            flowSelect({ kind: "apiKey", vendor: vendorOf(vendor) })
-                                        }
-                                        segments={props.keyVendors.map((vendor) => ({
-                                            value: vendor,
-                                            label: VENDOR_SHORT_NAMES[vendor],
-                                        }))}
-                                        size="small"
-                                        value={flow.vendor}
-                                    />
-                                    {props.teamOnly ? (
-                                        <span className="happy-agent-provider-add__hint">
-                                            {`${VENDOR_NAMES[flow.vendor]} keys run only in the team's connection, so this one is kept for the team.`}
-                                        </span>
-                                    ) : null}
                                     {flow.vendor === "bedrock" ? (
                                         <SegmentedControl
                                             aria-label="Kind of key"
@@ -678,5 +676,108 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                 </Box>
             </Modal>
         </ModalOverlay>
+    );
+}
+
+/**
+ * The step between choosing a way and typing the key: whose it is, what it
+ * is called, and which provider keeps it — one already there, or a new one.
+ */
+function HappyAgentProviderAddDetails(props: HappyAgentProviderAddDialogProps) {
+    const idle = props.phase === "idle";
+    const destination = props.destination;
+    return (
+        <>
+            {props.scopeChoice ? (
+                <Box className="happy-agent-provider-add__field">
+                    <span className="happy-agent-provider-add__label">For</span>
+                    <SegmentedControl
+                        aria-label="For"
+                        onChange={(to) => props.onScopeChange(to === "team" ? "team" : "private")}
+                        segments={[
+                            { value: "team", label: "Team" },
+                            { value: "private", label: "Personal" },
+                        ]}
+                        size="small"
+                        value={props.to}
+                    />
+                </Box>
+            ) : null}
+            {props.teamOnly ? (
+                <span className="happy-agent-provider-add__hint">
+                    Amazon Bedrock keys run only in the team&rsquo;s Bedrock provider, so this one
+                    is kept for the team.
+                </span>
+            ) : null}
+            <TextField
+                autoComplete="off"
+                autoFocus
+                disabled={!idle}
+                fullWidth
+                label="Name"
+                onSubmit={props.onDetailsSubmit}
+                onValueChange={props.onLabelChange}
+                {...(props.labelPlaceholder === undefined
+                    ? { hint: "Leave empty to name it after the account you sign in with." }
+                    : { placeholder: props.labelPlaceholder })}
+                value={props.label}
+            />
+            <Box className="happy-agent-provider-add__destinations">
+                <span className="happy-agent-provider-add__label">Add to</span>
+                <Box
+                    aria-label="Add to"
+                    className="happy-agent-provider-add__options"
+                    data-happy-desktop-ui="happy-agent-provider-add-destinations"
+                    role="radiogroup"
+                >
+                    {props.destinations.map((option) => (
+                        <button
+                            aria-checked={
+                                destination.kind === "existing" && destination.id === option.id
+                            }
+                            className="happy-agent-provider-add__option"
+                            disabled={!idle}
+                            key={option.id}
+                            onClick={() => props.onDestinationSelect(option.id)}
+                            role="radio"
+                            type="button"
+                        >
+                            <span aria-hidden="true" className="happy-agent-provider-add__radio" />
+                            <span className="happy-agent-provider-add__option-name">
+                                {option.name}
+                            </span>
+                        </button>
+                    ))}
+                    {props.newAllowed ? (
+                        <button
+                            aria-checked={destination.kind === "new"}
+                            className="happy-agent-provider-add__option"
+                            disabled={!idle}
+                            onClick={props.onDestinationNewSelect}
+                            role="radio"
+                            type="button"
+                        >
+                            <span aria-hidden="true" className="happy-agent-provider-add__radio" />
+                            <span className="happy-agent-provider-add__option-name">
+                                New provider
+                            </span>
+                        </button>
+                    ) : null}
+                </Box>
+                {destination.kind === "new" ? (
+                    <TextField
+                        autoComplete="off"
+                        autoFocus
+                        disabled={!idle}
+                        fullWidth
+                        label="Provider name"
+                        onSubmit={props.onDetailsSubmit}
+                        onValueChange={props.onDestinationNameChange}
+                        placeholder="Such as Research"
+                        value={destination.name}
+                    />
+                ) : null}
+            </Box>
+        </>
     );
 }

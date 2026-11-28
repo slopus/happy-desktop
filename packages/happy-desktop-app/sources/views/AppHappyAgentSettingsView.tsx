@@ -68,9 +68,11 @@ import {
     happyAgentOnboardingSettingsStoreNoop,
     happyAgentPaymentsStoreNoop,
     happyAgentDailyUsageStoreNoop,
+    happyAgentCloudProviderAddLabelDefault,
+    happyAgentCloudProviderAddNewAllowed,
+    happyAgentCloudProviderAddOptions,
     happyAgentCloudProviderAddTeamOnly,
-    happyAgentCloudConnectionName,
-    happyAgentCloudConnectionEditable,
+    happyAgentCloudConnectionNamed,
     happyAgentCloudCredentialReplaceable,
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
@@ -109,9 +111,10 @@ import {
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
     HappyAgentAiProviders,
-    type HappyAgentAiProviderConnectionRow,
+    type HappyAgentAiProviderRow,
+    type HappyAgentAiProviderSheetProps,
     type HappyAgentProviderAddDialogProps,
-    type HappyAgentProviderEditDialogProps,
+    type IconTileProps,
     HappyAgentDangerSettings,
     HappyAgentMembersSettings,
     type HappyAgentInviteNoticeView,
@@ -875,8 +878,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
         (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
     );
-    const cloudProviderEdit = cloudProvidersStore
-        ? providerEditProps(cloudProviders, cloudProvidersStore)
+    const cloudProviderDetail = cloudProvidersStore
+        ? providerDetailProps(cloudProviders, cloudProvidersStore)
         : undefined;
     const credentialImport = useSyncExternalStore(
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).subscribe,
@@ -1507,7 +1510,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 <>
                     {cloudProvidersStore ? (
                         <HappyAgentAiProviders
-                            connections={cloudProviders.connections.map(cloudConnectionRow)}
+                            scope={cloudProviders.listScope}
+                            providers={cloudProviderRows(cloudProviders)}
                             loading={cloudProviders.loading}
                             {...(cloudProviders.error
                                 ? { error: cloudProviders.error.message }
@@ -1515,7 +1519,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             {...(cloudProviders.saveError
                                 ? { saveError: cloudProviders.saveError.message }
                                 : {})}
-                            teamManageable={cloudProviders.teamAllowed}
                             {...(cloudProviders.add
                                 ? {
                                       add: {
@@ -1536,19 +1539,19 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                       },
                                   }
                                 : {})}
-                            {...(cloudProviderEdit ? { edit: cloudProviderEdit } : {})}
-                            onAdd={() => cloudProvidersStore.addOpen()}
-                            onEdit={(connectionId) => cloudProvidersStore.editOpen(connectionId)}
-                            onCredentialEnabledChange={(connectionId, credentialId, enabled) =>
-                                cloudProvidersStore.credentialEnabledUpdate(
-                                    connectionId,
-                                    credentialId,
-                                    enabled,
-                                )
+                            {...(cloudProviderDetail ? { detail: cloudProviderDetail } : {})}
+                            onScopeChange={(scope) => cloudProvidersStore.listScopeUpdate(scope)}
+                            onProviderOpen={(connectionId) =>
+                                cloudProvidersStore.detailOpen(connectionId)
                             }
-                            onCredentialRemove={(connectionId, credentialId) =>
-                                cloudProvidersStore.credentialRemove(connectionId, credentialId)
-                            }
+                            {...(cloudProviders.privateAllowed || cloudProviders.teamAllowed
+                                ? {
+                                      onAdd: () =>
+                                          cloudProvidersStore.addOpen({
+                                              to: cloudProviders.listScope,
+                                          }),
+                                  }
+                                : {})}
                         />
                     ) : null}
                     {credentialImportStore ? (
@@ -1571,122 +1574,137 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             onImport={() => credentialImportStore.importSubmit()}
                         />
                     ) : null}
-                    <HappyAgentProviderSettings
-                        loading={providers.loading}
-                        currentTime={currentTime}
-                        {...(providers.providerDetail
-                            ? { detail: providers.providerDetail.providerId }
-                            : {})}
-                        onDetailOpen={(providerId) => providersStore.providerDetailOpen(providerId)}
-                        onDetailClose={() => providersStore.providerDetailClose()}
-                        // A Happy Cloud server lists its accounts switched off too.
-                        hideDisabled={!happyCloud}
-                        onModelEnabledChange={(id, enabled) =>
-                            happyAgentOnline()
-                                ? props.settings.modelEnabledUpdate(
-                                      id as HappyAgentModelKey,
-                                      enabled,
-                                  )
-                                : undefined
-                        }
-                        onProviderEnabledChange={(id, enabled) => {
-                            if (happyAgentOnline())
-                                providersStore.providerEnabledUpdate(id, enabled);
-                        }}
-                        onKeyAdd={(providerId, input) =>
-                            providersStore.credentialAdd(providerId, input)
-                        }
-                        onKeyEnabledChange={(providerId, keyId, enabled) => {
-                            if (happyAgentOnline())
-                                providersStore.credentialEnabledUpdate(providerId, keyId, enabled);
-                        }}
-                        onKeyRemove={(providerId, keyId) => {
-                            if (happyAgentOnline())
-                                providersStore.credentialRemove(providerId, keyId);
-                        }}
-                        {...(providers.customProvidersManageable
-                            ? {
-                                  onCustomProviderCreate: () => {
-                                      if (happyAgentOnline())
-                                          providersStore.customProviderCreateOpen();
-                                  },
-                                  onCustomProviderEdit: (providerId: string) => {
-                                      if (!happyAgentOnline()) return;
-                                      // The editor takes the details' place rather than stacking on them.
-                                      providersStore.providerDetailClose();
-                                      providersStore.customProviderEditOpen(providerId);
-                                  },
-                              }
-                            : {})}
-                        providers={providerRows(
-                            providers.providers,
-                            settings,
-                            selection,
-                            cloudProvidersStore !== undefined,
-                            providerSignIn.accounts,
-                            usage.providers,
-                        )}
-                        {...(providerSignIn.forbidden ||
-                        (membersStore && !members.loading && !owner)
-                            ? {
-                                  signInLocked:
-                                      "Only the team owner can change how accounts sign in.",
-                              }
-                            : {})}
-                        onSignIn={(providerId) => {
-                            if (!happyAgentOnline()) return;
-                            const live = providerSignIn.accounts.get(providerId)?.operation;
-                            if (live?.status === "running" || live?.status === "waiting")
-                                providerSignInStore.signInDialogOpen(providerId);
-                            else providerSignInStore.signInStart(providerId);
-                        }}
-                        {...(providerSignIn.signInDialog
-                            ? ((account) =>
-                                  account
-                                      ? {
-                                            signInDialog: providerSignInDialogProps(
-                                                account,
-                                                providerSignInStore,
-                                                happyAgentOnline,
-                                                props.externalLinkOpen,
-                                            ),
-                                        }
-                                      : {})(
-                                  providerSignIn.accounts.get(
-                                      providerSignIn.signInDialog.providerId,
-                                  ),
-                              )
-                            : {})}
-                        onTokenEditorOpen={(providerId) => {
-                            if (happyAgentOnline()) providerSignInStore.tokenEditorOpen(providerId);
-                        }}
-                        {...(providerSignIn.tokenEditor
-                            ? {
-                                  tokenEditor: {
-                                      providerId: providerSignIn.tokenEditor.providerId,
-                                      shell: navigator.platform.toLowerCase().startsWith("win")
-                                          ? "powershell"
-                                          : "posix",
-                                      phase: providerSignIn.tokenEditor.saving
-                                          ? "saving"
-                                          : providerSignIn.tokenEditor.error
-                                            ? "failed"
-                                            : "idle",
-                                      ...(providerSignIn.tokenEditor.error
-                                          ? { error: providerSignIn.tokenEditor.error.message }
-                                          : {}),
-                                      onClose: () => providerSignInStore.tokenEditorClose(),
-                                      onTokenSubmit: (token: string) => {
+                    {/* Happy Cloud lists only what was added: its providers above, and
+                        here the team's own endpoints, never its built-in catalog. */}
+                    {happyCloud && !providers.providers.some((entry) => entry.custom) ? null : (
+                        <HappyAgentProviderSettings
+                            loading={providers.loading}
+                            currentTime={currentTime}
+                            {...(providers.providerDetail
+                                ? { detail: providers.providerDetail.providerId }
+                                : {})}
+                            onDetailOpen={(providerId) =>
+                                providersStore.providerDetailOpen(providerId)
+                            }
+                            onDetailClose={() => providersStore.providerDetailClose()}
+                            // A Happy Cloud server keeps its own endpoints listed while switched off.
+                            hideDisabled={!happyCloud}
+                            onModelEnabledChange={(id, enabled) =>
+                                happyAgentOnline()
+                                    ? props.settings.modelEnabledUpdate(
+                                          id as HappyAgentModelKey,
+                                          enabled,
+                                      )
+                                    : undefined
+                            }
+                            onProviderEnabledChange={(id, enabled) => {
+                                if (happyAgentOnline())
+                                    providersStore.providerEnabledUpdate(id, enabled);
+                            }}
+                            onKeyAdd={(providerId, input) =>
+                                providersStore.credentialAdd(providerId, input)
+                            }
+                            onKeyEnabledChange={(providerId, keyId, enabled) => {
+                                if (happyAgentOnline())
+                                    providersStore.credentialEnabledUpdate(
+                                        providerId,
+                                        keyId,
+                                        enabled,
+                                    );
+                            }}
+                            onKeyRemove={(providerId, keyId) => {
+                                if (happyAgentOnline())
+                                    providersStore.credentialRemove(providerId, keyId);
+                            }}
+                            {...(providers.customProvidersManageable
+                                ? {
+                                      onCustomProviderCreate: () => {
                                           if (happyAgentOnline())
-                                              providerSignInStore.tokenSave(token);
+                                              providersStore.customProviderCreateOpen();
                                       },
-                                  },
-                              }
-                            : {})}
-                        {...(providers.error ? { error: providers.error.message } : {})}
-                        {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
-                        {...(unavailable === undefined ? {} : { unavailable })}
-                    />
+                                      onCustomProviderEdit: (providerId: string) => {
+                                          if (!happyAgentOnline()) return;
+                                          // The editor takes the details' place rather than stacking on them.
+                                          providersStore.providerDetailClose();
+                                          providersStore.customProviderEditOpen(providerId);
+                                      },
+                                  }
+                                : {})}
+                            providers={providerRows(
+                                happyCloud
+                                    ? providers.providers.filter((entry) => entry.custom)
+                                    : providers.providers,
+                                settings,
+                                selection,
+                                cloudProvidersStore !== undefined,
+                                providerSignIn.accounts,
+                                usage.providers,
+                            )}
+                            {...(providerSignIn.forbidden ||
+                            (membersStore && !members.loading && !owner)
+                                ? {
+                                      signInLocked:
+                                          "Only the team owner can change how accounts sign in.",
+                                  }
+                                : {})}
+                            onSignIn={(providerId) => {
+                                if (!happyAgentOnline()) return;
+                                const live = providerSignIn.accounts.get(providerId)?.operation;
+                                if (live?.status === "running" || live?.status === "waiting")
+                                    providerSignInStore.signInDialogOpen(providerId);
+                                else providerSignInStore.signInStart(providerId);
+                            }}
+                            {...(providerSignIn.signInDialog
+                                ? ((account) =>
+                                      account
+                                          ? {
+                                                signInDialog: providerSignInDialogProps(
+                                                    account,
+                                                    providerSignInStore,
+                                                    happyAgentOnline,
+                                                    props.externalLinkOpen,
+                                                ),
+                                            }
+                                          : {})(
+                                      providerSignIn.accounts.get(
+                                          providerSignIn.signInDialog.providerId,
+                                      ),
+                                  )
+                                : {})}
+                            onTokenEditorOpen={(providerId) => {
+                                if (happyAgentOnline())
+                                    providerSignInStore.tokenEditorOpen(providerId);
+                            }}
+                            {...(providerSignIn.tokenEditor
+                                ? {
+                                      tokenEditor: {
+                                          providerId: providerSignIn.tokenEditor.providerId,
+                                          shell: navigator.platform.toLowerCase().startsWith("win")
+                                              ? "powershell"
+                                              : "posix",
+                                          phase: providerSignIn.tokenEditor.saving
+                                              ? "saving"
+                                              : providerSignIn.tokenEditor.error
+                                                ? "failed"
+                                                : "idle",
+                                          ...(providerSignIn.tokenEditor.error
+                                              ? { error: providerSignIn.tokenEditor.error.message }
+                                              : {}),
+                                          onClose: () => providerSignInStore.tokenEditorClose(),
+                                          onTokenSubmit: (token: string) => {
+                                              if (happyAgentOnline())
+                                                  providerSignInStore.tokenSave(token);
+                                          },
+                                      },
+                                  }
+                                : {})}
+                            {...(providers.error ? { error: providers.error.message } : {})}
+                            {...(providers.saveError
+                                ? { saveError: providers.saveError.message }
+                                : {})}
+                            {...(unavailable === undefined ? {} : { unavailable })}
+                        />
+                    )}
                     <AppCustomProviderDialog snapshot={providers} store={providersStore} />
                 </>
             ) : section === "plugins" ? (
@@ -2558,30 +2576,97 @@ function cloudVendorName(vendor: string): string {
     return CLOUD_VENDOR_NAMES[vendor] ?? vendor;
 }
 
-/** One AI provider connection as Settings lists it. */
-function cloudConnectionRow(
-    connection: HappyAgentCloudConnection,
-): HappyAgentAiProviderConnectionRow {
-    const models = connection.models.length;
+/** The tile each Happy Cloud vendor wears: its own mark, or a glyph where it has none. */
+const CLOUD_VENDOR_TILES: Readonly<Record<string, IconTileProps>> = {
+    openai: { mark: "openai", tone: "green" },
+    codex: { mark: "openai", tone: "green" },
+    anthropic: { mark: "claude", tone: "orange" },
+    "claude-code": { mark: "claude", tone: "orange" },
+    grok: { mark: "grok", tone: "gray" },
+    antigravity: { mark: "gemini", tone: "blue" },
+    bedrock: { ionicon: "cloud-outline", tone: "orange" },
+};
+
+/**
+ * A connection's tile: its one vendor's, from the team connection's own ID
+ * or the credentials it holds; a person for the reader's mixed account, and
+ * a stack for a named provider of several vendors or none yet.
+ */
+function cloudConnectionTile(connection: HappyAgentCloudConnection): IconTileProps {
+    const own = CLOUD_VENDOR_TILES[connection.id];
+    if (own) return own;
+    const vendors = new Set(
+        (connection.credentials?.map((credential) => credential.vendor) ?? connection.vendors).map(
+            (vendor) => CLOUD_VENDOR_TILES[vendor]?.mark ?? vendor,
+        ),
+    );
+    const only = vendors.size === 1 ? [...vendors][0] : undefined;
+    const tile = only
+        ? Object.values(CLOUD_VENDOR_TILES).find((entry) => (entry.mark ?? "") === only)
+        : undefined;
+    if (tile) return tile;
+    return connection.id === "private"
+        ? { ionicon: "person-outline", tone: "blue" }
+        : { ionicon: "layers-outline", tone: "indigo" };
+}
+
+function tokensText(count: number): string {
+    return count === 1 ? "1 token" : `${String(count)} tokens`;
+}
+
+/** One provider row: how many tokens, and whether one needs attention or none serves. */
+function cloudProviderRow(connection: HappyAgentCloudConnection): HappyAgentAiProviderRow {
+    const credentials = connection.credentials ?? [];
+    const invalid = credentials.some((credential) => credential.state === "invalid");
+    const tokens = tokensText(connection.credentialCount);
     return {
         id: connection.id,
-        name: happyAgentCloudConnectionName(connection),
-        group:
-            connection.source === "operator"
-                ? "included"
-                : connection.scope === "team"
-                  ? "team"
-                  : "private",
-        meta: connection.enabled
-            ? [
-                  [...new Set(connection.vendors.map(cloudVendorName))].join(", "),
-                  models === 1 ? "1 model" : `${String(models)} models`,
-              ]
-                  .filter(Boolean)
-                  .join(" · ")
-            : "Add a key or sign in to use it",
-        enabled: connection.enabled,
-        ...(happyAgentCloudConnectionEditable(connection) ? { editable: true } : {}),
+        name: connection.name,
+        tile: cloudConnectionTile(connection),
+        meta: invalid
+            ? `${tokens} · Needs attention`
+            : connection.credentialCount === 0
+              ? "No tokens yet"
+              : connection.enabled
+                ? tokens
+                : `${tokens} · Not serving`,
+        tone: invalid ? "danger" : connection.enabled ? "ok" : "off",
+    };
+}
+
+/**
+ * The providers of the scope the list shows: only what the team or reader
+ * added. Happy's own included ones are not added by anyone and stay out.
+ */
+function cloudProviderRows(
+    snapshot: HappyAgentCloudProvidersSnapshot,
+): readonly HappyAgentAiProviderRow[] {
+    return snapshot.connections
+        .filter(
+            (connection) =>
+                connection.source === "tenant" && connection.scope === snapshot.listScope,
+        )
+        .map(cloudProviderRow);
+}
+
+/** The sheet of the provider that is open, while it is listed. */
+function providerDetailProps(
+    snapshot: HappyAgentCloudProvidersSnapshot,
+    store: HappyAgentCloudProvidersStore,
+): HappyAgentAiProviderSheetProps | undefined {
+    const detail = snapshot.detail;
+    const connection = detail
+        ? snapshot.connections.find((candidate) => candidate.id === detail.connectionId)
+        : undefined;
+    if (!detail || !connection) return undefined;
+    const allowed = connection.scope === "team" ? snapshot.teamAllowed : snapshot.privateAllowed;
+    const editable =
+        allowed && connection.source === "tenant" && connection.credentials !== undefined;
+    return {
+        name: connection.name,
+        tile: cloudConnectionTile(connection),
+        meta: `${connection.scope === "team" ? "Team" : "Personal"} · ${tokensText(connection.credentialCount)}`,
+        view: detail.view,
         ...(connection.credentials
             ? {
                   credentials: connection.credentials.map((credential) => ({
@@ -2601,34 +2686,30 @@ function cloudConnectionRow(
                                     { hour: "numeric", minute: "2-digit" },
                                 ),
                             }),
+                      ...(snapshot.credentialsSaving.has(credential.id) ? { saving: true } : {}),
+                      replaceable: happyAgentCloudCredentialReplaceable(credential),
                   })),
               }
+            : { credentialsHidden: "Only those who manage the team's providers see its tokens." }),
+        editable,
+        ...(detail.phase === "busy" ? { busy: true } : {}),
+        ...(detail.error ? { error: detail.error } : {}),
+        onClose: () => store.detailClose(),
+        onBack: () => store.detailBack(),
+        onCredentialOpen: (credentialId) => store.credentialEditOpen(credentialId),
+        onCredentialSave: (changes) => store.credentialSave(changes),
+        onCredentialEnabledChange: (credentialId, enabled) =>
+            store.credentialEnabledUpdate(connection.id, credentialId, enabled),
+        onCredentialRemove: (credentialId) => store.credentialRemove(connection.id, credentialId),
+        ...(allowed && connection.source === "tenant"
+            ? {
+                  onAdd: () => store.addOpen({ to: connection.scope, connectionId: connection.id }),
+              }
             : {}),
-    };
-}
-
-/** The edit dialog's props from the AI providers store, while its connection is listed. */
-function providerEditProps(
-    snapshot: HappyAgentCloudProvidersSnapshot,
-    store: HappyAgentCloudProvidersStore,
-): HappyAgentProviderEditDialogProps | undefined {
-    const edit = snapshot.edit;
-    const connection = edit
-        ? snapshot.connections.find((candidate) => candidate.id === edit.connectionId)
-        : undefined;
-    if (!edit || !connection) return undefined;
-    return {
-        name: connection.name,
-        credentials: (connection.credentials ?? []).map((credential) => ({
-            id: credential.id,
-            label: credential.label,
-            meta: `${cloudVendorName(credential.vendor)} · ${CLOUD_KIND_NAMES[credential.kind]}`,
-            replaceable: happyAgentCloudCredentialReplaceable(credential),
-        })),
-        saving: edit.phase === "busy",
-        ...(edit.error ? { error: edit.error } : {}),
-        onSave: (changes) => store.editSave(changes),
-        onClose: () => store.editClose(),
+        ...(editable && happyAgentCloudConnectionNamed(connection)
+            ? { onRename: () => store.connectionRenameOpen() }
+            : {}),
+        onNameSave: (name) => store.connectionNameSave(name),
     };
 }
 
@@ -2639,13 +2720,25 @@ export function providerAddProps(
     externalLinkOpen: ((url: string) => void) | undefined,
 ): HappyAgentProviderAddDialogProps {
     const add = snapshot.add!;
+    const labelPlaceholder = happyAgentCloudProviderAddLabelDefault(add.flow);
     return {
         flow: add.flow,
+        step: add.step,
         to: add.to,
-        destinationChoice:
+        scopeChoice:
             snapshot.privateAllowed &&
             snapshot.teamAllowed &&
             !happyAgentCloudProviderAddTeamOnly(add.flow),
+        label: add.label,
+        ...(labelPlaceholder === undefined ? {} : { labelPlaceholder }),
+        destinations: happyAgentCloudProviderAddOptions(snapshot.connections, add.flow, add.to).map(
+            (option) => ({ id: option.connectionId, name: option.name }),
+        ),
+        destination:
+            add.destination.kind === "new"
+                ? add.destination
+                : { kind: "existing", id: add.destination.connectionId },
+        newAllowed: happyAgentCloudProviderAddNewAllowed(add.flow),
         keyVendors: snapshot.teamAllowed
             ? ["openai", "anthropic", "grok", "bedrock"]
             : ["openai", "anthropic", "grok"],
@@ -2661,7 +2754,12 @@ export function providerAddProps(
         onFlowSelect: (flow) => store.addFlowSelect(flow),
         onBack: () => store.addBack(),
         onClose: () => store.addClose(),
-        onDestinationChange: (to) => store.addDestinationUpdate(to),
+        onScopeChange: (to) => store.addScopeUpdate(to),
+        onLabelChange: (label) => store.addLabelUpdate(label),
+        onDestinationSelect: (id) => store.addDestinationSelect(id),
+        onDestinationNewSelect: () => store.addDestinationNewSelect(),
+        onDestinationNameChange: (name) => store.addDestinationNameUpdate(name),
+        onDetailsSubmit: () => store.addDetailsSubmit(),
         onApiKeySubmit: (secret, region) => store.apiKeySubmit(secret, region),
         onAwsKeysSubmit: (input) => store.awsKeysSubmit(input),
         onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),

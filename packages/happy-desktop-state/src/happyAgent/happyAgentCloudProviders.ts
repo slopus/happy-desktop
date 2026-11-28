@@ -47,6 +47,8 @@ export interface HappyAgentCloudConnection {
     readonly models: readonly string[];
     /** Whether it can serve at least one model for the reader now. */
     readonly enabled: boolean;
+    /** How many credentials it holds, including where the reader may not see them. */
+    readonly credentialCount: number;
     /** Present for the reader's own, and for the team's when the reader manages them. */
     readonly credentials?: readonly HappyAgentCloudCredential[];
 }
@@ -92,6 +94,8 @@ export interface HappyAgentCloudSignIn {
         readonly expiresAt: number;
     } | null;
     readonly error: { readonly code: string; readonly message: string } | null;
+    /** The credential a succeeded sign-in stored. */
+    readonly credentialId: string | null;
 }
 
 /** Happy Cloud's provider routes, over the connection's own transport. */
@@ -118,6 +122,8 @@ export interface HappyAgentCloudProvidersApi {
     credentialRemove(connectionId: string, credentialId: string): Promise<void>;
     /** Renames one of the team's connections; needs `providers.manage`. */
     connectionRename(connectionId: string, name: string): Promise<void>;
+    /** Creates a named connection for the team or the reader; answers its ID. */
+    connectionCreate(name: string, scope: HappyAgentCloudScope): Promise<{ readonly id: string }>;
     credentialLabelUpdate(connectionId: string, credentialId: string, label: string): Promise<void>;
     /**
      * Sets the region the team's Bedrock keys route to. It is team
@@ -203,6 +209,12 @@ function connectionRead(value: unknown): HappyAgentCloudConnection | undefined {
     )
         return undefined;
     const vendors = stringsOf(entry.vendors);
+    const credentials = Array.isArray(entry.credentials)
+        ? entry.credentials.flatMap((credential: unknown) => {
+              const read = credentialRead(credential);
+              return read ? [read] : [];
+          })
+        : undefined;
     return {
         id: entry.id,
         name: typeof entry.name === "string" ? entry.name : entry.id,
@@ -212,14 +224,11 @@ function connectionRead(value: unknown): HappyAgentCloudConnection | undefined {
         models: stringsOf(entry.models),
         // A server before the explicit field lists only the vendors that can serve.
         enabled: typeof entry.enabled === "boolean" ? entry.enabled : vendors.length > 0,
-        ...(Array.isArray(entry.credentials)
-            ? {
-                  credentials: entry.credentials.flatMap((credential: unknown) => {
-                      const read = credentialRead(credential);
-                      return read ? [read] : [];
-                  }),
-              }
-            : {}),
+        credentialCount:
+            typeof entry.credentialCount === "number" && Number.isFinite(entry.credentialCount)
+                ? entry.credentialCount
+                : (credentials?.length ?? 0),
+        ...(credentials ? { credentials } : {}),
     };
 }
 
@@ -257,6 +266,7 @@ function signInRead(value: unknown): HappyAgentCloudSignIn | null {
                   message: typeof error.message === "string" ? error.message : "",
               }
             : null,
+        credentialId: typeof operation.credentialId === "string" ? operation.credentialId : null,
     };
 }
 
@@ -332,6 +342,14 @@ export function happyAgentCloudProvidersApiCreate(
                 name,
             });
         },
+        connectionCreate: async (name, scope) => {
+            const id = recordOf(
+                recordOf(await request("POST", "v0/cloud/providers", { name, scope }))?.provider,
+            )?.id;
+            if (typeof id !== "string")
+                throw new UserError("Happy Cloud didn't say which provider it created.");
+            return { id };
+        },
         credentialLabelUpdate: async (connectionId, credentialId, label) => {
             await request(
                 "PATCH",
@@ -378,9 +396,25 @@ export function happyAgentCloudProvidersApiCreate(
     return api;
 }
 
-/** Whether a connection is one the team added, which a manager may rename and rekey. */
-export function happyAgentCloudConnectionEditable(connection: HappyAgentCloudConnection): boolean {
-    return connection.source === "tenant" && connection.scope === "team";
+/**
+ * The IDs of the containers Happy Cloud keeps by itself: the team's one per
+ * vendor, named by the vendor's ID, and each member's own `private`. Every
+ * other connection the team or reader added is a named `p…` one.
+ */
+const DEFAULT_CONNECTION_IDS: ReadonlySet<string> = new Set([
+    "openai",
+    "anthropic",
+    "codex",
+    "grok",
+    "bedrock",
+    "claude-code",
+    "antigravity",
+    "private",
+]);
+
+/** Whether a connection is a named one someone created, which alone may be renamed. */
+export function happyAgentCloudConnectionNamed(connection: HappyAgentCloudConnection): boolean {
+    return connection.source === "tenant" && !DEFAULT_CONNECTION_IDS.has(connection.id);
 }
 
 /** Whether a credential's secret can be typed again to replace it: a key or a setup token. */
