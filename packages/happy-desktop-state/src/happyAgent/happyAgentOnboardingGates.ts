@@ -23,6 +23,8 @@ export interface HappyAgentOnboardingPluginGateEntry {
     readonly name: string;
     readonly required: boolean;
     readonly active: boolean;
+    /** Every team starts with it on; the gate waits for one the team chose. */
+    readonly defaultOn: boolean;
 }
 
 /** One step of a Happy Cloud server's onboarding, as the server decides it. */
@@ -181,6 +183,7 @@ function gateRead(value: unknown, endpoint: string): HappyAgentOnboardingGate | 
                                   name: textOf(plugin.name) || pluginId,
                                   required: plugin.required === true,
                                   active: plugin.active === true,
+                                  defaultOn: plugin.defaultOn === true,
                               },
                           ]
                         : [];
