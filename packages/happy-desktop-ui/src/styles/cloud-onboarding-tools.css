@@ -1,0 +1,523 @@
+/*
+ * C-357 CloudOnboardingToolsBody — the plugins gate by job. The Code box and
+ * five rows side by side, 276px tall at every window size: the frame's body at
+ * 720×640 starts at y216 and its fade at y496, so 280px is clear and 276px
+ * leaves a little air. Ink follows the onboarding foreground, as in
+ * cloud-onboarding.css.
+ */
+
+.happy-cloud-tools {
+    display: flex;
+    flex-direction: row;
+    align-self: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    text-align: left;
+}
+
+.happy-cloud-tools {
+    position: relative;
+}
+
+.happy-cloud-tools__card {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+    text-align: left;
+}
+
+button.happy-cloud-tools__card:enabled {
+    cursor: pointer;
+}
+
+button.happy-cloud-tools__card:enabled:hover {
+    background: color-mix(in srgb, var(--onboarding-foreground) 10%, transparent);
+}
+
+.happy-cloud-tools__text {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-cloud-tools__detail {
+    margin: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* Marks at the sizes the step needs; the picture and its frame are PluginMark's. */
+.happy-cloud-tools__mark {
+    display: flex;
+    flex: none;
+}
+
+.happy-cloud-tools__mark[data-size="24"] .happy-agent-plugin-mark {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+}
+
+.happy-cloud-tools__mark[data-size="40"] .happy-agent-plugin-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+}
+
+.happy-cloud-tools__marks {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ---- The Code box: one action, so its parts spread evenly down the box ---- */
+
+.happy-cloud-tools__code {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0;
+    min-width: 0;
+    height: 276px;
+}
+
+.happy-cloud-tools__label {
+    margin: 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-cloud-tools__head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+}
+
+.happy-cloud-tools__name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+/* The column is narrow, so a line may wrap; its icon stays on the first line. */
+.happy-cloud-tools__points {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-cloud-tools__points > li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-cloud-tools__points .happy-vector-icon {
+    flex: none;
+    margin-top: 2px;
+    opacity: 0.72;
+}
+
+.happy-cloud-tools__foot {
+    display: flex;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    height: 36px;
+}
+
+.happy-cloud-tools__done {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: 36px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    white-space: nowrap;
+}
+
+.happy-cloud-tools__done .happy-icon {
+    color: var(--success);
+}
+
+/* The sky turns the primary button light, and Button's spinner is drawn for a
+   dark one, so it has to take the label's ink to be seen. */
+.happy-cloud-tools .happy-button[data-variant="primary"] .happy-spinner {
+    color: var(--onboarding-action-label);
+}
+
+/* ---- The rows: logos and chevron centred, words end in an ellipsis -------- */
+
+.happy-cloud-tools__jobs {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-cloud-tools__job {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 0;
+    padding: 0 14px;
+}
+
+.happy-cloud-tools__job .happy-icon {
+    flex: none;
+    opacity: 0.72;
+}
+
+.happy-cloud-tools__job-text {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-cloud-tools__job-name,
+.happy-cloud-tools__job-tools {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-cloud-tools__job-name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-tools__job-tools {
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-tools__hint {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    margin: 0;
+    color: var(--onboarding-foreground);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+}
+
+/* ---- Dialogs: as tall as their content ----------------------------------- */
+
+.happy-cloud-tools-dialog__mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+}
+
+.happy-cloud-tools-dialog__chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy-cloud-tools-dialog__body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    color: var(--text);
+}
+
+.happy-cloud-tools-dialog__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-cloud-tools-dialog__lead {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-tools-dialog__fine {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-tools-dialog__error {
+    margin: 0;
+    color: var(--box-error-text);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* Every icon of a dialog sits on one 14px column at the content's left edge,
+   and every line of words on one column 24px in. */
+.happy-cloud-tools-dialog__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-cloud-tools-dialog__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-cloud-tools-dialog__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy-cloud-tools-dialog__text {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-cloud-tools-dialog__n {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    line-height: 20px;
+}
+
+/* The chat question prompt's frame: a 1px divider hairline, 12px corners, no
+   fill, standing 12px outside the text column so what is inside stays on it. */
+.happy-cloud-tools-dialog__note {
+    margin: 0 -12px;
+    padding: 8px 11px;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    list-style: none;
+}
+
+.happy-cloud-tools-dialog__note .happy-cloud-tools-dialog__row {
+    color: var(--text-secondary);
+}
+
+/* The token: a quiet row on the same columns, filled only on hover, like a
+   prompt's option. */
+.happy-cloud-tools-dialog__alt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    width: calc(100% + 16px);
+    margin: 0 -8px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-cloud-tools-dialog__alt:hover {
+    background: var(--surface-selected);
+}
+
+.happy-cloud-tools-dialog__alt .happy-cloud-tools-dialog__icon {
+    align-self: flex-start;
+}
+
+.happy-cloud-tools-dialog__alt > .happy-icon {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-cloud-tools-dialog__alt-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-tools-dialog__alt-why {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-tools-dialog__needs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    list-style: none;
+}
+
+.happy-cloud-tools-dialog__needs > li {
+    display: flex;
+    gap: 12px;
+}
+
+.happy-cloud-tools-dialog__needs b {
+    flex: none;
+    width: 80px;
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* A secret and its show control; the control is centred on the 36px well,
+   under the field's 22px label lane. */
+.happy-cloud-tools-dialog__secret {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-cloud-tools-dialog__secret > .happy-text-field {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+}
+
+.happy-cloud-tools-dialog__eye {
+    display: flex;
+    flex: none;
+    padding-top: 26px;
+}
+
+/* A list's rows keep their hover fill, and their marks on the content edge. */
+.happy-cloud-tools-dialog__pick {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 -8px;
+}
+
+.happy-cloud-tools-dialog__pick-row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 56px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-cloud-tools-dialog__pick-row:hover {
+    background: var(--surface-selected);
+}
+
+.happy-cloud-tools-dialog__pick-name {
+    flex: none;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-tools-dialog__pick-detail {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-tools-dialog__pick-needs {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-tools-dialog__pick-needs[data-connected] .happy-icon {
+    color: var(--success);
+}
+
+.happy-cloud-tools-dialog__pick-row > .happy-icon {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-cloud-tools-dialog__pick > .happy-cloud-tools-dialog__fine {
+    padding: 8px 8px 0;
+}
+
+.happy-cloud-tools-dialog__summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
