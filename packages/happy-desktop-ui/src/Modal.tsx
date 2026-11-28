@@ -13,7 +13,10 @@ export type ModalSize = "small" | "medium" | "large" | "sheet";
  *
  * - `anchored`: the top edge sits where its size's frame (280, 560 or 720
  *   tall, clamped to the window) would and stays there. The card is as tall
- *   as its content, up to the frame, so only its bottom edge moves.
+ *   as its content, up to the frame, so only its bottom edge moves. With
+ *   `anchorHeight`, the top edge is set once so that the tallest view of the
+ *   flow would be centred in the window instead; the card grows down to the
+ *   window's gutter and then scrolls its body.
  *
  * `sheet` is already a fixed frame and takes no `frame`.
  */
@@ -46,6 +49,13 @@ export type ModalProps = {
     backLabel?: string;
     size?: ModalSize;
     frame?: ModalFrame;
+    /**
+     * For `frame="anchored"`: the height of the tallest view the flow shows in
+     * this card. The top edge is set so that view would be centred, and every
+     * shorter view hangs from the same top. Without it, the size's frame
+     * (280, 560 or 720) stands in.
+     */
+    anchorHeight?: number;
     tone?: ModalTone;
     icon?: IconName;
     /**
@@ -88,6 +98,7 @@ export function Modal(props: ModalProps) {
         "backLabel",
         "size",
         "frame",
+        "anchorHeight",
         "tone",
         "icon",
         "leading",
@@ -95,14 +106,24 @@ export function Modal(props: ModalProps) {
     ]);
     const size = () => local.size ?? "medium";
     const tone = () => local.tone ?? "default";
+    const anchorHeight =
+        size() !== "sheet" && local.frame === "anchored" ? local.anchorHeight : undefined;
     return (
         <div
             {...rest}
             className={["happy-modal", local.className].filter(Boolean).join(" ")}
             data-frame={size() === "sheet" ? undefined : local.frame}
             data-frame-size={size() === "sheet" || !local.frame ? undefined : size()}
+            data-anchor-height={anchorHeight}
             data-happy-desktop-ui="modal"
-            style={local.style}
+            style={
+                anchorHeight === undefined
+                    ? local.style
+                    : ({
+                          ...local.style,
+                          "--happy-modal-frame-height": `${String(anchorHeight)}px`,
+                      } as CSSProperties)
+            }
         >
             <div
                 aria-label={local.title}
