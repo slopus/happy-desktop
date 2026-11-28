@@ -31,9 +31,8 @@ import {
     type AppHappyAgentEntry,
 } from "../../sources/AppHappyAgentView";
 
-/* Happy Cloud places each bot by its kind. A shared bot is a destination of
- * the sidebar's first group, after everything else in it, and is not under
- * Bots; a personal bot is under Bots and opens the reader's own conversation.
+/* Happy Cloud has an untitled bot section led by Chief of Staff and Joy.
+ * Other shared bots remain destinations of the sidebar's first group.
  * Nobody makes a bot from the sidebar there, and only a bot the host reports
  * editable offers its settings. A Happy Agent daemon sends no kind, and its
  * bots are listed and offered exactly as before. */
@@ -289,21 +288,33 @@ const menuLabels = () =>
 const menuClose = () =>
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
-it("shows an owner the shared bot last in the main group, and not under Bots", () => {
-    const { container, onChatSelect } = view([CHIEF_SHARED, WRITER], { happyCloud: true });
-    const [first, ...rest] = sections(container);
-    expect(first!.rows).toEqual(["feed", "artifacts", "local/ws_chief"]);
-    const bots = rest.find((section) => section.label === "Bots");
-    expect(bots?.rows).toEqual(["local/ws_writer"]);
+it("puts Chief of Staff first and Joy second in the owner's untitled bot section", () => {
+    const joy = bot("sys_joy", "Renamed Joy", { kind: "personal", systemKey: "joy" });
+    const namesake = bot("namesake", "Joy", { kind: "personal" });
+    const { container, onChatSelect } = view([WRITER, namesake, joy, CHIEF_SHARED], {
+        happyCloud: true,
+    });
+    const [first, bots] = sections(container);
+    expect(first!.rows).toEqual(["feed", "artifacts"]);
+    expect(bots).toEqual({
+        label: null,
+        rows: ["local/ws_chief", "local/ws_sys_joy", "local/ws_writer", "local/ws_namesake"],
+    });
 
     fireEvent.click(row(container, "ws_chief"));
     expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_chief", "ses_chief");
+    fireEvent.click(row(container, "ws_sys_joy"));
+    expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_sys_joy", "ses_sys_joy");
     fireEvent.click(row(container, "ws_writer"));
     expect(onChatSelect).toHaveBeenLastCalledWith("local", "ws_writer", "ses_writer");
 });
 
 it("closes the main group with the shared bot, after Documents, TODOs, Pipelines, and Surfaces", () => {
-    const { container } = view([CHIEF_SHARED, WRITER], { happyCloud: true, everyTopRow: true });
+    const shared = bot("lobby", "Lobby", { kind: "shared" });
+    const { container } = view([CHIEF_SHARED, WRITER, shared], {
+        happyCloud: true,
+        everyTopRow: true,
+    });
     expect(sections(container)[0]!.rows).toEqual([
         "feed",
         "artifacts",
@@ -311,28 +322,30 @@ it("closes the main group with the shared bot, after Documents, TODOs, Pipelines
         "todos",
         "pipelines",
         "local/surface:srf_plan",
-        "local/ws_chief",
+        "local/ws_lobby",
     ]);
 });
 
-it("shows a member, who is sent no shared bot, only the personal bots under Bots", () => {
-    const { container } = view([WRITER, READER], { happyCloud: true });
-    const [first, ...rest] = sections(container);
+it("puts Joy first for a member who is not sent Chief of Staff", () => {
+    const joy = bot("sys_joy", "Joy", { kind: "personal", systemKey: "joy" });
+    const { container } = view([WRITER, READER, joy], { happyCloud: true });
+    const [first, bots] = sections(container);
     expect(first!.rows).toEqual(["feed", "artifacts"]);
-    expect(rest.find((section) => section.label === "Bots")?.rows).toEqual([
-        "local/ws_writer",
-        "local/ws_reader",
-    ]);
+    expect(bots).toEqual({
+        label: null,
+        rows: ["local/ws_sys_joy", "local/ws_writer", "local/ws_reader"],
+    });
 });
 
-it("offers no new bot on Happy Cloud, and leaves out a Bots heading with nothing under it", () => {
+it("offers no new bot on Happy Cloud and omits an empty bot section", () => {
     const { container, unmount } = view([CHIEF_SHARED, WRITER], { happyCloud: true });
     expect(container.querySelector('[aria-label="New bot"]')).toBeNull();
     unmount();
 
-    const owner = view([CHIEF_SHARED], { happyCloud: true });
-    expect(sections(owner.container).map((section) => section.label)).not.toContain("Bots");
-    expect(sections(owner.container)[0]!.rows).toContain("local/ws_chief");
+    const empty = view([], { happyCloud: true });
+    expect(sections(empty.container).filter((section) => section.label === null)).toEqual([
+        { label: null, rows: ["feed", "artifacts"] },
+    ]);
 });
 
 it("offers a shared bot no edits and an editable personal bot its settings", () => {
@@ -364,12 +377,12 @@ it("offers a shared bot no edits and an editable personal bot its settings", () 
 });
 
 it("lists a daemon's bots, which carry no kind, under Bots with New bot and Rename as before", () => {
-    const { container } = view([CHIEF_LEGACY, HELPER]);
+    const { container } = view([HELPER, CHIEF_LEGACY]);
     const [first, ...rest] = sections(container);
     expect(first!.rows).toEqual(["feed", "artifacts"]);
     expect(rest.find((section) => section.label === "Bots")?.rows).toEqual([
-        "local/ws_chief",
         "local/ws_helper",
+        "local/ws_chief",
     ]);
     expect(container.querySelector('[aria-label="New bot"]')).not.toBeNull();
 

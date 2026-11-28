@@ -1700,8 +1700,7 @@ function botAttentionMenuItems(attention: HappyAgentBotAttention, bot?: HappyAge
             label: attention === "muted" ? "Unmute bot" : "Mute bot",
             icon: "bell",
         },
-        // A shared bot is a destination of the first group, which is never
-        // thinned out, so it can be quietened but not hidden.
+        // A shared bot can be quietened but not hidden.
         ...(bot?.kind === "shared"
             ? []
             : ([
@@ -2817,6 +2816,20 @@ function voiceFocusInProjects(
     );
 }
 
+function cloudBotPriority(bot: HappyAgentBot): number {
+    if (bot.systemKey === "chief_of_staff") return 0;
+    if (bot.systemKey === "joy") return 1;
+    return 2;
+}
+
+function sidebarBots(happyAgent: AppHappyAgentEntry): readonly HappyAgentBot[] {
+    if (!happyAgent.happyCloud) return happyAgentSidebarTree(happyAgent).bots;
+    // Sort a copy so the catalog and the relative order of other bots stay intact.
+    return happyAgent.bots
+        .filter((bot) => bot.kind !== "shared" || cloudBotPriority(bot) < 2)
+        .sort((a, b) => cloudBotPriority(a) - cloudBotPriority(b));
+}
+
 function happyAgentSections(
     directory: AppHappyAgentDirectorySnapshot,
     titleShimmerEnabled: boolean,
@@ -2824,67 +2837,79 @@ function happyAgentSections(
     attention: HappyAgentAttentionSnapshot,
     folded?: ReadonlySet<string>,
 ): SidebarSection[] {
-    return directory.happyAgents.flatMap((happyAgent) => [
-        // Keep the heading even with no bots: its action is where the first
-        // one is named, and a machine with none is exactly where that is wanted.
-        // Where no bot can be made here, an empty heading has nothing to offer.
-        ...(happyAgentBotCreateOffered(happyAgent) ||
-        happyAgentSidebarTree(happyAgent).bots.length > 0 ||
-        (happyAgent.botsCreating ?? []).length > 0
-            ? [
-                  happyAgentBotsSection(
-                      happyAgent,
-                      titleShimmerEnabled,
-                      projectsVisibility,
-                      attention,
-                  ),
-              ]
-            : []),
-        // A Happy Agent from before tasks has no task list to show, so it
-        // offers no heading that could only ever stand empty.
-        ...(happyAgentTasksSupported(happyAgent)
-            ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled)]
-            : []),
-        // The reader's own choice in settings for this connection: the
-        // section goes entirely, heading and all, rather than folding. A Happy
-        // Agent that runs no workspaces has no projects to list or add.
-        ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden ||
-        happyAgent.workspacesUnavailable
-            ? []
-            : [happyAgentProjectsSection(happyAgent, titleShimmerEnabled, folded)]),
-    ]);
+    return directory.happyAgents.flatMap((happyAgent) => {
+        const bots = sidebarBots(happyAgent);
+        return [
+            // Keep the heading even with no bots: its action is where the first
+            // one is named, and a machine with none is exactly where that is wanted.
+            // Where no bot can be made here, an empty heading has nothing to offer.
+            ...(happyAgentBotCreateOffered(happyAgent) ||
+            bots.length > 0 ||
+            (happyAgent.botsCreating ?? []).length > 0
+                ? [
+                      happyAgentBotsSection(
+                          happyAgent,
+                          bots,
+                          titleShimmerEnabled,
+                          projectsVisibility,
+                          attention,
+                      ),
+                  ]
+                : []),
+            // A Happy Agent from before tasks has no task list to show, so it
+            // offers no heading that could only ever stand empty.
+            ...(happyAgentTasksSupported(happyAgent)
+                ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled)]
+                : []),
+            // The reader's own choice in settings for this connection: the
+            // section goes entirely, heading and all, rather than folding. A Happy
+            // Agent that runs no workspaces has no projects to list or add.
+            ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden ||
+            happyAgent.workspacesUnavailable
+                ? []
+                : [happyAgentProjectsSection(happyAgent, titleShimmerEnabled, folded)]),
+        ];
+    });
 }
 
 /**
- * The Bots heading and every bot listed under it, each with its interactive
- * subtasks nested beneath. Happy Cloud's shared bots are not here; they are
- * destinations of the first group (`happyAgentTopSection`).
+ * The bot list, with interactive subtasks nested beneath. Cloud has no
+ * heading and gives Chief of Staff and Joy the first two positions.
  */
 function happyAgentBotsSection(
     happyAgent: AppHappyAgentEntry,
+    bots: readonly HappyAgentBot[],
     titleShimmerEnabled: boolean,
     projectsVisibility: ProjectsVisibilitySnapshot,
     attention: HappyAgentAttentionSnapshot,
 ): SidebarSection {
     return {
         id: happyAgentBotsSectionId(happyAgent.id),
-        label: "Bots",
+        ...(happyAgent.happyCloud ? {} : { label: "Bots" }),
         items: [
-            ...happyAgentSidebarTree(happyAgent).bots.flatMap((bot) => {
+            ...bots.flatMap((bot) => {
                 // A hidden bot leaves the list with everything nested
                 // under it; a muted one stays, with its whole tree quiet.
                 const botAttention = happyAgentBotAttention(attention, happyAgent.id, bot.id);
-                if (botAttention === "hidden") return [];
+                if (botAttention === "hidden" && bot.kind !== "shared") return [];
                 const muted = botAttention === "muted";
+                const fixed = happyAgent.happyCloud && cloudBotPriority(bot) < 2;
                 return [
-                    botSidebarItem(bot, titleShimmerEnabled, muted),
+                    {
+                        ...botSidebarItem(bot, titleShimmerEnabled, muted),
+                        ...(fixed ? { reorderable: false } : {}),
+                    },
                     ...botSubtaskSidebarItems(
                         bot.subtasks,
                         happyAgent.projects,
                         titleShimmerEnabled,
                         1,
                         happyAgent.taskRepositories,
-                    ).map((item) => (muted ? { ...item, muted: true } : item)),
+                    ).map((item) => ({
+                        ...item,
+                        ...(bot.kind === "shared" ? { reorderable: false } : {}),
+                        ...(muted ? { muted: true } : {}),
+                    })),
                 ];
             }),
             // The host lists a new bot last, so a bot still being made
@@ -2910,7 +2935,8 @@ function happyAgentBotsSection(
                   },
               }
             : {}),
-        ...hiddenBotsAction(happyAgent, attention),
+        // Cloud restores hidden bots through Search instead of a heading menu.
+        ...(happyAgent.happyCloud ? {} : hiddenBotsAction(happyAgent, attention)),
         // With the Projects list left out, what the Happy Agent said when it
         // failed still needs a heading to stand under.
         ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden &&
@@ -3366,7 +3392,7 @@ function happyAgentTopSection(
 }
 
 /**
- * Happy Cloud's shared bots as rows of the first group, addressed like any of
+ * The remaining shared bots as rows of the first group, addressed like any of
  * the Happy Agent's rows so selecting one opens its conversation the way a bot
  * under Bots opens. A shared bot is never hidden; muting quietens its tree.
  */
@@ -3376,7 +3402,8 @@ function sharedBotSidebarItems(
     attention: HappyAgentAttentionSnapshot,
 ): SidebarItem[] {
     return happyAgentSidebarTree(happyAgent)
-        .sharedBots.flatMap((bot) => {
+        .sharedBots.filter((bot) => !happyAgent.happyCloud || cloudBotPriority(bot) === 2)
+        .flatMap((bot) => {
             const muted = happyAgentBotAttention(attention, happyAgent.id, bot.id) === "muted";
             return [
                 { ...botSidebarItem(bot, titleShimmerEnabled, muted), reorderable: false },
