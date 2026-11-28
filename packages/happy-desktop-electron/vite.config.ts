@@ -55,6 +55,30 @@ function profilerEntryPlugin(enabled: boolean): Plugin {
 }
 
 /**
+ * A renderer served over HTTPS (the hosted Nightly renderer, and the Portless
+ * development server) reaches the daemon at `http://happy-agent`, which the
+ * shell marks as a secure origin. Chromium still announces every image, video
+ * and audio element on that origin as "Mixed Content ... automatically
+ * upgraded to HTTPS", although it then leaves a secure origin's URL alone. With
+ * `upgrade-insecure-requests` in the page's own policy that announcement is
+ * never made: secure origins (happy-agent, localhost) stay on HTTP as before,
+ * and any other `http:` request is upgraded quietly. The bundled renderer is a
+ * `file:` document with no such warning, so its policy is left as written.
+ */
+function httpsDocumentPolicyPlugin(build: boolean): Plugin {
+    return {
+        name: "happy-https-document-policy",
+        transformIndexHtml(html, context) {
+            if (!build && !context.server) return html;
+            const policy = /(http-equiv="Content-Security-Policy"\s+content="[^"]+)"/u;
+            if (!policy.test(html))
+                throw new Error("Happy renderer Content-Security-Policy was not found.");
+            return html.replace(policy, '$1; upgrade-insecure-requests"');
+        },
+    };
+}
+
+/**
  * The cloud web app names its tab after its server and puts back the server's
  * picture before the app loads. The script is a file of its own because the
  * edge's CSP refuses inline scripts.
@@ -114,6 +138,7 @@ export default defineConfig({
         react(),
         babel({ presets: [reactCompilerPreset()] }),
         profilerEntryPlugin(profileBuild),
+        httpsDocumentPolicyPlugin(localWebSite),
         ...(cloudWeb ? [cloudWebHeadPlugin()] : []),
         // Happy-ui's empty-state marks are drawn by a WASM Lottie renderer that
         // ships hardcoded CDN URLs for its binary. This cuts them out so the
