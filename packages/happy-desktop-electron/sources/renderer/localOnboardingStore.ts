@@ -12,6 +12,7 @@ import type {
     OnboardingStage,
 } from "happy-desktop-ui";
 import {
+    HappyAgentApiError,
     HappyAgentClient,
     happyAgentMobileConnectorStoreNoop,
     type HappyAgentMobileConnectorStore,
@@ -30,7 +31,6 @@ import type {
 import {
     LocalProviderClisUnavailable,
     LocalProviderCliRouteMissing,
-    LOCAL_PROVIDER_CLIS_REFUSED,
     LocalProviderCliRefused,
     localProviderClisApiCreate,
     type LocalProviderCli,
@@ -970,6 +970,16 @@ export function localOnboardingStoreCreate(
             });
     }
 
+    /** The local Happy Agent's client, while it is the one connected. */
+    function agentClient() {
+        const runtime = snapshot.runtime;
+        if (runtime?.phase !== "ready" || runtime.mode !== "local") return undefined;
+        return new HappyAgentClient({
+            endpoint: runtime.activeTarget.happyAgentHttpUrl,
+            token: "happy-local-capability",
+        });
+    }
+
     /** The local Happy Agent's provider CLI routes, while it is the one connected. */
     function providerClisApi() {
         const runtime = snapshot.runtime;
@@ -1059,12 +1069,19 @@ export function localOnboardingStoreCreate(
         if (providerClisReadFor === runtime.connectionId || providerClisReading) return;
         providerClisReading = true;
         const connectionId = runtime.connectionId;
-        // Whether keys can be added is asked once per connection, beside the CLIs;
-        // a Happy Agent that cannot answer cannot add them either.
-        void api.providerAccountsSupported().then(
-            (supported) => keyAddSupportedPublish(connectionId, supported),
-            () => keyAddSupportedPublish(connectionId, false),
-        );
+        // Whether accounts can be added is asked once per connection, beside the
+        // CLIs; a Happy Agent that cannot answer cannot add them either.
+        const client = agentClient();
+        void Promise.resolve()
+            .then(() => client?.getHealth())
+            .then(
+                (health) =>
+                    keyAddSupportedPublish(
+                        connectionId,
+                        health?.capabilities?.providerAccounts === true,
+                    ),
+                () => keyAddSupportedPublish(connectionId, false),
+            );
         void api
             .list()
             .then(
@@ -1342,45 +1359,49 @@ export function localOnboardingStoreCreate(
             publish({ ...snapshot, claudeToken: { phase: "idle" } });
         },
         providerKeyAdd(credential) {
-            const api = providerClisApi();
+            const client = agentClient();
             const keyAdd = snapshot.keyAdd;
-            if (!api || keyAdd?.supported !== true || keyAdd.phase === "saving") return;
+            if (!client || keyAdd?.supported !== true || keyAdd.phase === "saving") return;
             const row = credential.kind === "api-key" ? credential.type : "bedrock";
             publish({ ...snapshot, keyAdd: { phase: "saving", row, supported: true } });
-            api.providerAccountAdd(
-                credential.kind === "api-key"
-                    ? { apiKey: credential.apiKey, type: credential.type }
-                    : {
-                          bedrock:
-                              credential.kind === "aws"
-                                  ? {
-                                        accessKeyId: credential.accessKeyId,
-                                        region: credential.region,
-                                        secretAccessKey: credential.secretAccessKey,
-                                    }
-                                  : {
-                                        bearerToken: credential.bearerToken,
-                                        region: credential.region,
-                                    },
-                          type: "bedrock",
-                      },
-                crypto.randomUUID(),
-            ).then(
-                // The new account is a configured provider: the next pass reads
-                // and checks it like any other, and its row counts it.
-                () => publish({ ...snapshot, keyAdd: { phase: "saved", row, supported: true } }),
-                (error: unknown) => {
-                    publish({
-                        ...snapshot,
-                        keyAdd: {
-                            error: keyAddFailure(error, row),
-                            phase: "failed",
-                            row,
-                            supported: true,
-                        },
-                    });
-                },
-            );
+            const mutationId = crypto.randomUUID();
+            client
+                .addProviderAccount(
+                    credential.kind === "api-key"
+                        ? { apiKey: credential.apiKey, mutationId, type: credential.type }
+                        : {
+                              bedrock:
+                                  credential.kind === "aws"
+                                      ? {
+                                            accessKeyId: credential.accessKeyId,
+                                            region: credential.region,
+                                            secretAccessKey: credential.secretAccessKey,
+                                        }
+                                      : {
+                                            bearerToken: credential.bearerToken,
+                                            region: credential.region,
+                                        },
+                              mutationId,
+                              type: "bedrock",
+                          },
+                )
+                .then(
+                    // The new account is a configured provider: the next pass reads
+                    // and checks it like any other, and its row counts it.
+                    () =>
+                        publish({ ...snapshot, keyAdd: { phase: "saved", row, supported: true } }),
+                    (error: unknown) => {
+                        publish({
+                            ...snapshot,
+                            keyAdd: {
+                                error: keyAddFailure(error, row),
+                                phase: "failed",
+                                row,
+                                supported: true,
+                            },
+                        });
+                    },
+                );
         },
         providerKeyAddReset() {
             const keyAdd = snapshot.keyAdd;
@@ -1890,20 +1911,21 @@ const KEY_VENDORS: Readonly<Record<LocalOnboardingKeyRowId, string>> = {
  */
 function keyAddFailure(error: unknown, row: LocalOnboardingKeyRowId): string {
     const vendor = KEY_VENDORS[row];
-    if (error instanceof LocalProviderCliRouteMissing)
+    const plural = row === "bedrock";
+    if (!(error instanceof HappyAgentApiError))
+        return "Happy couldn't reach Happy Agent. Try again.";
+    // A daemon without the route: the capability said otherwise, or it predates it.
+    if (error.status === 404 && error.code === "not_found")
         return "This version of Happy Agent can't add keys yet. Update Happy Agent, then try again.";
-    if (error instanceof LocalProviderCliRefused) {
-        // The vendor's own refusal says best what is wrong with the key.
-        if (error.code === "verification_failed")
-            return error.message !== LOCAL_PROVIDER_CLIS_REFUSED
-                ? error.message
-                : `${vendor} didn't accept ${row === "bedrock" ? "these keys" : "this key"}. Check that ${row === "bedrock" ? "they're" : "it's"} whole and still active.`;
-        if (error.code === "verification_unavailable")
-            return `Happy Agent couldn't check ${row === "bedrock" ? "these keys" : "the key"} with ${vendor} right now. ${row === "bedrock" ? "They" : "It"} may be fine; try again in a moment.`;
-        return error.message;
-    }
-    if (error instanceof LocalProviderClisUnavailable) return error.message;
-    return "Happy couldn't reach Happy Agent. Try again.";
+    // The vendor's own refusal says best what is wrong with the key.
+    if (error.code === "verification_failed")
+        return error.message
+            ? error.message
+            : `${vendor} didn't accept ${plural ? "these keys" : "this key"}. Check that ${plural ? "they're" : "it's"} whole and still active.`;
+    // Unproven, not wrong: nothing here may say the key is bad.
+    if (error.code === "verification_unavailable")
+        return `Happy Agent couldn't check ${plural ? "these keys" : "the key"} with ${vendor} right now. ${plural ? "They" : "It"} may be fine; try again in a moment.`;
+    return error.message || "Happy Agent couldn't add that. Try again.";
 }
 
 /**

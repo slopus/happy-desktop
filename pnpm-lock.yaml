@@ -162,8 +162,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: 0.0.184
-        version: 0.0.184
+        specifier: 0.0.185
+        version: 0.0.185
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9(patch_hash=5c9a21b3eddba64e3cd8de285f909c9153ef313443f6c636c14806a95f452457)
@@ -302,8 +302,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: 0.0.184
-        version: 0.0.184
+        specifier: 0.0.185
+        version: 0.0.185
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2110,8 +2110,8 @@ packages:
     resolution: {integrity: sha512-C1yWlHMh2UbKLCHjry27mNR2QjeaPyd9o9IVwMY/uKXHJbPPve39jfd/Omofk6ddQHEZlCfhF0hjuvMaH23h3Q==}
     engines: {node: '>=20'}
 
-  '@slopus/happy-agent-client@0.0.184':
-    resolution: {integrity: sha512-2tUBtxfZaY2+fkk0RQ9aR/wv9+6S4F00ai0xfxBxq7UEHAeqDzHJFBx7pNNSro7/hrjBIa+mOCEnv/m3/2KqDQ==}
+  '@slopus/happy-agent-client@0.0.185':
+    resolution: {integrity: sha512-Ixl6KC6WBgrMC/k/WxzvUI26WJ3F8L4DHXy+OUHA/8LI9K6KO3H60Cw0nsrZX1rwaMh2FOgsImvSAOTUgz7UTg==}
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7408,7 +7408,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@0.0.184':
+  '@slopus/happy-agent-client@0.0.185':
     dependencies:
       '@noble/hashes': 1.8.0
       '@sinclair/typebox': 0.34.52

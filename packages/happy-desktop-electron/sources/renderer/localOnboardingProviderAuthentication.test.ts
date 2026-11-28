@@ -8,19 +8,25 @@ vi.mock("./happyAgentDirectoryStore", () => ({ LOCAL_HAPPY_AGENT_ID: "local" }))
 
 /** The daemon setup talks to, one fake shared by every client the store opens. */
 const daemon = {
+    addProviderAccount: vi.fn(),
     getConfig: vi.fn(),
+    getHealth: vi.fn(),
     scanProviders: vi.fn(),
     verifyProvider: vi.fn(),
 };
-vi.mock("happy-desktop-state", () => ({
+vi.mock("happy-desktop-state", async () => ({
+    HappyAgentApiError: (await import("@slopus/happy-agent-client")).HappyAgentApiError,
     HappyAgentClient: class {
+        addProviderAccount = (...args: unknown[]) => daemon.addProviderAccount(...args);
         getConfig = (...args: unknown[]) => daemon.getConfig(...args);
+        getHealth = (...args: unknown[]) => daemon.getHealth(...args);
         scanProviders = (...args: unknown[]) => daemon.scanProviders(...args);
         verifyProvider = (...args: unknown[]) => daemon.verifyProvider(...args);
     },
     happyAgentMobileConnectorStoreNoop: {},
 }));
 
+import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -50,6 +56,7 @@ beforeEach(() => {
     daemon.scanProviders.mockResolvedValue({
         providers: [{ credentials: "available", providerId: "claude" }],
     });
+    daemon.getHealth.mockResolvedValue({});
     daemonConfigSet("https://llm-proxy.internal");
 });
 
@@ -981,3 +988,38 @@ it("offers the Google page and takes the code it shows for a waiting Antigravity
     ];
     expect(JSON.parse(String(request.body))).toMatchObject({ code: "4/0AbCdEf" });
 });
+
+it.each([
+    [
+        new HappyAgentApiError(503, "Couldn't check.", "verification_unavailable", null),
+        "Happy Agent couldn't check the key with OpenAI right now. It may be fine; try again in a moment.",
+    ],
+    [
+        new HappyAgentApiError(422, "Incorrect API key provided.", "verification_failed", null),
+        "Incorrect API key provided.",
+    ],
+])(
+    "adds a pasted key as a provider account and says why one was not (%#)",
+    async (error, shown) => {
+        daemon.getHealth.mockResolvedValue({ capabilities: { providerAccounts: true } });
+        daemon.addProviderAccount.mockRejectedValue(error);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ providerClis: [] })));
+        const store = storeOpen();
+        await vi.waitFor(() => expect(store.get().keyAdd?.supported).toBe(true));
+
+        store.providerKeyAdd({ apiKey: "sk-proj-1", kind: "api-key", type: "codex" });
+        expect(daemon.addProviderAccount).toHaveBeenCalledWith({
+            apiKey: "sk-proj-1",
+            mutationId: expect.any(String),
+            type: "codex",
+        });
+        await vi.waitFor(() =>
+            expect(store.get().keyAdd).toEqual({
+                error: shown,
+                phase: "failed",
+                row: "codex",
+                supported: true,
+            }),
+        );
+    },
+);

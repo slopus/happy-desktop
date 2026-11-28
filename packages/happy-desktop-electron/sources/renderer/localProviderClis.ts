@@ -131,9 +131,6 @@ export class LocalProviderClisUnavailable extends Error {}
 export class LocalProviderCliRouteMissing extends LocalProviderClisUnavailable {}
 
 /** Happy Agent refused the request; `message` is displayable. */
-/** What a refusal says when Happy Agent gave no words of its own. */
-export const LOCAL_PROVIDER_CLIS_REFUSED = "Happy Agent could not do that.";
-
 export class LocalProviderCliRefused extends Error {
     constructor(
         readonly code: string,
@@ -162,33 +159,7 @@ export interface LocalProviderClisApi {
      * Happy Agent takes one yet; those answer `LocalProviderClisUnavailable`.
      */
     claudeSetupTokenSave(token: string, mutationId: string): Promise<void>;
-    /**
-     * Whether this Happy Agent adds a provider from a key: `capabilities.providerAccounts`
-     * in `GET /v0/health`. Proposed in the happy-agent API; no Happy Agent says so yet.
-     */
-    providerAccountsSupported(signal?: AbortSignal): Promise<boolean>;
-    /**
-     * Adds a new, enabled provider from an API key or AWS keys: `POST /v0/providers`,
-     * the route proposed beside that capability, which answers `201` once it is saved.
-     * A key the vendor refused is `verification_failed` (422); one that could not be
-     * checked at all is `verification_unavailable` (503), which says nothing against it.
-     */
-    providerAccountAdd(request: LocalProviderCreate, mutationId: string): Promise<void>;
 }
-
-/** The body of the proposed `POST /v0/providers`, without its mutation ID. */
-export type LocalProviderCreate =
-    | { readonly type: "claude" | "codex" | "grok"; readonly apiKey: string }
-    | {
-          readonly type: "bedrock";
-          readonly bedrock:
-              | {
-                    readonly accessKeyId: string;
-                    readonly secretAccessKey: string;
-                    readonly region: string;
-                }
-              | { readonly bearerToken: string; readonly region: string };
-      };
 
 /** The routes on the local Happy Agent, over its HTTP endpoint. */
 export function localProviderClisApiCreate(input: {
@@ -218,7 +189,7 @@ export function localProviderClisApiCreate(input: {
                 ? error.message
                 : typeof json?.error === "string"
                   ? json.error
-                  : LOCAL_PROVIDER_CLIS_REFUSED;
+                  : "Happy Agent could not do that.";
         if (
             response.status === 404 &&
             error?.code === "not_found" &&
@@ -277,13 +248,6 @@ export function localProviderClisApiCreate(input: {
                 token: token.replace(/[\s\p{White_Space}]/gu, ""),
                 mutationId,
             });
-        },
-        async providerAccountsSupported(signal) {
-            const health = await request("GET", "v0/health", undefined, signal);
-            return recordOf(health?.capabilities)?.providerAccounts === true;
-        },
-        async providerAccountAdd(body, mutationId) {
-            await request("POST", "v0/providers", { ...body, mutationId });
         },
     };
 }

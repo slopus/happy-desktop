@@ -154,36 +154,4 @@ describe("Antigravity", () => {
             },
         );
     });
-
-    it("adds a provider from a key only where Happy Agent says it can", async () => {
-        const fetch = vi
-            .fn()
-            .mockResolvedValueOnce(Response.json({ capabilities: { providerClis: true } }))
-            .mockResolvedValueOnce(Response.json({ capabilities: { providerAccounts: true } }))
-            .mockResolvedValueOnce(
-                Response.json({ config: {}, providerId: "bedrock_2" }, { status: 201 }),
-            );
-        vi.stubGlobal("fetch", fetch);
-        expect(await api().providerAccountsSupported()).toBe(false);
-        expect(await api().providerAccountsSupported()).toBe(true);
-        await api().providerAccountAdd(
-            {
-                bedrock: { accessKeyId: "AKIA1", region: "us-east-1", secretAccessKey: "secret" },
-                type: "bedrock",
-            },
-            "mutation",
-        );
-        expect(fetch).toHaveBeenLastCalledWith("https://agent.example/v0/providers", {
-            method: "POST",
-            headers: {
-                authorization: "Bearer local-capability",
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                bedrock: { accessKeyId: "AKIA1", region: "us-east-1", secretAccessKey: "secret" },
-                type: "bedrock",
-                mutationId: "mutation",
-            }),
-        });
-    });
 });
