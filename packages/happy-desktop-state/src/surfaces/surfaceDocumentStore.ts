@@ -1,10 +1,15 @@
 import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
-import * as Y from "yjs";
+import type * as Y from "yjs";
+import {
+    collaborativeDocumentSyncCreate,
+    type CollaborativeDocumentPresence,
+    type CollaborativeDocumentPresencePayload,
+    type CollaborativeDocumentSyncState,
+} from "../documents/collaborativeDocumentSync.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import type { UserError } from "../types.js";
-import { cuid2Create } from "../utils/cuid2Create.js";
 import {
     HAPPY_AGENT_SURFACE_DOCUMENT_EVENT_TYPES,
     happyAgentSurfaceDocumentEventProject,
@@ -13,37 +18,14 @@ import {
 } from "./surfaceProject.js";
 import type { HappyAgentSurfaceDocument, HappyAgentSurfaceId } from "./surfaceTypes.js";
 
-/** The least time between two changes sent for one document. */
-const SEND_SPACING = 200;
-/** The least time between two presence updates sent for one document. */
-const PRESENCE_SPACING = 250;
-/**
- * The most change bytes merged into one request, under the daemon's 1 MiB
- * bound on one change. A single change larger than this is still sent alone.
- */
-const SEND_BATCH_BYTES = 768 * 1024;
-
 /** Whether the reader's changes have reached the Happy Agent. */
-export type HappyAgentSurfaceDocumentSync = "saved" | "saving" | "offline";
+export type HappyAgentSurfaceDocumentSync = CollaborativeDocumentSyncState;
 
 /** Someone else's window in the document, as its editor last described itself. */
-export interface HappyAgentSurfaceDocumentPresence {
-    /** Names one window in this document; assigned by the Happy Agent, opaque. */
-    readonly clientKey: string;
-    /** Rises with each update from that window. */
-    readonly revision: number;
-    readonly active: boolean;
-    /** That editor's awareness update, base64; absent once the window has left. */
-    readonly update?: string;
-    /** That editor's awareness client, so its caret can be taken away when it leaves. */
-    readonly awarenessClientId?: number;
-}
+export type HappyAgentSurfaceDocumentPresence = CollaborativeDocumentPresence;
 
 /** The reader's own editor's awareness, to be relayed to everyone else in the document. */
-export interface HappyAgentSurfaceDocumentPresencePayload {
-    readonly update: string;
-    readonly awarenessClientId: number;
-}
+export type HappyAgentSurfaceDocumentPresencePayload = CollaborativeDocumentPresencePayload;
 
 export type HappyAgentSurfaceDocumentSnapshot =
     | {
@@ -120,48 +102,8 @@ export interface HappyAgentSurfaceDocumentDeps {
     readonly surfaceCreated?: Promise<void>;
 }
 
-/** The origin of every change this store applies to the document from elsewhere. */
-const REMOTE = Symbol("happy-agent-surface-document-remote");
-
-/** A change being sent, kept whole so a retry repeats it under the same mutation ID. */
-interface Sending {
-    readonly mutationId: string;
-    readonly update: string;
-}
-
-function base64Encode(bytes: Uint8Array): string {
-    let binary = "";
-    for (let offset = 0; offset < bytes.length; offset += 0x8000)
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    return btoa(binary);
-}
-
-function base64Decode(value: string): Uint8Array {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return bytes;
-}
-
-function waitFor(milliseconds: number, signal: AbortSignal): Promise<void> {
-    return new Promise((resolve) => {
-        const done = (): void => {
-            clearTimeout(timer);
-            signal.removeEventListener("abort", done);
-            resolve();
-        };
-        const timer = setTimeout(done, milliseconds);
-        signal.addEventListener("abort", done, { once: true });
-    });
-}
-
 function notFound(error: unknown): boolean {
     return error instanceof HappyAgentApiError && error.status === 404;
-}
-
-/** The daemon answered and refused, as opposed to never answering or failing. */
-function refusal(error: unknown): boolean {
-    return error instanceof HappyAgentApiError && error.status >= 400 && error.status < 500;
 }
 
 /**
@@ -171,20 +113,9 @@ function refusal(error: unknown): boolean {
  * health whether it serves collaborative documents, and asks again on every
  * new connection, since a different daemon may be answering.
  *
- * A collaborative document is one Yjs document. While something shows it, the
- * connection's event stream is subscribed to it, and every change anyone makes
- * arrives on that stream in order and is merged in; what the stream missed,
- * across a gap or a reconnect, is read as whatever the document here lacks.
- * The reader's own changes are written to the document by the editor and sent
- * from here: merged while one request is in flight, at most one request at a
- * time and no closer than 200 ms apart, each repeated under its mutation ID
- * until the daemon has it, whether or not the document is still on screen. A
- * change the daemon refuses cannot be taken back out of a CRDT, so the
- * document is replaced by what the daemon holds, and says so.
- *
- * The reader's editor describes its caret through `presenceUpdate`; that is
- * sent at most every 250 ms, and the editor itself renews it every 15 seconds
- * while it is open. Everyone else's arrives on the same stream.
+ * A collaborative document is carried by the shared collaborative document
+ * driver, addressed by this Surface's routes and fed the live frames that
+ * name it; see `collaborativeDocumentSyncCreate`.
  *
  * An older Happy Agent has the Markdown text only, which is shown read-only
  * and kept current from its `surface.document.updated` events.
@@ -192,11 +123,8 @@ function refusal(error: unknown): boolean {
 export function happyAgentSurfaceDocumentStoreCreate(
     deps: HappyAgentSurfaceDocumentDeps,
 ): HappyAgentSurfaceDocumentStore {
-    const now = deps.now ?? Date.now;
-    const idCreate = cuid2Create(now);
     const surfaceId = deps.surfaceId;
     const listeners = new Set<() => void>();
-    const life = new AbortController();
     let disposed = false;
 
     /** What this Happy Agent serves, once its health has said. */
@@ -204,33 +132,6 @@ export function happyAgentSurfaceDocumentStoreCreate(
         deps.surfaceCreated === undefined ? undefined : "collaborative";
     let missing = false;
     let error: UserError | undefined;
-
-    // Collaborative.
-    let ydoc: Y.Doc | undefined;
-    /** Whether the document holds what the daemon had when it was first read. */
-    let loaded = false;
-    /** The latest change seen from the stream or a read; a frame past the next is a gap. */
-    let seq = 0;
-    /** The current connection's stream, while it is connected. */
-    let streamId: string | undefined;
-    /** The stream this document is subscribed on, once the daemon has said so. */
-    let subscribed: string | undefined;
-    const presence = new Map<string, HappyAgentSurfaceDocumentPresence>();
-    /** The reader's changes not yet in a request. */
-    let pending: Uint8Array[] = [];
-    let sending: Sending | undefined;
-    let sendRunning = false;
-    let sendAt = 0;
-    /** The last request failed without an answer; the reader is offline until one arrives. */
-    let sendFailing = false;
-    let failure: UserError | undefined;
-    let presenceLatest: HappyAgentSurfaceDocumentPresencePayload | undefined;
-    let presenceAt = 0;
-    let presenceTimer: ReturnType<typeof setTimeout> | undefined;
-    /** The reader's pointer is down in the document. */
-    let pressed = false;
-    /** Everyone else's changes that arrived while it was, for the document as it is now. */
-    let held: Uint8Array[] = [];
 
     // Markdown.
     let markdown: HappyAgentSurfaceDocument | undefined;
@@ -241,20 +142,17 @@ export function happyAgentSurfaceDocumentStoreCreate(
     let health: AbortController | undefined;
 
     const snapshotOf = (): HappyAgentSurfaceDocumentSnapshot => {
-        if (missing) return { surfaceId, status: "missing" };
-        if (mode === "collaborative" && ydoc !== undefined && loaded)
+        if (missing || (mode === "collaborative" && collaborative.missing()))
+            return { surfaceId, status: "missing" };
+        const live = mode === "collaborative" ? collaborative.live() : undefined;
+        if (live !== undefined)
             return {
                 surfaceId,
                 status: "live",
-                ydoc,
-                sync:
-                    streamId === undefined || sendFailing
-                        ? "offline"
-                        : sending !== undefined || pending.length > 0
-                          ? "saving"
-                          : "saved",
-                presence: [...presence.values()],
-                ...(failure === undefined ? {} : { failure }),
+                ydoc: live.ydoc,
+                sync: live.sync,
+                presence: live.presence,
+                ...(live.failure === undefined ? {} : { failure: live.failure }),
                 madeHere: deps.surfaceCreated !== undefined,
             };
         if (mode === "markdown" && markdown !== undefined)
@@ -264,9 +162,13 @@ export function happyAgentSurfaceDocumentStoreCreate(
                 text: markdown.text,
                 ...(error === undefined ? {} : { error }),
             };
-        return { surfaceId, status: "loading", ...(error === undefined ? {} : { error }) };
+        const reading = mode === "collaborative" ? collaborative.error() : error;
+        return {
+            surfaceId,
+            status: "loading",
+            ...(reading === undefined ? {} : { error: reading }),
+        };
     };
-    let snapshot = snapshotOf();
 
     const publish = (): void => {
         if (disposed) return;
@@ -279,268 +181,36 @@ export function happyAgentSurfaceDocumentStoreCreate(
             next.ydoc === previous.ydoc &&
             next.sync === previous.sync &&
             next.failure === previous.failure &&
-            next.presence.length === previous.presence.length &&
-            next.presence.every((entry, index) => entry === previous.presence[index])
+            next.presence === previous.presence
         )
             return;
         snapshot = next;
         for (const listener of listeners) listener();
     };
 
-    const created = async (): Promise<boolean> => {
-        if (deps.surfaceCreated === undefined) return true;
-        try {
-            await deps.surfaceCreated;
-            return true;
-        } catch {
-            return false;
-        }
-    };
-
-    // ---- Collaborative --------------------------------------------------
-
-    const localChange = (update: Uint8Array, origin: unknown): void => {
-        if (origin === REMOTE || disposed) return;
-        pending.push(update);
-        failure = undefined;
-        publish();
-        void sendRun();
-    };
-
-    const ydocCreate = (): Y.Doc => {
-        const doc = new Y.Doc();
-        doc.on("update", localChange);
-        return doc;
-    };
-
-    /** Applies what the daemon sent, as everyone else's change, once the reader's pointer is up. */
-    const remoteApply = (doc: Y.Doc, update: string): void => {
-        if (pressed && doc === ydoc) held.push(base64Decode(update));
-        else Y.applyUpdate(doc, base64Decode(update), REMOTE);
-    };
-
-    const heldRelease = (): void => {
-        const updates = held;
-        held = [];
-        if (updates.length > 0 && ydoc !== undefined && !disposed)
-            Y.applyUpdate(ydoc, Y.mergeUpdates(updates), REMOTE);
-    };
-
-    /**
-     * Reads what the document here lacks and merges it in: the whole document
-     * the first time. Answers false once the document turns out to be gone.
-     */
-    const catchUp = async (signal: AbortSignal): Promise<boolean> => {
-        const doc = (ydoc ??= ydocCreate());
-        const stateVector = loaded ? base64Encode(Y.encodeStateVector(doc)) : undefined;
-        try {
-            const state = await happyAgentSyncRead(
-                signal,
-                () =>
-                    deps.client.getSurfaceDocumentState(surfaceId, {
-                        ...(stateVector === undefined ? {} : { stateVector }),
-                        signal,
-                    }),
-                (readError) => {
-                    if (notFound(readError)) throw readError;
-                    if (!loaded) {
-                        error = happyAgentUserError(readError);
-                        publish();
-                    }
-                },
-            );
-            if (signal.aborted || disposed || ydoc !== doc) return true;
-            remoteApply(doc, state.update);
-            seq = Math.max(seq, state.seq);
-            loaded = true;
-            error = undefined;
-            publish();
-            return true;
-        } catch (readError) {
-            if (notFound(readError)) {
-                missing = true;
-                publish();
-                return false;
-            }
-            return true;
-        }
-    };
-
-    /** Subscribes the current stream to the document, then catches up on it. */
-    const attach = async (signal: AbortSignal): Promise<void> => {
-        if (!(await created())) {
-            missing = true;
-            publish();
-            return;
-        }
-        if (signal.aborted || mode !== "collaborative") return;
-        const stream = streamId;
-        if (stream !== undefined && subscribed !== stream) {
-            const answered = await happyAgentSyncRead(
-                signal,
-                () =>
-                    deps.client.subscribeSurfaceDocument(
-                        surfaceId,
-                        { streamId: stream },
-                        { signal },
-                    ),
-                (subscribeError) => {
-                    // A refusal is not asked again: a document that is gone is
-                    // found by the read below, a stream that is gone is
-                    // replaced by the next connection, and a document open in
-                    // too many windows is still read, without live changes.
-                    if (refusal(subscribeError) || streamId !== stream) throw subscribeError;
-                },
-            ).then(
-                () => true,
-                () => false,
-            );
-            if (signal.aborted) return;
-            if (answered && streamId === stream) {
-                subscribed = stream;
-                // Said again on the new subscription, still no sooner than the pace allows.
-                presenceSchedule();
-            }
-        }
-        await catchUp(signal);
-    };
-
-    const detach = (): void => {
-        const stream = subscribed;
-        subscribed = undefined;
-        presenceLatest = undefined;
-        if (presenceTimer) clearTimeout(presenceTimer);
-        presenceTimer = undefined;
-        presence.clear();
-        // Ending the subscription also ends this window's presence there.
-        if (stream !== undefined && !disposed)
-            void deps.client
-                .unsubscribeSurfaceDocument(
-                    surfaceId,
-                    { streamId: stream },
-                    { signal: life.signal },
-                )
-                .catch(() => undefined);
-    };
-
-    const sendRun = async (): Promise<void> => {
-        if (sendRunning || disposed) return;
-        sendRunning = true;
-        try {
-            if (!(await created())) {
-                missing = true;
-                publish();
-                return;
-            }
-            let delay = 1_000;
-            while (!disposed && (sending !== undefined || pending.length > 0)) {
-                if (sending === undefined) {
-                    let bytes = 0;
-                    let count = 0;
-                    while (
-                        count < pending.length &&
-                        (count === 0 || bytes + pending[count]!.length <= SEND_BATCH_BYTES)
-                    ) {
-                        bytes += pending[count]!.length;
-                        count += 1;
-                    }
-                    const batch = pending.slice(0, count);
-                    pending = pending.slice(count);
-                    sending = {
-                        mutationId: idCreate(),
-                        update: base64Encode(
-                            batch.length === 1 ? batch[0]! : Y.mergeUpdates(batch),
-                        ),
-                    };
-                }
-                const wait = sendAt + SEND_SPACING - now();
-                if (wait > 0) await waitFor(wait, life.signal);
-                if (disposed) return;
-                sendAt = now();
-                const request = sending;
-                try {
-                    await deps.client.sendSurfaceDocumentUpdate(surfaceId, request, {
-                        signal: life.signal,
-                    });
-                    if (disposed) return;
-                    sending = undefined;
-                    sendFailing = false;
-                    delay = 1_000;
-                    publish();
-                } catch (sendError) {
-                    if (disposed || life.signal.aborted) return;
-                    if (notFound(sendError)) {
-                        missing = true;
-                        sending = undefined;
-                        pending = [];
-                        publish();
-                        return;
-                    }
-                    if (refusal(sendError)) {
-                        // What was refused, and everything written over it,
-                        // cannot be taken out of the document; it is read again.
-                        sending = undefined;
-                        pending = [];
-                        failure = happyAgentUserError(sendError);
-                        ydocReplace();
-                        return;
-                    }
-                    // Never answered, or the daemon failed: the same change,
-                    // under the same mutation ID, once it can be heard again.
-                    sendFailing = true;
-                    publish();
-                    await waitFor(delay, life.signal);
-                    delay = Math.min(delay * 2, 10_000);
-                }
-            }
-        } finally {
-            sendRunning = false;
-            // Written while the last run was ending, after it last looked.
-            if (!disposed && !missing && pending.length > 0) void sendRun();
-        }
-    };
-
-    /** Drops the document held here for what the daemon holds. */
-    const ydocReplace = (): void => {
-        const previous = ydoc;
-        previous?.off("update", localChange);
-        ydoc = ydocCreate();
-        // The read below brings everything held for the old document.
-        held = [];
-        loaded = false;
-        seq = 0;
-        sendFailing = false;
-        publish();
-        previous?.destroy();
-        const signal = following?.signal ?? life.signal;
-        void catchUp(signal);
-    };
-
-    const presenceSend = (): void => {
-        presenceTimer = undefined;
-        const payload = presenceLatest;
-        const stream = subscribed;
-        if (payload === undefined || stream === undefined || disposed) return;
-        presenceAt = now();
-        void deps.client
-            .sendSurfaceDocumentPresence(
-                surfaceId,
-                {
-                    streamId: stream,
-                    awarenessClientId: payload.awarenessClientId,
-                    update: payload.update,
-                },
-                { signal: life.signal },
-            )
-            .catch(() => undefined);
-    };
-
-    const presenceSchedule = (): void => {
-        if (presenceTimer !== undefined || subscribed === undefined) return;
-        const wait = presenceAt + PRESENCE_SPACING - now();
-        if (wait <= 0) presenceSend();
-        else presenceTimer = setTimeout(presenceSend, wait);
-    };
+    const collaborative = collaborativeDocumentSyncCreate({
+        routes: {
+            state: ({ stateVector, signal }) =>
+                deps.client.getSurfaceDocumentState(surfaceId, {
+                    ...(stateVector === undefined ? {} : { stateVector }),
+                    signal,
+                }),
+            updateSend: (request, signal) =>
+                deps.client.sendSurfaceDocumentUpdate(surfaceId, request, { signal }),
+            subscribe: (streamId, signal) =>
+                deps.client.subscribeSurfaceDocument(surfaceId, { streamId }, { signal }),
+            unsubscribe: (streamId, signal) =>
+                deps.client.unsubscribeSurfaceDocument(surfaceId, { streamId }, { signal }),
+            presenceSend: (request, signal) =>
+                deps.client.sendSurfaceDocumentPresence(surfaceId, request, { signal }),
+            status: (failed) => (failed instanceof HappyAgentApiError ? failed.status : undefined),
+            userError: happyAgentUserError,
+        },
+        changed: () => publish(),
+        ...(deps.now === undefined ? {} : { now: deps.now }),
+        ...(deps.surfaceCreated === undefined ? {} : { created: deps.surfaceCreated }),
+    });
+    let snapshot = snapshotOf();
 
     // ---- Markdown -------------------------------------------------------
 
@@ -604,22 +274,12 @@ export function happyAgentSurfaceDocumentStoreCreate(
             if (next !== mode) {
                 // A different daemon answers now; what the last one held is
                 // read again in the form this one serves.
-                if (mode === "collaborative") {
-                    detach();
-                    ydoc?.off("update", localChange);
-                    ydoc?.destroy();
-                    ydoc = undefined;
-                    loaded = false;
-                    seq = 0;
-                    pending = [];
-                    held = [];
-                    sending = undefined;
-                }
+                if (mode === "collaborative") collaborative.reset();
                 markdown = undefined;
                 mode = next;
                 publish();
             }
-            if (mode === "collaborative") await attach(checkSignal);
+            if (mode === "collaborative") await collaborative.attach(checkSignal);
             else await markdownRead(checkSignal);
         })();
     };
@@ -628,12 +288,8 @@ export function happyAgentSurfaceDocumentStoreCreate(
         if (disposed || following || listeners.size === 0) return;
         const active = new AbortController();
         following = active;
-        if (mode === "collaborative" && ydoc === undefined && deps.surfaceCreated !== undefined) {
-            // Made here: empty, and open for writing before the daemon has it.
-            ydoc = ydocCreate();
-            loaded = true;
-            publish();
-        }
+        // Made here: empty, and open for writing before the daemon has it.
+        if (mode === "collaborative" && deps.surfaceCreated !== undefined) collaborative.open();
         void (async () => {
             for await (const input of deps.sync.follow({
                 signal: active.signal,
@@ -648,57 +304,22 @@ export function happyAgentSurfaceDocumentStoreCreate(
                 if (input.kind !== "update") continue;
                 const update = input.update;
                 if (update.kind === "connected") {
-                    streamId = update.streamId;
-                    if (subscribed !== undefined && subscribed !== streamId) {
-                        // The old stream's subscription and presence ended with it.
-                        subscribed = undefined;
-                        presence.clear();
-                    }
-                    publish();
+                    if (update.streamId === undefined) collaborative.streamDisconnected();
+                    else collaborative.streamConnected(update.streamId);
                     modeCheck(active.signal);
                     continue;
                 }
                 if (update.kind === "disconnected") {
-                    streamId = undefined;
-                    subscribed = undefined;
-                    presence.clear();
-                    publish();
+                    collaborative.streamDisconnected();
                     continue;
                 }
                 if (update.kind === "document") {
-                    const frame = update.frame;
                     // Frames reach this connection only for documents it
                     // subscribed, and can arrive before the subscription or
                     // the first read has answered; neither is waited for.
-                    if (frame.data.surfaceId !== surfaceId || mode !== "collaborative") continue;
-                    if (frame.type === "document.update") {
-                        // Applied even before the first read lands: Yjs holds a
-                        // change until what it builds on arrives, and the read
-                        // may have been taken before this change was made.
-                        const doc = (ydoc ??= ydocCreate());
-                        const gap = loaded && frame.data.seq > seq + 1;
-                        remoteApply(doc, frame.data.update);
-                        seq = Math.max(seq, frame.data.seq);
-                        // A change the stream skipped is read as whatever is missing.
-                        if (gap) void catchUp(active.signal);
+                    if (update.frame.data.surfaceId !== surfaceId || mode !== "collaborative")
                         continue;
-                    }
-                    const known = presence.get(frame.data.clientKey);
-                    if (known !== undefined && known.revision >= frame.data.revision) continue;
-                    if (frame.data.active)
-                        presence.set(frame.data.clientKey, {
-                            clientKey: frame.data.clientKey,
-                            revision: frame.data.revision,
-                            active: true,
-                            ...(frame.data.update === undefined
-                                ? {}
-                                : { update: frame.data.update }),
-                            ...(frame.data.awarenessClientId === undefined
-                                ? {}
-                                : { awarenessClientId: frame.data.awarenessClientId }),
-                        });
-                    else presence.delete(frame.data.clientKey);
-                    publish();
+                    collaborative.frameReceive(update.frame);
                     continue;
                 }
                 if (update.kind !== "event" || mode !== "markdown") continue;
@@ -734,10 +355,7 @@ export function happyAgentSurfaceDocumentStoreCreate(
         health = undefined;
         if (retry) clearTimeout(retry);
         retry = undefined;
-        detach();
-        // Nobody is reading it, so no pointer is down in it.
-        pressed = false;
-        heldRelease();
+        collaborative.pause();
         publish();
     };
 
@@ -757,20 +375,17 @@ export function happyAgentSurfaceDocumentStoreCreate(
         },
         presenceUpdate(payload) {
             if (disposed || mode !== "collaborative") return;
-            presenceLatest = payload;
-            presenceSchedule();
+            collaborative.presenceUpdate(payload);
         },
         pointerPressUpdate(next) {
-            if (disposed || pressed === next) return;
-            pressed = next;
-            if (!next) heldRelease();
+            if (disposed) return;
+            collaborative.pointerPressUpdate(next);
         },
         [Symbol.dispose]() {
             if (disposed) return;
             stop();
             disposed = true;
-            life.abort();
-            ydoc?.off("update", localChange);
+            collaborative.dispose();
             listeners.clear();
         },
     };
