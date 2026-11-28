@@ -126,13 +126,16 @@ export interface HappyAgentProviderAddDialogProps extends HappyAgentProviderAddF
 }
 
 /**
- * The form inside a provider's sheet: a token added to that provider, or a
+ * A dialog over a provider's sheet: a token added to that provider, or a
  * sign-in run again for one of its tokens (`reauth`), which asks for nothing
  * but the sign-in.
  */
-export interface HappyAgentProviderAddPanelProps extends HappyAgentProviderAddFormProps {
+export interface HappyAgentProviderTokenDialogProps extends HappyAgentProviderAddFormProps {
+    readonly title: string;
+    /** Who or what it is about, such as the provider or the token signed in again. */
+    readonly subject: string;
     readonly reauth?: boolean;
-    onCancel: () => void;
+    onClose: () => void;
 }
 
 type FamilyId = "chatgpt" | "claude" | "grok" | "bedrock";
@@ -800,41 +803,56 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
 }
 
 /**
- * The same form inside a provider's sheet, under its tokens: it adds to that
- * provider, so it asks only for the way, the name and the key. With `reauth`
- * it runs one token's sign-in again and asks for nothing else.
+ * The same form in a dialog of its own over a provider's sheet: it adds to
+ * that provider, so it asks only for the way, the key and the name. With
+ * `reauth` it runs one token's sign-in again and asks for nothing else.
  */
-export function HappyAgentProviderAddPanel(props: HappyAgentProviderAddPanelProps) {
+export function HappyAgentProviderTokenDialog(props: HappyAgentProviderTokenDialogProps) {
     const form = useProviderAddForm(props);
     const busy = props.phase === "busy";
     const primary = form.primary;
+    const close = (): void => {
+        if (!busy) props.onClose();
+    };
     return (
-        <Box
-            className="happy-agent-provider-add happy-agent-provider-add--panel"
-            data-flow={props.flow.kind}
-            data-happy-desktop-ui={
-                props.reauth ? "happy-agent-provider-reauth" : "happy-agent-provider-add-panel"
-            }
-        >
-            {errorBanner(props.error)}
-            {form.chooser}
-            {form.credential}
-            {form.name}
-            <Box className="happy-agent-provider-add__buttons">
-                <Button disabled={busy} onClick={props.onCancel} size="small" variant="ghost">
-                    Cancel
-                </Button>
-                {primary ? (
-                    <Button
-                        disabled={primary.disabled && !primary.loading}
-                        loading={primary.loading}
-                        onClick={primary.onClick}
-                        size="small"
-                    >
-                        {primary.label}
-                    </Button>
-                ) : null}
-            </Box>
-        </Box>
+        <ModalOverlay onDismiss={close}>
+            <Modal
+                busy={busy}
+                footer={
+                    primary ? (
+                        <Button
+                            disabled={primary.disabled && !primary.loading}
+                            loading={primary.loading}
+                            onClick={primary.onClick}
+                        >
+                            {primary.label}
+                        </Button>
+                    ) : undefined
+                }
+                frame="anchored"
+                icon={props.reauth ? "repeat" : "plus"}
+                onClose={close}
+                size="medium"
+                subheader={
+                    <span className="happy-agent-provider-add__subject">{props.subject}</span>
+                }
+                title={props.title}
+            >
+                <Box
+                    className="happy-agent-provider-add"
+                    data-flow={props.flow.kind}
+                    data-happy-desktop-ui={
+                        props.reauth
+                            ? "happy-agent-provider-reauth"
+                            : "happy-agent-provider-token-add"
+                    }
+                >
+                    {errorBanner(props.error)}
+                    {form.chooser}
+                    {form.credential}
+                    {form.name}
+                </Box>
+            </Modal>
+        </ModalOverlay>
     );
 }

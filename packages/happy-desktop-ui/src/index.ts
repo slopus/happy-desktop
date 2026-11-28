@@ -1284,18 +1284,18 @@ export {
 export {
     HAPPY_AGENT_PROVIDER_ENDPOINT_VENDORS,
     HappyAgentProviderAddDialog,
-    HappyAgentProviderAddPanel,
+    HappyAgentProviderTokenDialog,
     type HappyAgentProviderAddDestination,
     type HappyAgentProviderAddDestinationOption,
     type HappyAgentProviderAddDialogProps,
     type HappyAgentProviderAddFlow,
     type HappyAgentProviderAddFormProps,
-    type HappyAgentProviderAddPanelProps,
+    type HappyAgentProviderTokenDialogProps,
     type HappyAgentProviderKeyVendor,
 } from "./pages/settings/HappyAgentProviderAddDialog";
 export {
     HappyAgentProviderAuthSelect,
-    HappyAgentProviderConnectionEditor,
+    HappyAgentProviderConnectionDialog,
     HappyAgentProviderHeadersEditor,
     type HappyAgentProviderAuth,
     type HappyAgentProviderConnection,

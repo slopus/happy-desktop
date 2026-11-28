@@ -3,7 +3,7 @@ import type { BadgeVariant } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
-import { Icon } from "../../Icon";
+import { Icon, type IconName } from "../../Icon";
 import { IconTile, type IconTileProps } from "../../IconTile";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
@@ -11,11 +11,11 @@ import { Spinner } from "../../Spinner";
 import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
 import {
-    HappyAgentProviderAddPanel,
-    type HappyAgentProviderAddPanelProps,
+    HappyAgentProviderTokenDialog,
+    type HappyAgentProviderAddFormProps,
 } from "./HappyAgentProviderAddDialog";
 import {
-    HappyAgentProviderConnectionEditor,
+    HappyAgentProviderConnectionDialog,
     type HappyAgentProviderConnection,
     type HappyAgentProviderConnectionChange,
     type HappyAgentProviderEndpointVendor,
@@ -71,16 +71,17 @@ export interface HappyAgentAiProviderSheetProps {
     /** Whether the reader may change its tokens; each then shows its actions. */
     readonly editable: boolean;
     readonly action?: HappyAgentAiProviderSheetAction;
-    /** The open action's change is out. */
+    /** The open action, shown in a dialog of its own over the sheet. Its change is out while `busy`. */
     readonly busy?: boolean;
     readonly error?: { readonly title: string; readonly message: string };
     /**
-     * The add form open in the sheet: under one token when it signs that
-     * token in again, under the list when it adds one.
+     * The add form open over the sheet: signing `credentialId` in again, or
+     * adding a token to this provider.
      */
     readonly add?: {
         readonly credentialId?: string;
-        readonly panel: HappyAgentProviderAddPanelProps;
+        readonly form: HappyAgentProviderAddFormProps;
+        onClose: () => void;
     };
     onClose: () => void;
     onCredentialEnabledChange: (credentialId: string, enabled: boolean) => void;
@@ -149,9 +150,9 @@ interface Held {
 /**
  * One provider behind its row, in one fixed card that never navigates: its
  * tokens as a list, each with its actions in plain sight — Rename, Replace
- * key, Sign in again, Remove — and its switch. An action opens in place under
- * its token and closes when it is done or cancelled; adding a token opens
- * the add form under the list the same way.
+ * key, Connection, Sign in again, Remove — and its switch. Each action opens
+ * a dialog of its own over the card, and Add token one with the add form;
+ * the card under it stays as it was.
  */
 export function HappyAgentAiProviderSheet(props: HappyAgentAiProviderSheetProps) {
     const busy = props.busy === true;
@@ -171,65 +172,33 @@ export function HappyAgentAiProviderSheet(props: HappyAgentAiProviderSheetProps)
                 ? (opened?.label ?? "")
                 : "";
     const valueUpdate = (next: string): void => setHeld({ key, value: next });
-    const addBusy = props.add?.panel.phase === "busy";
     const close = (): void => {
-        if (!busy && !addBusy) props.onClose();
-    };
-    const error = props.error ? (
-        <Banner tone="danger" title={props.error.title}>
-            {props.error.message}
-        </Banner>
-    ) : null;
-    const nameSave = (): void => {
-        if (!busy && value.trim() !== "") props.onNameSave(value);
+        if (!busy && !props.add && !action) props.onClose();
     };
     const add = props.add;
-    const adding = add !== undefined && add.credentialId === undefined;
+    const reauthOf = add?.credentialId
+        ? props.credentials?.find((entry) => entry.id === add.credentialId)
+        : undefined;
     return (
-        <ModalOverlay onDismiss={close}>
-            <Modal
-                busy={busy || addBusy}
-                footer={
-                    props.onAdd ? (
-                        <Button
-                            disabled={adding}
-                            icon="plus"
-                            onClick={props.onAdd}
-                            variant="secondary"
-                        >
-                            Add token
-                        </Button>
-                    ) : undefined
-                }
-                leading={<IconTile {...props.tile} />}
-                onClose={close}
-                size="sheet"
-                title={props.name}
-            >
-                <Box
-                    className="happy-agent-ai-provider-sheet"
-                    data-happy-desktop-ui="happy-agent-ai-provider-sheet"
+        <>
+            <ModalOverlay onDismiss={close}>
+                <Modal
+                    footer={
+                        props.onAdd ? (
+                            <Button icon="plus" onClick={props.onAdd} variant="secondary">
+                                Add token
+                            </Button>
+                        ) : undefined
+                    }
+                    leading={<IconTile {...props.tile} />}
+                    onClose={close}
+                    size="sheet"
+                    title={props.name}
                 >
-                    {action?.kind === "name" ? (
-                        <ActionPanel
-                            busy={busy}
-                            confirm="Save"
-                            confirmDisabled={value.trim() === ""}
-                            error={error}
-                            onCancel={props.onActionCancel}
-                            onConfirm={nameSave}
-                        >
-                            <TextField
-                                autoFocus
-                                disabled={busy}
-                                fullWidth
-                                label="Provider name"
-                                onSubmit={nameSave}
-                                onValueChange={valueUpdate}
-                                value={value}
-                            />
-                        </ActionPanel>
-                    ) : (
+                    <Box
+                        className="happy-agent-ai-provider-sheet"
+                        data-happy-desktop-ui="happy-agent-ai-provider-sheet"
+                    >
                         <Box className="happy-agent-ai-provider-sheet__heading">
                             <span className="happy-agent-ai-provider-sheet__meta">
                                 {props.meta}
@@ -245,87 +214,211 @@ export function HappyAgentAiProviderSheet(props: HappyAgentAiProviderSheetProps)
                                 </Button>
                             ) : null}
                         </Box>
-                    )}
-                    {action ? null : error}
-                    <CredentialList
-                        {...props}
-                        openError={action && action.kind !== "name" ? error : null}
+                        <CredentialList {...props} />
+                    </Box>
+                </Modal>
+            </ModalOverlay>
+            {action?.kind === "name" ? (
+                <ActionDialog
+                    busy={busy}
+                    confirm="Save"
+                    confirmDisabled={value.trim() === ""}
+                    error={props.error}
+                    icon="edit"
+                    onClose={props.onActionCancel}
+                    onConfirm={() => props.onNameSave(value)}
+                    subject={props.name}
+                    title="Rename provider"
+                >
+                    <TextField
+                        autoFocus
+                        disabled={busy}
+                        fullWidth
+                        label="Provider name"
+                        onSubmit={() => {
+                            if (value.trim() !== "") props.onNameSave(value);
+                        }}
+                        onValueChange={valueUpdate}
                         value={value}
-                        valueUpdate={valueUpdate}
                     />
-                    {adding ? (
-                        <Box
-                            className="happy-agent-ai-provider-sheet__add"
-                            data-happy-desktop-ui="happy-agent-ai-provider-add"
-                        >
-                            <span className="happy-agent-ai-provider-sheet__add-title">
-                                New token
-                            </span>
-                            <HappyAgentProviderAddPanel {...add.panel} />
-                        </Box>
+                </ActionDialog>
+            ) : action?.kind === "label" && opened ? (
+                <ActionDialog
+                    busy={busy}
+                    confirm="Save"
+                    confirmDisabled={value.trim() === ""}
+                    error={props.error}
+                    icon="edit"
+                    onClose={props.onActionCancel}
+                    onConfirm={() => props.onCredentialLabelSave(value)}
+                    subject={`${props.name} · ${opened.meta}`}
+                    title="Rename token"
+                >
+                    <TextField
+                        autoFocus
+                        disabled={busy}
+                        fullWidth
+                        label="Token name"
+                        onSubmit={() => {
+                            if (value.trim() !== "") props.onCredentialLabelSave(value);
+                        }}
+                        onValueChange={valueUpdate}
+                        value={value}
+                    />
+                </ActionDialog>
+            ) : action?.kind === "secret" && opened ? (
+                <ActionDialog
+                    busy={busy}
+                    confirm={opened.replaceWith === "token" ? "Replace token" : "Replace key"}
+                    confirmDisabled={value.trim() === ""}
+                    error={props.error}
+                    icon="lock"
+                    onClose={props.onActionCancel}
+                    onConfirm={() => props.onCredentialSecretSave(value)}
+                    subject={opened.label}
+                    title={
+                        opened.replaceWith === "token" ? "Replace setup token" : "Replace API key"
+                    }
+                >
+                    <TextField
+                        autoComplete="off"
+                        autoFocus
+                        disabled={busy}
+                        fullWidth
+                        hint="The old one stops being used once the new one is saved. The name, usage and switch stay."
+                        label={opened.replaceWith === "token" ? "New setup token" : "New API key"}
+                        onSubmit={() => {
+                            if (value.trim() !== "") props.onCredentialSecretSave(value);
+                        }}
+                        onValueChange={valueUpdate}
+                        type="password"
+                        value={value}
+                    />
+                </ActionDialog>
+            ) : action?.kind === "connection" && opened?.connection ? (
+                <HappyAgentProviderConnectionDialog
+                    busy={busy}
+                    connection={opened.connection}
+                    {...(props.error ? { error: props.error } : {})}
+                    onClose={props.onActionCancel}
+                    onSave={props.onCredentialConnectionSave}
+                    subject={opened.label}
+                    vendor={opened.connection.vendor}
+                />
+            ) : action?.kind === "remove" && opened ? (
+                <ActionDialog
+                    busy={busy}
+                    confirm="Remove"
+                    danger
+                    error={props.error}
+                    icon="trash"
+                    onClose={props.onActionCancel}
+                    onConfirm={() => props.onCredentialRemove(opened.id)}
+                    title={`Remove “${opened.label}”?`}
+                >
+                    <span className="happy-agent-ai-provider-sheet__text">
+                        {`Agents stop using it right away. It is removed from ${props.name}.`}
+                    </span>
+                </ActionDialog>
+            ) : add ? (
+                <HappyAgentProviderTokenDialog
+                    {...add.form}
+                    onClose={add.onClose}
+                    {...(reauthOf
+                        ? { reauth: true, subject: reauthOf.label, title: "Sign in again" }
+                        : { subject: props.name, title: "Add token" })}
+                />
+            ) : null}
+        </>
+    );
+}
+
+/**
+ * One action in a dialog of its own over the sheet: its fields, and the one
+ * button that does it. Removing is a confirmation, so it alone has Cancel.
+ */
+function ActionDialog(props: {
+    readonly children?: ReactNode;
+    readonly title: string;
+    readonly subject?: string;
+    readonly icon: IconName;
+    readonly error?: { readonly title: string; readonly message: string };
+    readonly busy: boolean;
+    readonly confirm: string;
+    readonly confirmDisabled?: boolean;
+    readonly danger?: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    const busy = props.busy;
+    const close = (): void => {
+        if (!busy) props.onClose();
+    };
+    const confirm = (
+        <Button
+            disabled={props.confirmDisabled === true && !busy}
+            loading={busy}
+            onClick={props.onConfirm}
+            variant={props.danger ? "danger" : "primary"}
+        >
+            {props.confirm}
+        </Button>
+    );
+    return (
+        <ModalOverlay onDismiss={close}>
+            <Modal
+                busy={busy}
+                footer={
+                    props.danger ? (
+                        <>
+                            <Button disabled={busy} onClick={close} variant="secondary">
+                                Cancel
+                            </Button>
+                            {confirm}
+                        </>
+                    ) : (
+                        confirm
+                    )
+                }
+                icon={props.icon}
+                onClose={close}
+                size={props.danger ? "small" : "medium"}
+                {...(props.subject === undefined
+                    ? {}
+                    : {
+                          subheader: (
+                              <span className="happy-agent-provider-add__subject">
+                                  {props.subject}
+                              </span>
+                          ),
+                      })}
+                {...(props.danger ? { tone: "danger" as const } : {})}
+                title={props.title}
+            >
+                <Box
+                    className="happy-agent-ai-provider-sheet__dialog"
+                    data-happy-desktop-ui="happy-agent-ai-provider-action"
+                >
+                    {props.error ? (
+                        <Banner tone="danger" title={props.error.title}>
+                            {props.error.message}
+                        </Banner>
                     ) : null}
+                    {props.children}
                 </Box>
             </Modal>
         </ModalOverlay>
     );
 }
 
-/** An action opened under a token or the provider's name: its fields, and Cancel beside its one button. */
-function ActionPanel(props: {
-    readonly children?: ReactNode;
-    readonly error: ReactNode;
-    readonly busy: boolean;
-    readonly confirm: string;
-    readonly confirmDisabled?: boolean;
-    readonly danger?: boolean;
-    onCancel: () => void;
-    onConfirm: () => void;
-}) {
-    return (
-        <Box
-            className="happy-agent-ai-provider-sheet__action"
-            data-happy-desktop-ui="happy-agent-ai-provider-action"
-        >
-            {props.error}
-            {props.children}
-            <Box className="happy-agent-ai-provider-sheet__action-buttons">
-                <Button disabled={props.busy} onClick={props.onCancel} size="small" variant="ghost">
-                    Cancel
-                </Button>
-                <Button
-                    disabled={props.confirmDisabled === true && !props.busy}
-                    loading={props.busy}
-                    onClick={props.onConfirm}
-                    size="small"
-                    variant={props.danger ? "danger" : "primary"}
-                >
-                    {props.confirm}
-                </Button>
-            </Box>
-        </Box>
-    );
-}
-
-/** The provider's tokens, each with its actions and the one that is open under it. */
-function CredentialList(
-    props: HappyAgentAiProviderSheetProps & {
-        readonly value: string;
-        readonly valueUpdate: (value: string) => void;
-        readonly openError: ReactNode;
-    },
-) {
+/** The provider's tokens, each with its actions. */
+function CredentialList(props: HappyAgentAiProviderSheetProps) {
     if (props.credentials === undefined)
         return (
             <span className="happy-agent-ai-provider-sheet__note">{props.credentialsHidden}</span>
         );
     if (props.credentials.length === 0)
         return <span className="happy-agent-ai-provider-sheet__note">No tokens yet.</span>;
-    const busy = props.busy === true;
-    const action = props.action;
-    const add = props.add;
-    const valueSave = (save: (value: string) => void) => (): void => {
-        if (!busy && props.value.trim() !== "") save(props.value);
-    };
     return (
         <Box
             className="happy-agent-ai-provider-sheet__credentials"
@@ -333,21 +426,11 @@ function CredentialList(
         >
             {props.credentials.map((entry) => {
                 const label = STATE_LABELS[entry.state];
-                const current =
-                    action && action.kind !== "name" && action.credentialId === entry.id
-                        ? action.kind
-                        : add?.credentialId === entry.id
-                          ? "reauth"
-                          : undefined;
-                const locked = busy || entry.saving === true;
-                const labelSave = valueSave(props.onCredentialLabelSave);
-                const secretSave = valueSave(props.onCredentialSecretSave);
-                const secretWord = entry.replaceWith === "token" ? "token" : "key";
+                const locked = entry.saving === true;
                 return (
                     <Box
                         className="happy-agent-ai-provider-sheet__credential"
                         data-happy-desktop-ui="happy-agent-ai-provider-credential"
-                        data-open={current}
                         data-state={entry.state}
                         key={entry.id}
                     >
@@ -403,7 +486,9 @@ function CredentialList(
                                         size="small"
                                         variant="ghost"
                                     >
-                                        {`Replace ${secretWord}`}
+                                        {entry.replaceWith === "token"
+                                            ? "Replace token"
+                                            : "Replace key"}
                                     </Button>
                                 ) : null}
                                 {entry.connection ? (
@@ -437,78 +522,6 @@ function CredentialList(
                                 >
                                     Remove
                                 </Button>
-                            </Box>
-                        ) : null}
-                        {current === "label" ? (
-                            <ActionPanel
-                                busy={busy}
-                                confirm="Save"
-                                confirmDisabled={props.value.trim() === ""}
-                                error={props.openError}
-                                onCancel={props.onActionCancel}
-                                onConfirm={labelSave}
-                            >
-                                <TextField
-                                    autoFocus
-                                    disabled={busy}
-                                    fullWidth
-                                    label="Token name"
-                                    onSubmit={labelSave}
-                                    onValueChange={props.valueUpdate}
-                                    value={props.value}
-                                />
-                            </ActionPanel>
-                        ) : current === "secret" ? (
-                            <ActionPanel
-                                busy={busy}
-                                confirm={`Replace ${secretWord}`}
-                                confirmDisabled={props.value.trim() === ""}
-                                error={props.openError}
-                                onCancel={props.onActionCancel}
-                                onConfirm={secretSave}
-                            >
-                                <TextField
-                                    autoComplete="off"
-                                    autoFocus
-                                    disabled={busy}
-                                    fullWidth
-                                    hint="The old one stops being used once the new one is saved. The name, usage and switch stay."
-                                    label={
-                                        entry.replaceWith === "token"
-                                            ? "New setup token"
-                                            : "New API key"
-                                    }
-                                    onSubmit={secretSave}
-                                    onValueChange={props.valueUpdate}
-                                    type="password"
-                                    value={props.value}
-                                />
-                            </ActionPanel>
-                        ) : current === "connection" && entry.connection ? (
-                            <HappyAgentProviderConnectionEditor
-                                busy={busy}
-                                connection={entry.connection}
-                                error={props.openError}
-                                onCancel={props.onActionCancel}
-                                onSave={props.onCredentialConnectionSave}
-                                vendor={entry.connection.vendor}
-                            />
-                        ) : current === "remove" ? (
-                            <ActionPanel
-                                busy={busy}
-                                confirm="Remove"
-                                danger
-                                error={props.openError}
-                                onCancel={props.onActionCancel}
-                                onConfirm={() => props.onCredentialRemove(entry.id)}
-                            >
-                                <span className="happy-agent-ai-provider-sheet__text">
-                                    {`Remove “${entry.label}”? Agents stop using it right away.`}
-                                </span>
-                            </ActionPanel>
-                        ) : current === "reauth" && add ? (
-                            <Box className="happy-agent-ai-provider-sheet__action">
-                                <HappyAgentProviderAddPanel {...add.panel} reauth />
                             </Box>
                         ) : null}
                     </Box>

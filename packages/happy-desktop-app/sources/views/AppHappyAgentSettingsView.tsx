@@ -2737,10 +2737,8 @@ function providerDetailProps(
                       ...(add.anchor?.credentialId === undefined
                           ? {}
                           : { credentialId: add.anchor.credentialId }),
-                      panel: {
-                          ...providerAddFormProps(snapshot, store, externalLinkOpen),
-                          onCancel: () => store.addClose(),
-                      },
+                      form: providerAddFormProps(snapshot, store, externalLinkOpen),
+                      onClose: () => store.addClose(),
                   },
               }
             : {}),
