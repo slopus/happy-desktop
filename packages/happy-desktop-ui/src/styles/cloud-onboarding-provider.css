@@ -1,0 +1,422 @@
+/*
+ * C-371 CloudOnboardingProviderRows and C-372 CloudOnboardingProviderDialog —
+ * Happy Cloud onboarding's "Connect your AI": one row per provider on the
+ * page, and one dialog per provider over it.
+ *
+ * The rows sit on the onboarding sky and take its ink; the dialog's parts sit
+ * on the card and take the card's.
+ */
+
+/* ---- The rows ---------------------------------------------------------------- */
+
+.happy-cloud-provider-rows {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-self: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 480px;
+    color: var(--onboarding-foreground);
+    font-family: var(--happy-font-ui);
+}
+
+/* One height whatever the row says: nothing, one account or five. A connected
+   row keeps this same hairline; its check and count say it is connected. */
+.happy-cloud-provider-row {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    height: 56px;
+    padding: 0 12px 0 16px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+}
+
+/*
+ * Under 700px of window the step body has 280px clear of its fades: five 52px
+ * rows with 4px gaps take 276. The setup page is the size container, and it
+ * is the window. A row still has one height in every state.
+ */
+@container (max-height: 699px) {
+    .happy-cloud-provider-rows {
+        gap: 4px;
+    }
+
+    .happy-cloud-provider-row {
+        height: 52px;
+    }
+}
+
+/* The whole row opens the dialog; "Add another" sits above that, in its own slot. */
+.happy-cloud-provider-row__open {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+/* The press target is the whole row, drawn over it; it arranges nothing. */
+.happy-cloud-provider-row__open::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    content: "";
+}
+
+.happy-cloud-provider-row__open:focus-visible {
+    outline: none;
+}
+
+.happy-cloud-provider-row__open:focus-visible::after {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy-cloud-provider-row__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+}
+
+.happy-cloud-provider-row__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-cloud-provider-row__name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-provider-row__line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.happy-cloud-provider-row__line[data-tone="ok"] {
+    color: var(--onboarding-foreground);
+    font-weight: 500;
+}
+
+.happy-cloud-provider-row__line[data-tone="ok"] .happy-icon {
+    color: var(--success);
+}
+
+/* Reserved on every row, so the text column is the same width with or without accounts. */
+.happy-cloud-provider-row__slot {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    width: 112px;
+}
+
+.happy-cloud-provider-row__chevron {
+    display: flex;
+    flex: none;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+}
+
+/* ---- The dialog -------------------------------------------------------------- */
+
+.happy-cloud-provider-dialog .happy-modal__body,
+.happy-cloud-provider-dialog .happy-modal__body-viewport {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-cloud-provider-dialog .happy-modal__body-viewport,
+.happy-cloud-provider-dialog .happy-modal__body-content {
+    flex: 1 1 auto;
+}
+
+.happy-cloud-provider-dialog .happy-modal__body-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 20px 20px;
+}
+
+.happy-cloud-provider-dialog .happy-modal__subheader {
+    padding: 0 20px 16px;
+}
+
+/* The header chip: a 28px neutral box with 7px corners, an 18px glyph or a 16px brand mark. */
+.happy-cloud-provider-dialog__chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+/* Where a new account is saved: one line under the title, in every view. */
+.happy-cloud-provider-save {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-provider-save__icon {
+    display: flex;
+    flex: none;
+}
+
+.happy-cloud-provider-save__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The ghost's padding hangs past the column, so its words end on the close button's edge column. */
+.happy-cloud-provider-save > .happy-button {
+    flex: none;
+    margin-inline-end: -10px;
+}
+
+.happy-cloud-provider-stack {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 16px;
+}
+
+.happy-cloud-provider-field {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 6px;
+}
+
+.happy-cloud-provider-field__label {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-cloud-provider-note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-provider-note[data-tone="attention"] {
+    color: var(--text-destructive);
+}
+
+.happy-cloud-provider-code,
+.happy-cloud-provider-command {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-sizing: border-box;
+    padding: 12px 12px 12px 16px;
+    border-radius: 10px;
+    background: var(--surface-selected);
+    box-shadow: inset 0 0 0 1px var(--divider);
+    color: var(--text);
+}
+
+.happy-cloud-provider-code__value {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    font-family: var(--happy-font-mono);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 32px;
+    user-select: all;
+}
+
+.happy-cloud-provider-command {
+    padding: 6px 8px 6px 12px;
+}
+
+.happy-cloud-provider-command__text {
+    font-family: var(--happy-font-mono);
+    font-size: 13px;
+    line-height: 20px;
+    user-select: all;
+}
+
+.happy-cloud-provider-wait {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-cloud-provider-wait[data-tone="attention"] {
+    color: var(--text-destructive);
+}
+
+/* Added: said in the same card, as tall as what it says. */
+.happy-cloud-provider-success {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding-block: 24px 12px;
+    text-align: center;
+}
+
+.happy-cloud-provider-success__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 24px;
+}
+
+.happy-cloud-provider-success__title .happy-icon {
+    color: var(--success);
+}
+
+.happy-cloud-provider-success__detail {
+    max-width: 320px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-cloud-provider-pair {
+    display: flex;
+    gap: 12px;
+}
+
+.happy-cloud-provider-pair__wide {
+    flex: 2 1 0;
+    min-width: 0;
+}
+
+.happy-cloud-provider-pair__narrow {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* ---- Numbered steps and help ------------------------------------------------- */
+
+.happy-cloud-provider-steps {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-cloud-provider-step {
+    display: flex;
+    gap: 8px;
+}
+
+.happy-cloud-provider-step__n {
+    flex: none;
+    width: 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-cloud-provider-step__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-cloud-provider-step__title {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+
+.happy-cloud-provider-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/*
+ * "No key yet?" as a frame, the way the chat's question prompt is drawn: no
+ * fill, a 1px divider border and 12px corners, standing out of the text column
+ * by the chat frame outset so the words inside sit on the form's left edge.
+ */
+.happy-cloud-provider-help {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-sizing: border-box;
+    margin-inline: calc(-1 * var(--happy-chat-frame-outset));
+    padding: calc(var(--happy-chat-frame-text-inset) - 1px)
+        calc(var(--happy-chat-frame-outset) - 1px);
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    background: transparent;
+}
+
+.happy-cloud-provider-help__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-cloud-provider-help__title {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
