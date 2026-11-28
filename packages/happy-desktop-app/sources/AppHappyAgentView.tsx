@@ -9833,8 +9833,13 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 // One document needs no strip: the band floats over the
                                 // content, and without a second tab it goes, giving
                                 // that document the full height without moving it.
+                                // A review or a tool in place of the conversation
+                                // keeps the band clear: its header has controls,
+                                // which the window controls and the veil would
+                                // otherwise stand over.
                                 barOverlay
                                 barHidden={groupTabs.length <= 1}
+                                barBandKept={!mainConversationDisplayed}
                                 tabSizing="content"
                                 closePresentation="overlay"
                                 overflowFade

@@ -77,6 +77,14 @@ export type TabbedPaneProps = {
      * the body keeps what it shows where it was as the inset changes.
      */
     barHidden?: boolean;
+    /**
+     * With `barOverlay` and `barHidden`, keeps the hidden bar's band clear
+     * above the body instead of letting the body run under it, and the veil is
+     * that band alone. For a document whose own header must stand clear of the
+     * controls that ride the band, such as a review, rather than a transcript
+     * that scrolls up under the veil.
+     */
+    barBandKept?: boolean;
 };
 
 /**
@@ -233,6 +241,7 @@ export function TabbedPane(props: TabbedPaneProps) {
     const [local, rest] = partitionComponentProps(props, [
         "actions",
         "activeId",
+        "barBandKept",
         "barHidden",
         "barOverlay",
         "children",
@@ -294,6 +303,7 @@ export function TabbedPane(props: TabbedPaneProps) {
         <div
             {...rest}
             className={["happy-tabbed-pane", local.className].filter(Boolean).join(" ")}
+            data-bar-band-kept={local.barHidden && local.barBandKept ? "" : undefined}
             data-bar-hidden={local.barHidden ? "" : undefined}
             data-bar-overlay={local.barOverlay ? "" : undefined}
             data-happy-desktop-ui="tabbed-pane"
@@ -380,7 +390,9 @@ export function TabbedPane(props: TabbedPaneProps) {
             </div>
             <TabbedPaneBody
                 activeId={local.activeId}
-                insetHidden={local.barOverlay ? local.barHidden : undefined}
+                insetHidden={
+                    local.barOverlay ? local.barHidden === true && !local.barBandKept : undefined
+                }
                 veil={local.barOverlay === true}
             >
                 {local.children}
