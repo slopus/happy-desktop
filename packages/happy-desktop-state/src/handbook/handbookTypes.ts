@@ -146,7 +146,11 @@ export type HappyAgentHandbookMetadataChange =
 export interface HappyAgentHandbookReviewItem {
     readonly itemId: HappyAgentHandbookItemId;
     readonly title: string;
-    /** The draft change the reader reviews; the apply publishes the draft as of it. */
+    /**
+     * The draft change the reader reviews; the apply publishes the draft as of
+     * it. Read from the server as the review opens, so it is settled once
+     * `comparison` is no longer loading.
+     */
     readonly baseSeq: number;
     /** The revision agents follow now; `null` for an item never applied. */
     readonly applied: HappyAgentHandbookApplied | null;

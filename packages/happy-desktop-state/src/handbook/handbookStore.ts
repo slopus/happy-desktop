@@ -484,21 +484,41 @@ export function happyAgentHandbookStoreCreate(
         });
     };
 
-    /** The applied text and the draft as of `baseSeq`, which the sheet compares. */
-    const comparisonRead = (generation: number, entry: HappyAgentHandbookReviewItem): void => {
-        void handbookComparisonRead(
-            deps.request,
-            entry.itemId,
-            entry.applied === null ? { seq: 0 } : { revision: entry.applied.revision },
-            { seq: entry.baseSeq },
-        ).then(
+    /**
+     * The draft change the review holds, then the applied text and the draft as
+     * of it, which the sheet compares. Typing reaches no journal event, so the
+     * list's `draftSeq` lags the draft while people write; the review asks the
+     * server where the draft stands as it opens, and applies exactly what the
+     * sheet then shows.
+     */
+    const comparisonRead = (generation: number, opened: HappyAgentHandbookReviewItem): void => {
+        void (async () => {
+            const read = handbookItemRead(
+                recordOf(await deps.request("GET", handbookPath(opened.itemId)))?.item,
+            );
+            if (read && !read.removed && !disposed) itemReplace(read.item);
+            const entry: HappyAgentHandbookReviewItem = read
+                ? { ...opened, baseSeq: read.item.draftSeq, applied: read.item.applied }
+                : opened;
+            reviewItemUpdate(generation, entry.itemId, (item) => ({
+                ...item,
+                baseSeq: entry.baseSeq,
+                applied: entry.applied,
+            }));
+            return handbookComparisonRead(
+                deps.request,
+                entry.itemId,
+                entry.applied === null ? { seq: 0 } : { revision: entry.applied.revision },
+                { seq: entry.baseSeq },
+            );
+        })().then(
             (comparison) =>
-                reviewItemUpdate(generation, entry.itemId, (item) => ({
+                reviewItemUpdate(generation, opened.itemId, (item) => ({
                     ...item,
                     comparison: { type: "ready", value: comparison },
                 })),
             (error: unknown) =>
-                reviewItemUpdate(generation, entry.itemId, (item) => ({
+                reviewItemUpdate(generation, opened.itemId, (item) => ({
                     ...item,
                     comparison: { type: "error", error: happyAgentUserError(error) },
                 })),
@@ -981,6 +1001,8 @@ export function happyAgentHandbookStoreCreate(
         reviewSubmit() {
             const review = store.getState().review;
             if (disposed || !review || review.applying || !store.getState().access.apply) return;
+            // Until each draft's place is read, there is no change to apply as of.
+            if (review.items.some((entry) => entry.comparison.type === "loading")) return;
             const generation = reviewGeneration;
             applyMutationId ??= idCreate();
             const mutationId = applyMutationId;

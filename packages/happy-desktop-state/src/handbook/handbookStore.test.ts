@@ -79,14 +79,20 @@ it("applies each draft as the reviewer saw it, and leaves later edits pending", 
     cluster.draftWrite(DEPLOYS, "Deploy to staging first.");
     handbook.subscribe(() => undefined);
     await settled(handbook, () => handbook.get().items[0]?.pending === true);
+    // Typing reaches no journal event, so the list still holds the draft at 2.
+    cluster.draftWrite(DEPLOYS, "Deploy to staging first.\n\nRoll back from the thread.");
 
     handbook.reviewOpen([DEPLOYS]);
     await settled(handbook, () => handbook.get().review?.items[0]?.comparison.type === "ready");
     const reviewed = handbook.get().review!.items[0]!;
-    expect(reviewed.baseSeq).toBe(2);
+    // The review asked where the draft stands, rather than trusting the list.
+    expect(reviewed.baseSeq).toBe(3);
     expect(reviewed.comparison).toEqual({
         type: "ready",
-        value: { before: "Deploy after CI.", after: "Deploy to staging first." },
+        value: {
+            before: "Deploy after CI.",
+            after: "Deploy to staging first.\n\nRoll back from the thread.",
+        },
     });
 
     // Kirill keeps typing while the sheet is open.
@@ -98,7 +104,7 @@ it("applies each draft as the reviewer saw it, and leaves later edits pending", 
     const apply = cluster.calls.find((call) => call.path === "v0/handbook/apply");
     expect(apply?.body).toMatchObject({
         note: "Staging first",
-        items: [{ id: DEPLOYS, baseSeq: 2 }],
+        items: [{ id: DEPLOYS, baseSeq: 3 }],
     });
     await settled(handbook, () => handbook.get().items[0]?.applied?.revision === 2);
     expect(handbook.get().items[0]).toMatchObject({ pending: true, pendingUserIds: ["u_kirill"] });
@@ -123,6 +129,10 @@ it("explains a refused apply in the review and lets it be tried again", async ()
     handbook.subscribe(() => undefined);
     await settled(handbook, () => handbook.get().items.length === 1);
     handbook.reviewOpen([DEPLOYS]);
+    // Nothing applies until the review has read where the draft stands.
+    handbook.reviewSubmit();
+    expect(handbook.get().review?.applying).toBe(false);
+    await settled(handbook, () => handbook.get().review?.items[0]?.comparison.type === "ready");
     cluster.refuseNext("POST", "v0/handbook/apply", 409, {
         error: { code: "handbook_budget", message: "Too big." },
         bytes: 300_000,
