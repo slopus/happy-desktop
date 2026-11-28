@@ -1,6 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
+import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import { Modal } from "../../Modal";
+import { ModalOverlay } from "../../ModalOverlay";
 import { Select } from "../../Select";
 import { TextField } from "../../TextField";
 
@@ -169,16 +172,18 @@ export interface HappyAgentProviderConnectionChange {
 }
 
 /**
- * One token's endpoint, auth and headers, edited in place under it. Stored
- * header values are never shown: they are kept, or replaced as a whole set.
- * A token that took no key asks for one before it signs again.
+ * One token's endpoint, auth and headers, in a dialog over its provider.
+ * Stored header values are never shown: they are kept, or replaced as a
+ * whole set. A token that took no key asks for one before it signs again.
  */
-export function HappyAgentProviderConnectionEditor(props: {
+export function HappyAgentProviderConnectionDialog(props: {
     readonly vendor: HappyAgentProviderEndpointVendor;
     readonly connection: HappyAgentProviderConnection;
+    /** The token it is for, such as "Backup key". */
+    readonly subject: string;
     readonly busy: boolean;
-    readonly error?: ReactNode;
-    onCancel: () => void;
+    readonly error?: { readonly title: string; readonly message: string };
+    onClose: () => void;
     onSave: (change: HappyAgentProviderConnectionChange) => void;
 }) {
     const stored = props.connection;
@@ -193,6 +198,9 @@ export function HappyAgentProviderConnectionEditor(props: {
     const complete =
         (!keyNeeded || secret.trim() !== "") &&
         (rows === undefined || happyAgentProviderHeadersComplete(rows));
+    const close = (): void => {
+        if (!busy) props.onClose();
+    };
     const save = (): void => {
         if (busy || !complete) return;
         props.onSave({
@@ -203,82 +211,97 @@ export function HappyAgentProviderConnectionEditor(props: {
         });
     };
     return (
-        <Box
-            className="happy-agent-ai-provider-sheet__action"
-            data-happy-desktop-ui="happy-agent-ai-provider-connection"
-        >
-            {props.error}
-            <TextField
-                autoComplete="off"
-                autoFocus
-                disabled={busy}
-                fullWidth
-                hint={`A proxy or gateway that speaks ${props.vendor.name}’s API. Leave empty for ${props.vendor.name} itself.`}
-                label="Endpoint"
-                onSubmit={save}
-                onValueChange={setBaseUrl}
-                placeholder={props.vendor.official}
-                value={baseUrl}
-            />
-            {custom ? (
-                <>
-                    <HappyAgentProviderAuthSelect
-                        disabled={busy}
-                        onChange={setAuth}
-                        value={auth}
-                        vendor={props.vendor}
-                    />
-                    {keyNeeded ? (
-                        <TextField
-                            autoComplete="off"
-                            disabled={busy}
-                            fullWidth
-                            label="Token"
-                            onSubmit={save}
-                            onValueChange={setSecret}
-                            type="password"
-                            value={secret}
-                        />
+        <ModalOverlay onDismiss={close}>
+            <Modal
+                busy={busy}
+                footer={
+                    <Button disabled={!complete && !busy} loading={busy} onClick={save}>
+                        Save
+                    </Button>
+                }
+                frame="anchored"
+                icon="link"
+                onClose={close}
+                size="medium"
+                subheader={
+                    <span className="happy-agent-provider-add__subject">{props.subject}</span>
+                }
+                title="Connection"
+            >
+                <Box
+                    className="happy-agent-provider-add"
+                    data-happy-desktop-ui="happy-agent-ai-provider-connection"
+                >
+                    {props.error ? (
+                        <Banner tone="danger" title={props.error.title}>
+                            {props.error.message}
+                        </Banner>
                     ) : null}
-                    {rows === undefined && stored.headerNames.length > 0 ? (
-                        <Box className="happy-agent-provider-headers__stored">
-                            <span className="happy-agent-provider-add__hint">
-                                {`Sends ${stored.headerNames.join(", ")}; values hidden.`}
-                            </span>
-                            <Button
+                    <TextField
+                        autoComplete="off"
+                        autoFocus
+                        disabled={busy}
+                        fullWidth
+                        hint={`A proxy or gateway that speaks ${props.vendor.name}’s API. Leave empty for ${props.vendor.name} itself.`}
+                        label="Endpoint"
+                        onSubmit={save}
+                        onValueChange={setBaseUrl}
+                        placeholder={props.vendor.official}
+                        value={baseUrl}
+                    />
+                    {custom ? (
+                        <>
+                            <HappyAgentProviderAuthSelect
                                 disabled={busy}
-                                onClick={() =>
-                                    setRows(
-                                        stored.headerNames.map((name, index) => ({
-                                            id: index + 1,
-                                            name,
-                                            value: "",
-                                        })),
-                                    )
-                                }
-                                size="small"
-                                variant="ghost"
-                            >
-                                Replace headers
-                            </Button>
-                        </Box>
-                    ) : (
-                        <HappyAgentProviderHeadersEditor
-                            disabled={busy}
-                            onChange={setRows}
-                            rows={rows ?? []}
-                        />
-                    )}
-                </>
-            ) : null}
-            <Box className="happy-agent-ai-provider-sheet__action-buttons">
-                <Button disabled={busy} onClick={props.onCancel} size="small" variant="ghost">
-                    Cancel
-                </Button>
-                <Button disabled={!complete && !busy} loading={busy} onClick={save} size="small">
-                    Save
-                </Button>
-            </Box>
-        </Box>
+                                onChange={setAuth}
+                                value={auth}
+                                vendor={props.vendor}
+                            />
+                            {keyNeeded ? (
+                                <TextField
+                                    autoComplete="off"
+                                    disabled={busy}
+                                    fullWidth
+                                    label="Token"
+                                    onSubmit={save}
+                                    onValueChange={setSecret}
+                                    type="password"
+                                    value={secret}
+                                />
+                            ) : null}
+                            {rows === undefined && stored.headerNames.length > 0 ? (
+                                <Box className="happy-agent-provider-headers__stored">
+                                    <span className="happy-agent-provider-add__hint">
+                                        {`Sends ${stored.headerNames.join(", ")}; values hidden.`}
+                                    </span>
+                                    <Button
+                                        disabled={busy}
+                                        onClick={() =>
+                                            setRows(
+                                                stored.headerNames.map((name, index) => ({
+                                                    id: index + 1,
+                                                    name,
+                                                    value: "",
+                                                })),
+                                            )
+                                        }
+                                        size="small"
+                                        variant="ghost"
+                                    >
+                                        Replace headers
+                                    </Button>
+                                </Box>
+                            ) : (
+                                <HappyAgentProviderHeadersEditor
+                                    disabled={busy}
+                                    onChange={setRows}
+                                    rows={rows ?? []}
+                                />
+                            )}
+                        </>
+                    ) : null}
+                </Box>
+            </Modal>
+        </ModalOverlay>
     );
 }

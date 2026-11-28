@@ -367,15 +367,13 @@ function AiProvidersSpecimen(props: {
                                                 ...(sheetAdd.credentialId === undefined
                                                     ? {}
                                                     : { credentialId: sheetAdd.credentialId }),
-                                                panel: {
-                                                    ...formProps(sheetAdd, flowsOf(open), (form) =>
-                                                        detailSet({
-                                                            id: detail.id,
-                                                            add: { ...sheetAdd, ...form },
-                                                        }),
-                                                    ),
-                                                    onCancel: () => detailSet({ id: detail.id }),
-                                                },
+                                                form: formProps(sheetAdd, flowsOf(open), (form) =>
+                                                    detailSet({
+                                                        id: detail.id,
+                                                        add: { ...sheetAdd, ...form },
+                                                    }),
+                                                ),
+                                                onClose: () => detailSet({ id: detail.id }),
                                             },
                                         }
                                       : {}),
@@ -466,7 +464,7 @@ export function CloudProvidersFlowPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Happy Cloud's AI providers: a short list of what the team or the reader added; a provider opens in one fixed card whose tokens carry their actions, and adding is one page in a card of the same size."
+            summary="Happy Cloud's AI providers: a short list of what the team or the reader added; a provider opens in one fixed card whose tokens carry their actions, each action opens a dialog of its own over it, and adding is one page in a card of the same size."
             title="Cloud AI providers"
             width={WINDOWS[0].width + 96}
         >
@@ -499,7 +497,7 @@ export function CloudProvidersFlowPage() {
                 {() => <AiProvidersSpecimen detail={{ id: "anthropic" }} />}
             </Screens>
             <Screens
-                detail="Rename opens under its token, in the same card"
+                detail="Rename opens a dialog of its own over the provider"
                 label="Rename a token"
                 step="05-rename-token"
             >
@@ -510,7 +508,7 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="Replace key is an action of its own: a new key, and its button"
+                detail="Replace key: a dialog over the provider with the new key and its button"
                 label="Replace a key"
                 step="06-replace-key"
             >
@@ -521,7 +519,7 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="Remove asks once, in place"
+                detail="Remove asks once, in a confirmation dialog"
                 label="Remove a token"
                 step="07-remove-token"
             >
@@ -532,7 +530,7 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="Sign in again runs a ChatGPT sign-in for that token, under it"
+                detail="Sign in again runs a ChatGPT sign-in for that token, in a dialog over the provider"
                 label="Sign in again"
                 step="08-reauth"
             >
@@ -555,7 +553,7 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="Add token opens the form under the list: it goes to this provider, so only the way, its name and the key"
+                detail="Add token opens the form in a dialog over the provider: it goes to this provider, so only the way, the key and its name"
                 label="Add a token here"
                 step="09-add-token"
             >
@@ -569,7 +567,7 @@ export function CloudProvidersFlowPage() {
                 )}
             </Screens>
             <Screens
-                detail="A named provider someone created is renamed in place"
+                detail="A named provider someone created is renamed in a dialog"
                 label="Rename a provider"
                 step="10-rename-provider"
             >

@@ -1055,8 +1055,7 @@
     flex-direction: column;
 }
 
-/* A token owns its hairline: its line of status, its actions under it, and
-   the one that is open under those. */
+/* A token owns its hairline: its line of status, and its actions under it. */
 .happy-agent-ai-provider-sheet__credential {
     box-sizing: border-box;
     display: flex;
@@ -1085,45 +1084,11 @@
     padding-inline-start: 18px;
 }
 
-/* An open action: an unfilled frame, as a group inside a dialog is. */
-.happy-agent-ai-provider-sheet__action {
-    box-sizing: border-box;
+/* An action's dialog over the sheet: its note or fields, stacked. */
+.happy-agent-ai-provider-sheet__dialog {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-block-start: 4px;
-    padding: 12px;
-    border: 1px solid var(--divider);
-    border-radius: 12px;
-}
-
-.happy-agent-ai-provider-sheet__action .happy-agent-provider-add--panel {
-    gap: 12px;
-}
-
-.happy-agent-ai-provider-sheet__action-buttons,
-.happy-agent-provider-add__buttons {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-.happy-agent-ai-provider-sheet__add {
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--divider);
-    border-radius: 12px;
-}
-
-.happy-agent-ai-provider-sheet__add-title {
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 18px;
 }
 
 .happy-agent-provider-add {
@@ -1152,6 +1117,8 @@
     line-height: 18px;
 }
 
+/* Who or what a dialog over the sheet is about, under its title. */
+.happy-agent-provider-add__subject,
 .happy-agent-provider-add__hint,
 .happy-agent-provider-add__waiting {
     color: var(--text-secondary);

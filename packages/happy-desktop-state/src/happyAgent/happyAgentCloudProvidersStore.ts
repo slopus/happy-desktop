@@ -49,7 +49,7 @@ export interface HappyAgentCloudProviderAddOption {
 export interface HappyAgentCloudProviderAdd {
     readonly flow: HappyAgentCloudProviderAddFlow;
     /**
-     * Set when it was opened from a provider's sheet, which shows it in place:
+     * Set when it was opened from a provider's sheet, which shows it in a dialog over itself:
      * a token added to that provider, or `credentialId` signed in again.
      * Absent for the add dialog of its own.
      */
@@ -87,7 +87,7 @@ export interface HappyAgentCloudProviderAdd {
 }
 
 /**
- * The one action a provider's sheet has open in place: renaming the
+ * The one action a provider's sheet has open, in a dialog over it: renaming the
  * provider, or renaming, replacing the key of, or removing one token.
  */
 export type HappyAgentCloudProviderDetailAction =
