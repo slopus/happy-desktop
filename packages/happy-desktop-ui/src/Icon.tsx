@@ -98,7 +98,8 @@ export type IconName =
     | "width-center"
     | "full-screen"
     | "vault"
-    | "folder-open";
+    | "folder-open"
+    | "book";
 export type IconProps = {
     name: IconName;
     /*
@@ -292,6 +293,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     locate: { set: "ionicons", name: "locate-outline" },
     // Showing a file where it lives: the open folder Finder selects it in.
     "folder-open": { set: "ionicons", name: "folder-open-outline" },
+    // The team's handbook: the bound book of how work is done here, distinct
+    // from one document (`doc`) and from a tray of files (`vault`).
+    book: { set: "ionicons", name: "book-outline" },
     mobile: { set: "ionicons", name: "phone-portrait-outline" },
     smile: { set: "ionicons", name: "happy-outline" },
     paperclip: { set: "ionicons", name: "attach-outline" },

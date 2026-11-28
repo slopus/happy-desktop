@@ -1,0 +1,631 @@
+/*
+ * P-050 Happy Agent handbook: the team's items beside the one being read or
+ * written, its history beside that, and the review an apply goes through.
+ *
+ * The page takes the whole lane as three columns that meet on hairlines: a
+ * fixed list, the editor, and the history panel while it is open. The
+ * editor's header stands on the document's own column, so the title sits over
+ * the first letter of the text. Colors, radii, and type come only from theme
+ * roles.
+ */
+
+.happy-handbook {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-handbook__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+.happy-handbook__banner {
+    flex: none;
+    padding: 0 16px 8px;
+}
+
+.happy-handbook__body {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 1px solid var(--divider);
+}
+
+/* ---- List -------------------------------------------------------------- */
+
+.happy-handbook__list {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: clamp(200px, 24%, 264px);
+    min-height: 0;
+    border-right: 1px solid var(--divider);
+    background: var(--groupped-background);
+}
+
+.happy-handbook__list-top,
+.happy-handbook__list-bottom {
+    display: flex;
+    flex: none;
+    padding: 8px;
+}
+
+/* The rows below keep their own 8px, so the button and the first row sit 8px apart. */
+.happy-handbook__list-top {
+    padding-bottom: 0;
+}
+
+.happy-handbook__list-bottom {
+    border-top: 1px solid var(--divider);
+}
+
+.happy-handbook__list-scroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-handbook__list-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-handbook__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+}
+
+.happy-handbook__item {
+    display: flex;
+    min-width: 0;
+}
+
+.happy-handbook-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 32px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-handbook-row:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-row[data-selected="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-handbook-row:focus-visible,
+.happy-handbook-history__toggle:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+/* The star's slot is kept on every row, so titles start on one column. */
+.happy-handbook-row__star {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    color: var(--text);
+}
+
+.happy-handbook-row__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-handbook-row__pending {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy-handbook-row__dot,
+.happy-handbook-editor__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--happy-tile-orange);
+}
+
+.happy-handbook-row__revision {
+    flex: none;
+    min-width: 24px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+.happy-handbook-row__revision[data-new="true"] {
+    color: var(--text-link);
+}
+
+.happy-handbook__empty {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 24px;
+}
+
+/* ---- Faces ------------------------------------------------------------- */
+
+.happy-handbook-faces {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+}
+
+.happy-handbook-faces__more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--surface-selected);
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 12px;
+}
+
+/* ---- Editor ------------------------------------------------------------ */
+
+.happy-handbook-editor {
+    --happy-handbook-column-inset: 64px;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-handbook-editor__scroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-handbook-editor__viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-handbook-editor__column {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* The document's own column, so the title stands over the text. */
+.happy-handbook-editor__header {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-self: center;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: calc(
+        var(--happy-document-measure) + 2 *
+            (var(--happy-handbook-column-inset) - var(--happy-document-inset-inline))
+    );
+    padding: 24px var(--happy-handbook-column-inset) 0;
+}
+
+.happy-handbook-editor__heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-handbook-editor__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+}
+
+.happy-handbook-editor__title,
+.happy-handbook-editor__description {
+    flex: 1 1 auto;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-family: var(--happy-font-ui);
+}
+
+.happy-handbook-editor__title {
+    height: 32px;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 32px;
+}
+
+.happy-handbook-editor__description {
+    height: 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy-handbook-editor__title::placeholder,
+.happy-handbook-editor__description::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.happy-handbook-editor__meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 20px;
+}
+
+.happy-handbook-editor__state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-editor__state[data-pending="true"] {
+    color: var(--text);
+}
+
+.happy-handbook-editor__reading {
+    flex: 1 1 auto;
+}
+
+.happy-handbook-editor .happy-document-editor .bn-editor {
+    padding-inline: var(--happy-handbook-column-inset);
+}
+
+.happy-handbook-editor__footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    height: 32px;
+    padding: 0 16px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* ---- History ----------------------------------------------------------- */
+
+.happy-handbook-history {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 320px;
+    min-height: 0;
+    border-left: 1px solid var(--divider);
+    background: var(--surface);
+}
+
+.happy-handbook-history__header {
+    justify-content: space-between;
+    padding-inline: 16px 8px;
+}
+
+.happy-handbook-history__title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-handbook-history__scroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-handbook-history__viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-handbook-history__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 8px 16px;
+}
+
+.happy-handbook-history__row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 4px;
+    border-radius: 8px;
+}
+
+.happy-handbook-history__row[data-kind="revision"] {
+    background: var(--groupped-background);
+}
+
+.happy-handbook-history__line {
+    display: flex;
+    min-width: 0;
+}
+
+.happy-handbook-history__toggle {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-handbook-history__toggle:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-handbook-history__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-history__row[data-kind="revision"] .happy-handbook-history__mark {
+    color: var(--text);
+}
+
+.happy-handbook-history__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-handbook-history__headline {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-handbook-history__row[data-kind="session"] .happy-handbook-history__headline {
+    font-weight: 400;
+}
+
+.happy-handbook-history__detail {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-handbook-history__chevron {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-history__note,
+.happy-handbook-history__people,
+.happy-handbook-history__change {
+    margin: 0;
+    padding: 0 8px 0 32px;
+}
+
+.happy-handbook-history__note {
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-history__people {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-handbook-history__change {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    font-size: 13px;
+}
+
+.happy-handbook-history__pending,
+.happy-handbook-review__pending {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-history__empty,
+.happy-handbook-review__same {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-history__pending,
+.happy-handbook-history__empty {
+    padding: 8px;
+}
+
+/* ---- Review ------------------------------------------------------------ */
+
+.happy-handbook-review {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.happy-handbook-review__lead {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+/* An unfilled frame, as dialogs group rows: no card inside the card. */
+.happy-handbook-review__item {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+}
+
+.happy-handbook-review__item-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 12px;
+    row-gap: 4px;
+    min-width: 0;
+}
+
+.happy-handbook-review__item-title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-handbook-review__item-revision {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-handbook-review__item-people {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-handbook-review__metadata {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-handbook-review__metadata li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-handbook-review__metadata-label {
+    flex: none;
+    width: 128px;
+    color: var(--text-secondary);
+}
+
+.happy-handbook-review__metadata del {
+    color: var(--git-status-deleted);
+}
+
+.happy-handbook-review__metadata ins {
+    color: var(--git-status-new);
+    text-decoration: none;
+}
+
+.happy-handbook-review__diff {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    font-size: 13px;
+}

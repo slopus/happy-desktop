@@ -933,6 +933,34 @@ export {
     type HappyAgentPipelinesPageProps,
 } from "./pages/pipelines/HappyAgentPipelinesPage";
 export {
+    HappyAgentHandbookPage,
+    type HappyAgentHandbookListRow,
+    type HappyAgentHandbookPageProps,
+} from "./pages/handbook/HappyAgentHandbookPage";
+export {
+    HappyAgentHandbookEditor,
+    type HappyAgentHandbookDraftSync,
+    type HappyAgentHandbookEditorContent,
+    type HappyAgentHandbookEditorProps,
+} from "./pages/handbook/HappyAgentHandbookEditor";
+export {
+    HappyAgentHandbookReviewSheet,
+    type HappyAgentHandbookMetadataChangeView,
+    type HappyAgentHandbookReviewEntry,
+    type HappyAgentHandbookReviewSheetProps,
+} from "./pages/handbook/HappyAgentHandbookReviewSheet";
+export {
+    HappyAgentHandbookHistoryPanel,
+    type HappyAgentHandbookHistoryPanelProps,
+    type HappyAgentHandbookHistoryRow,
+} from "./pages/handbook/HappyAgentHandbookHistoryPanel";
+export {
+    HandbookFaces,
+    handbookNames,
+    type HappyAgentHandbookComparisonView,
+    type HappyAgentHandbookPerson,
+} from "./pages/handbook/handbookPresentation";
+export {
     HappyAgentPipelinePage,
     type HappyAgentPipelinePageProps,
 } from "./pages/pipelines/HappyAgentPipelinePage";
@@ -1180,6 +1208,7 @@ export {
 export {
     HappyAgentInstructionsSettings,
     type HappyAgentInstructionDocument,
+    type HappyAgentInstructionLink,
     type HappyAgentInstructionsSettingsProps,
 } from "./pages/settings/HappyAgentInstructionsSettings";
 export {

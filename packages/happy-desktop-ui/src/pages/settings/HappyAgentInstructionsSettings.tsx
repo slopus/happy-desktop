@@ -8,6 +8,7 @@ import { Tabs } from "../../Tabs";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export type HappyAgentInstructionDocument = {
+    kind?: "document";
     /** Stable identity for switching between the peer global documents. */
     id: string;
     label: string;
@@ -41,8 +42,25 @@ export type HappyAgentInstructionDocument = {
     onRevert: () => void;
 };
 
+/**
+ * A tab whose document lives somewhere else now, such as a team's
+ * instructions on a server with a handbook: it says where, and goes there.
+ */
+export type HappyAgentInstructionLink = {
+    kind: "link";
+    id: string;
+    label: string;
+    /** What the tab's section says it controls. */
+    description: string;
+    title: string;
+    message: string;
+    /** Names where it goes, such as "Open Handbook". */
+    action: string;
+    onOpen: () => void;
+};
+
 export type HappyAgentInstructionsSettingsProps = {
-    documents: readonly HappyAgentInstructionDocument[];
+    documents: readonly (HappyAgentInstructionDocument | HappyAgentInstructionLink)[];
 };
 
 /**
@@ -60,6 +78,32 @@ export function HappyAgentInstructionsSettings(props: HappyAgentInstructionsSett
     const active =
         props.documents.find((document) => document.id === activeId) ?? props.documents[0];
     if (!active) return null;
+    const tabs = (
+        <Tabs
+            activeId={active.id}
+            onSelect={setActiveId}
+            size="small"
+            tabs={props.documents.map(({ id, label }) => ({ id, label }))}
+        />
+    );
+    if (active.kind === "link")
+        return (
+            <HappyAgentSettingsSection
+                description={active.description}
+                rows="cards"
+                title="Global files"
+            >
+                {tabs}
+                <Banner
+                    action={{ label: active.action, onClick: active.onOpen }}
+                    icon="book"
+                    title={active.title}
+                    tone="info"
+                >
+                    {active.message}
+                </Banner>
+            </HappyAgentSettingsSection>
+        );
     const oversize = active.bytes > active.maximumBytes;
     return (
         <HappyAgentSettingsSection
@@ -67,12 +111,7 @@ export function HappyAgentInstructionsSettings(props: HappyAgentInstructionsSett
             rows="cards"
             title="Global files"
         >
-            <Tabs
-                activeId={active.id}
-                onSelect={setActiveId}
-                size="small"
-                tabs={props.documents.map(({ id, label }) => ({ id, label }))}
-            />
+            {tabs}
             {active.error ? (
                 <Banner tone="danger" title={`${active.label} unavailable`}>
                     {active.error}
