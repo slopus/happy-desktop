@@ -56,7 +56,6 @@ const METADATA_SETTLE_MS = 600;
 const REVIEW_POLL_MS = 4_000;
 /** A session that ended this recently is someone still writing. */
 const EDITING_RECENT_MS = 5 * 60 * 1_000;
-const LIST_PAGES_MAX = 20;
 
 const EDITS_NONE: ReadonlyMap<HappyAgentHandbookItemId, HappyAgentHandbookMetadataEdit> = new Map();
 
@@ -225,35 +224,25 @@ export function happyAgentHandbookStoreCreate(
         folders: HappyAgentHandbookFolder[];
         items: HappyAgentHandbookItem[];
     }> => {
-        const folders = new Map<HappyAgentHandbookFolderId, HappyAgentHandbookFolder>();
+        // One answer holds the whole handbook. Its `cursor` is the journal position the
+        // list was read at, not a next page.
+        const answer = recordOf(await deps.request("GET", "v0/handbook"));
+        const folders: HappyAgentHandbookFolder[] = [];
         const items: HappyAgentHandbookItem[] = [];
         const removed = new Map<HappyAgentHandbookItemId, HappyAgentHandbookFolderId>();
-        let cursor: string | undefined;
-        for (let page = 0; page < LIST_PAGES_MAX; page += 1) {
-            const answer = recordOf(
-                await deps.request(
-                    "GET",
-                    cursor === undefined
-                        ? "v0/handbook"
-                        : `v0/handbook?cursor=${encodeURIComponent(cursor)}`,
-                ),
-            );
-            for (const entry of listOf(answer?.folders)) {
-                const folder = handbookFolderRead(entry);
-                if (folder) folders.set(folder.id, folder);
-            }
-            for (const entry of listOf(answer?.items)) {
-                const read = handbookItemRead(entry);
-                // A removed item is history only; the page lists what agents can be given.
-                if (read && !read.removed) items.push(read.item);
-                else if (read && read.item.folderId !== null)
-                    removed.set(read.item.id, read.item.folderId);
-            }
-            if (typeof answer?.cursor !== "string" || answer.cursor.length === 0) break;
-            cursor = answer.cursor;
+        for (const entry of listOf(answer?.folders)) {
+            const folder = handbookFolderRead(entry);
+            if (folder) folders.push(folder);
+        }
+        for (const entry of listOf(answer?.items)) {
+            const read = handbookItemRead(entry);
+            // A removed item is history only; the page lists what agents can be given.
+            if (read && !read.removed) items.push(read.item);
+            else if (read && read.item.folderId !== null)
+                removed.set(read.item.id, read.item.folderId);
         }
         removedFolders = removed;
-        return { folders: [...folders.values()].sort(itemOrder), items: items.sort(itemOrder) };
+        return { folders: folders.sort(itemOrder), items: items.sort(itemOrder) };
     };
 
     const read = async (): Promise<void> => {
