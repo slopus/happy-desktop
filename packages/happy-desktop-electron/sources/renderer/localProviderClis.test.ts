@@ -108,11 +108,12 @@ describe("Antigravity", () => {
                 status: "waiting",
             },
             providerId: "antigravity",
-            signIn: { status: "signed_out" },
+            signIn: { acceptsCode: true, status: "signed_out" },
             version: "01991f3a",
         };
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ providerCli: cli })));
         expect(await api().get("antigravity")).toEqual({
+            acceptsCode: true,
             id: "antigravity",
             installable: false,
             installed: true,

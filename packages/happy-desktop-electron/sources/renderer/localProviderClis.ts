@@ -36,6 +36,11 @@ export interface LocalProviderCli {
     /** The vendor offers an installer for this operating system. */
     readonly installable: boolean;
     readonly signedIn: "signed_in" | "signed_out" | "unknown";
+    /**
+     * `signIn.acceptsCode`: the program's sign-in can be finished with a code the
+     * vendor's page shows. A waiting sign-in's own `acceptsCode` decides that attempt.
+     */
+    readonly acceptsCode: boolean;
     /** The provider account this sign-in serves, when Happy Agent has one. */
     readonly providerId?: string;
     readonly operation?: LocalProviderCliOperation;
@@ -112,6 +117,7 @@ export function localProviderCliRead(value: unknown): LocalProviderCli | undefin
             signIn?.status === "signed_in" || signIn?.status === "signed_out"
                 ? signIn.status
                 : "unknown",
+        acceptsCode: signIn?.acceptsCode === true,
         ...(typeof cli.providerId === "string" ? { providerId: cli.providerId } : {}),
         ...(operation ? { operation } : {}),
         version: typeof cli.version === "string" ? cli.version : "",
@@ -175,11 +181,13 @@ export type LocalProviderCreate =
     | { readonly type: "claude" | "codex" | "grok"; readonly apiKey: string }
     | {
           readonly type: "bedrock";
-          readonly bedrock: {
-              readonly accessKeyId: string;
-              readonly secretAccessKey: string;
-              readonly region: string;
-          };
+          readonly bedrock:
+              | {
+                    readonly accessKeyId: string;
+                    readonly secretAccessKey: string;
+                    readonly region: string;
+                }
+              | { readonly bearerToken: string; readonly region: string };
       };
 
 /** The routes on the local Happy Agent, over its HTTP endpoint. */

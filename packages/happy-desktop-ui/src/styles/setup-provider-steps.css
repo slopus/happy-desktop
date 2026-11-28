@@ -124,6 +124,11 @@
     gap: 16px;
 }
 
+/* A choice inside a form takes the form's own spacing. */
+.happy-setup-provider-dialog__form > .happy-setup-provider-dialog__ways {
+    margin-bottom: 0;
+}
+
 /* Two fields on one line: the wide one takes what the narrow one leaves. */
 .happy-setup-provider-dialog__pair {
     display: flex;

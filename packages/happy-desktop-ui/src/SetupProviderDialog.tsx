@@ -86,6 +86,8 @@ export interface SetupProviderWay {
 
 /** How to connect, for a provider with more than one way: the steps follow it. */
 export function SetupProviderWays(props: {
+    /** What the choice is of. Absent, "Connect with". */
+    readonly label?: string;
     readonly ways: readonly SetupProviderWay[];
     readonly value: string;
     onChange(value: string): void;
@@ -96,9 +98,11 @@ export function SetupProviderWays(props: {
             className="happy-setup-provider-dialog__ways"
             data-happy-desktop-ui="setup-provider-ways"
         >
-            <span className="happy-setup-provider-dialog__title">Connect with</span>
+            <span className="happy-setup-provider-dialog__title">
+                {props.label ?? "Connect with"}
+            </span>
             <SegmentedControl
-                aria-label="Connect with"
+                aria-label={props.label ?? "Connect with"}
                 fullWidth
                 onChange={props.onChange}
                 segments={props.ways.map((way) => ({ label: way.label, value: way.value }))}

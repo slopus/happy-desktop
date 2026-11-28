@@ -70,6 +70,11 @@ export interface LocalOnboardingAssistantConnect {
     readonly installed: boolean;
     /** Whether Happy Agent can install it from the vendor's own installer. */
     readonly installable: boolean;
+    /**
+     * The vendor's sign-in page may show a code to paste back here, as Happy
+     * Agent says of the program before any sign-in starts.
+     */
+    readonly acceptsCode?: boolean;
     /** The install or sign-in going on now, or the one that just failed. */
     readonly operation?: LocalOnboardingAssistantOperation;
 }
@@ -105,7 +110,9 @@ export type LocalOnboardingKeyCredential =
           readonly accessKeyId: string;
           readonly secretAccessKey: string;
           readonly region: string;
-      };
+      }
+    /** A Bedrock API key, sent as a bearer token, in one region. */
+    | { readonly kind: "bedrock-key"; readonly bearerToken: string; readonly region: string };
 
 /** Adding an account from a key: whether this Happy Agent can, and how the last one went. */
 export interface LocalOnboardingKeyAdd {
@@ -367,8 +374,6 @@ const ASSISTANTS: Record<
         vendor: string;
         /** The row's line while nothing is connected: what it signs in with. */
         offer: string;
-        /** The vendor's sign-in page shows a code to paste back into Happy. */
-        pastesCode: boolean;
         /** Signing in with that plan, as the dialog's choice names it. */
         plan: string;
         planNote: string;
@@ -388,7 +393,6 @@ const ASSISTANTS: Record<
         signIn: "claude auth login",
         vendor: "Claude",
         offer: "Your Claude plan, or an Anthropic API key",
-        pastesCode: false,
         plan: "Claude plan",
         planNote: "Uses the Claude plan you already pay for, through a token from Claude Code.",
         key: {
@@ -413,7 +417,6 @@ const ASSISTANTS: Record<
         signIn: "codex login",
         vendor: "OpenAI",
         offer: "Your ChatGPT plan, or an OpenAI API key",
-        pastesCode: false,
         plan: "ChatGPT plan",
         planNote: "Uses the ChatGPT plan you already pay for. No key needed.",
         key: {
@@ -436,7 +439,6 @@ const ASSISTANTS: Record<
         signIn: "grok login",
         vendor: "xAI",
         offer: "Your Grok plan, or an xAI API key",
-        pastesCode: false,
         plan: "Grok plan",
         planNote: "Uses the Grok plan you already pay for. No key needed.",
         key: {
@@ -460,7 +462,6 @@ const ASSISTANTS: Record<
         signIn: "agy",
         vendor: "Google",
         offer: "Your Google AI plan",
-        pastesCode: true,
         plan: "Google AI plan",
         planNote: "Uses the Google AI plan you already pay for. No key needed.",
     },

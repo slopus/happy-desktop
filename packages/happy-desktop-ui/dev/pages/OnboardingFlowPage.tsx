@@ -191,7 +191,8 @@ const grokSignedOut: LocalOnboardingAssistant = {
 };
 const antigravitySignedOut: LocalOnboardingAssistant = {
     authentication: "invalid",
-    connect: { installable: true, installed: true },
+    // Happy Agent says agy's sign-in takes a code from Google's page.
+    connect: { acceptsCode: true, installable: true, installed: true },
     id: "antigravity",
     status: "found",
 };
@@ -212,7 +213,7 @@ function antigravityOperation(
 ): LocalOnboardingAssistant {
     return {
         ...antigravitySignedOut,
-        connect: { installable: true, installed: true, operation },
+        connect: { acceptsCode: true, installable: true, installed: true, operation },
     };
 }
 
@@ -389,6 +390,17 @@ const connectAiScreens: readonly {
             },
             antigravityWaiting,
         ]),
+    },
+    {
+        dialog: "bedrock",
+        id: "ai-bedrock-refused",
+        label: "Amazon Bedrock dialog · AWS refused the keys",
+        view: rowsView(signedOut, [], {
+            error: "The security token included in the request is invalid.",
+            phase: "failed",
+            row: "bedrock",
+            supported: true,
+        }),
     },
     {
         dialog: "bedrock",

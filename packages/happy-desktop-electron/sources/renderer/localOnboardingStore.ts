@@ -1345,19 +1345,25 @@ export function localOnboardingStoreCreate(
             const api = providerClisApi();
             const keyAdd = snapshot.keyAdd;
             if (!api || keyAdd?.supported !== true || keyAdd.phase === "saving") return;
-            const row = credential.kind === "aws" ? "bedrock" : credential.type;
+            const row = credential.kind === "api-key" ? credential.type : "bedrock";
             publish({ ...snapshot, keyAdd: { phase: "saving", row, supported: true } });
             api.providerAccountAdd(
-                credential.kind === "aws"
-                    ? {
-                          bedrock: {
-                              accessKeyId: credential.accessKeyId,
-                              region: credential.region,
-                              secretAccessKey: credential.secretAccessKey,
-                          },
+                credential.kind === "api-key"
+                    ? { apiKey: credential.apiKey, type: credential.type }
+                    : {
+                          bedrock:
+                              credential.kind === "aws"
+                                  ? {
+                                        accessKeyId: credential.accessKeyId,
+                                        region: credential.region,
+                                        secretAccessKey: credential.secretAccessKey,
+                                    }
+                                  : {
+                                        bearerToken: credential.bearerToken,
+                                        region: credential.region,
+                                    },
                           type: "bedrock",
-                      }
-                    : { apiKey: credential.apiKey, type: credential.type },
+                      },
                 crypto.randomUUID(),
             ).then(
                 // The new account is a configured provider: the next pass reads
@@ -1723,6 +1729,7 @@ function assistantConnectProject(cli: LocalProviderCli): LocalOnboardingAssistan
         }
     })();
     return {
+        ...(cli.acceptsCode ? { acceptsCode: true } : {}),
         installable: cli.installable,
         installed: cli.installed,
         ...(projected ? { operation: projected } : {}),

@@ -44,8 +44,6 @@ export interface LocalOnboardingProviderVendor {
     readonly name: string;
     /** Whose page signs in, for example "Google". */
     readonly vendor: string;
-    /** That page shows a code to paste back here, rather than finishing by itself. */
-    readonly pastesCode: boolean;
     readonly install: Record<LocalOnboardingInstallShell, string>;
     /** Signing in with the person's plan, as the choice names it, for example "Claude plan". */
     readonly plan: string;
@@ -110,7 +108,14 @@ interface KeyFields {
     readonly secretAccessKeySet: (value: string) => void;
     readonly region: string;
     readonly regionSet: (value: string) => void;
+    readonly bearerToken: string;
+    readonly bearerTokenSet: (value: string) => void;
+    /** How Bedrock is signed: an IAM access key pair, or a Bedrock API key. */
+    readonly bedrockWay: BedrockWay;
+    readonly bedrockWaySet: (way: BedrockWay) => void;
 }
+
+type BedrockWay = "aws" | "api-key";
 
 /**
  * One provider's dialog on Connect your AI, opened from its row whether or
@@ -135,11 +140,17 @@ export function LocalOnboardingProviderDialog(props: LocalOnboardingProviderDial
     const [accessKeyId, accessKeyIdSet] = useState("");
     const [secretAccessKey, secretAccessKeySet] = useState("");
     const [region, regionSet] = useState("");
+    const [bearerToken, bearerTokenSet] = useState("");
+    const [bedrockWay, bedrockWaySet] = useState<BedrockWay>("aws");
     const fields: KeyFields = {
         accessKeyId,
         accessKeyIdSet,
         apiKey,
         apiKeySet,
+        bearerToken,
+        bearerTokenSet,
+        bedrockWay,
+        bedrockWaySet,
         region,
         regionSet,
         secretAccessKey,
@@ -284,68 +295,118 @@ function keyView(
     };
 }
 
-/** Amazon Bedrock, signed with AWS access keys in one region. */
+/**
+ * Amazon Bedrock in one region, signed with an IAM access key pair or with a
+ * Bedrock API key. Each way is a wide field and the region on one line, then
+ * the secret where there is one.
+ */
 function bedrockView(props: LocalOnboardingProviderDialogProps, fields: KeyFields): WayView {
     const state = keyFormState(props.keyAdd, "bedrock");
-    const credential = {
-        accessKeyId: fields.accessKeyId.trim(),
-        region: fields.region.trim(),
-        secretAccessKey: fields.secretAccessKey.trim(),
-    };
-    const complete =
-        credential.accessKeyId !== "" &&
-        credential.region !== "" &&
-        credential.secretAccessKey !== "";
+    const region = fields.region.trim();
+    const credential: LocalOnboardingKeyCredential | undefined =
+        fields.bedrockWay === "aws"
+            ? fields.accessKeyId.trim() !== "" && fields.secretAccessKey.trim() !== "" && region
+                ? {
+                      accessKeyId: fields.accessKeyId.trim(),
+                      kind: "aws",
+                      region,
+                      secretAccessKey: fields.secretAccessKey.trim(),
+                  }
+                : undefined
+            : fields.bearerToken.trim() !== "" && region
+              ? { bearerToken: fields.bearerToken.trim(), kind: "bedrock-key", region }
+              : undefined;
     const submit = () => {
-        if (!complete || state.saving || !state.supported) return;
-        props.onKeyAdd?.({ ...credential, kind: "aws" });
+        if (!credential || state.saving || !state.supported) return;
+        props.onKeyAdd?.(credential);
     };
+    const message = state.problem
+        ? { error: state.problem }
+        : { hint: "Billed to your AWS account. Requests go to the region above." };
+    const regionField = (
+        <TextField
+            autoComplete="off"
+            className="happy-setup-provider-dialog__narrow"
+            disabled={state.saving}
+            fullWidth
+            label="Region"
+            onValueChange={fields.regionSet}
+            placeholder="us-east-1"
+            value={fields.region}
+        />
+    );
     return {
         action: {
-            disabled: !complete || state.saving || !state.supported,
+            disabled: !credential || state.saving || !state.supported,
             label: "Connect",
             loading: state.saving,
             onSelect: submit,
         },
         steps: (
             <div className="happy-setup-provider-dialog__form">
-                <div className="happy-setup-provider-dialog__pair">
-                    <TextField
-                        autoComplete="off"
-                        className="happy-setup-provider-dialog__wide"
-                        disabled={state.saving}
-                        fullWidth
-                        label="Access key ID"
-                        onValueChange={fields.accessKeyIdSet}
-                        placeholder="AKIA…"
-                        value={fields.accessKeyId}
-                    />
-                    <TextField
-                        autoComplete="off"
-                        className="happy-setup-provider-dialog__narrow"
-                        disabled={state.saving}
-                        fullWidth
-                        label="Region"
-                        onValueChange={fields.regionSet}
-                        placeholder="us-east-1"
-                        value={fields.region}
-                    />
-                </div>
-                <TextField
-                    autoComplete="off"
-                    disabled={state.saving}
-                    fullWidth
-                    label="Secret access key"
-                    onSubmit={submit}
-                    onValueChange={fields.secretAccessKeySet}
-                    type="password"
-                    value={fields.secretAccessKey}
-                    {...(state.problem
-                        ? { error: state.problem }
-                        : {
-                              hint: "Billed to your AWS account. Requests go to the region above.",
-                          })}
+                <SetupProviderWays
+                    label="Sign with"
+                    onChange={(value) =>
+                        fields.bedrockWaySet(value === "api-key" ? "api-key" : "aws")
+                    }
+                    value={fields.bedrockWay}
+                    ways={[
+                        {
+                            label: "AWS access keys",
+                            note: "An IAM user's access key ID and secret.",
+                            value: "aws",
+                        },
+                        {
+                            label: "Bedrock API key",
+                            note: "A key made in the Amazon Bedrock console.",
+                            value: "api-key",
+                        },
+                    ]}
                 />
+                {fields.bedrockWay === "aws" ? (
+                    <>
+                        <div className="happy-setup-provider-dialog__pair">
+                            <TextField
+                                autoComplete="off"
+                                className="happy-setup-provider-dialog__wide"
+                                disabled={state.saving}
+                                fullWidth
+                                label="Access key ID"
+                                onValueChange={fields.accessKeyIdSet}
+                                placeholder="AKIA…"
+                                value={fields.accessKeyId}
+                            />
+                            {regionField}
+                        </div>
+                        <TextField
+                            autoComplete="off"
+                            disabled={state.saving}
+                            fullWidth
+                            label="Secret access key"
+                            onSubmit={submit}
+                            onValueChange={fields.secretAccessKeySet}
+                            type="password"
+                            value={fields.secretAccessKey}
+                            {...message}
+                        />
+                    </>
+                ) : (
+                    <div className="happy-setup-provider-dialog__pair">
+                        <TextField
+                            autoComplete="off"
+                            className="happy-setup-provider-dialog__wide"
+                            disabled={state.saving}
+                            fullWidth
+                            label="Bedrock API key"
+                            onSubmit={submit}
+                            onValueChange={fields.bearerTokenSet}
+                            type="password"
+                            value={fields.bearerToken}
+                            {...message}
+                        />
+                        {regionField}
+                    </div>
+                )}
             </div>
         ),
     };
@@ -462,6 +523,9 @@ function signInView(
     const signInFailed = operation?.kind === "sign-in" && operation.status === "failed";
     const checkingCode = signingIn && codeSent;
     const acceptsCode = waiting?.acceptsCode === true;
+    // Whether this program's page may show a code is Happy Agent's to say,
+    // before a sign-in starts and again for each attempt.
+    const pastesCode = connect.acceptsCode === true || acceptsCode;
     const open = () => {
         codeSentSet(false);
         if (waiting) props.onExternalOpen?.(waiting.url);
@@ -477,7 +541,7 @@ function signInView(
         if (signInFailed) return { danger: true, text: operation.message };
         if (assistant.authentication === "error" && assistant.message)
             return { danger: true, text: assistant.message };
-        if (waiting && !vendor.pastesCode)
+        if (waiting && !pastesCode)
             return {
                 danger: false,
                 text: `Approve Happy at ${vendor.vendor}. This finishes by itself when you do.`,
@@ -487,7 +551,7 @@ function signInView(
             text: `Your browser opens ${vendor.vendor}. Sign in with the account Happy should use.`,
         };
     })();
-    const action: SetupProviderDialogAction | undefined = vendor.pastesCode
+    const action: SetupProviderDialogAction | undefined = pastesCode
         ? {
               disabled: !acceptsCode || code.trim() === "",
               label: "Connect",
@@ -538,13 +602,13 @@ function signInView(
                             <SetupProviderCode code={waiting.userCode} />
                         </>
                     )}
-                    {vendor.pastesCode && !signInHint.danger ? null : (
+                    {pastesCode && !signInHint.danger ? null : (
                         <SetupProviderHint {...(signInHint.danger ? { tone: "danger" } : {})}>
                             {signInHint.text}
                         </SetupProviderHint>
                     )}
                 </SetupProviderStep>
-                {vendor.pastesCode ? (
+                {pastesCode ? (
                     <SetupProviderStep
                         n={first + 1}
                         title={`Paste the code ${vendor.vendor} shows`}
