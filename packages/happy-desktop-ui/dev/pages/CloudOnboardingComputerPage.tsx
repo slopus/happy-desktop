@@ -180,6 +180,7 @@ interface State {
     readonly shared?: boolean;
     readonly hostOs?: "mac" | "linux" | "windows";
     readonly connect?: "idle" | "working" | "connected" | "failed";
+    readonly copyNext?: boolean;
     readonly computers?: readonly CloudOnboardingComputerRow[];
     /** Done: a computer of the reader's is online. */
     readonly done?: boolean;
@@ -220,7 +221,10 @@ function Step(props: {
             required: state.required === true,
             shared: state.shared === true,
             hostOs: state.hostOs ?? "mac",
-            connect: { kind: state.connect ?? "idle" },
+            connect:
+                state.connect === "failed" && state.copyNext
+                    ? { kind: "failed", copyNext: true }
+                    : { kind: state.connect ?? "idle" },
             computers: state.computers ?? [],
             onConnect: noop,
             onAdd: noop,
@@ -318,6 +322,18 @@ const FAILED: CloudOnboardingComputerRow = {
     state: { kind: "failed", reason: "The command expired." },
 };
 
+/** This Mac's row while the app runs the installer itself, and after it failed. */
+const setup = (note: string, reason?: string): CloudOnboardingComputerRow => ({
+    ...(reason ? FAILED : { ...FAILED, name: "This Mac" }),
+    state: reason ? { kind: "failed", reason } : { kind: "joining" },
+    note,
+});
+const SETUP_FAILED = setup("Happy couldn't run the installer.", "Setup failed");
+const SETUP_STOPPED = setup(
+    "error: launchctl bootstrap gui/501 /Users/olga/Library/LaunchAgents/dev.happy.runner.plist failed: 5: Input/output error",
+    "Setup stopped",
+);
+
 interface Shot {
     readonly id: string;
     readonly label: string;
@@ -348,6 +364,26 @@ const shots: readonly Shot[] = [
         id: "o18-computer-online",
         label: "Owner · this Mac online",
         state: { ...OWNER, connect: "connected", computers: [OLGA_MAC], done: true },
+    },
+    {
+        id: "h01-computer-downloading",
+        label: "Owner · the app sets this Mac up · downloading",
+        state: { ...OWNER, connect: "working", computers: [setup("Downloading")] },
+    },
+    {
+        id: "h02-computer-installing",
+        label: "Owner · the app sets this Mac up · installing",
+        state: { ...OWNER, connect: "working", computers: [setup("Installing")] },
+    },
+    {
+        id: "h03-computer-setup-failed",
+        label: "Owner · the app couldn't run the installer, so the press copies it",
+        state: { ...OWNER, connect: "failed", copyNext: true, computers: [SETUP_FAILED] },
+    },
+    {
+        id: "h04-computer-setup-stopped",
+        label: "Owner · the installer stopped, with what it said last",
+        state: { ...OWNER, connect: "failed", computers: [SETUP_STOPPED] },
     },
     {
         id: "o18a-computer-failed",
