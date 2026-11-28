@@ -416,7 +416,8 @@ export function fakeHandbookClusterCreate(
                 return {
                     folders: [...folders.values()].map((folder) => ({ ...folder })),
                     items: [...items.values()].map(wireItem),
-                    cursor: null,
+                    // As the cluster does: the journal position the list was read at.
+                    cursor: "c0",
                 };
             if (!fake.granted.includes("handbook.edit")) refuse(403, "forbidden", "No.");
             const id = typeof body.id === "string" ? body.id : `hb_${String(items.size + 1)}`;
