@@ -65,6 +65,8 @@ export type ComposerModelAccountUsage = {
     week?: ComposerModelUsageWindow;
     /** The short session window, such as five hours, shown beneath the week. */
     session?: ComposerModelUsageWindow;
+    /** Additional quota windows beyond the primary pair, such as Antigravity's Claude/GPT scope. */
+    extraWindows?: readonly ComposerModelUsageWindow[];
     /** When the account was last read successfully, in milliseconds. */
     updatedAt?: number;
     /** The account is being read now. */
@@ -449,34 +451,49 @@ function usageLeft(window: ComposerModelUsageWindow) {
 }
 
 /** Which of an account's windows a reading is, by the field it came from. */
-type UsageWindowKind = "week" | "session";
+type UsageWindowKind = "week" | "session" | "extra";
 
-const USAGE_WINDOW_NAMES: Record<UsageWindowKind, string> = { week: "Weekly", session: "Session" };
+const USAGE_WINDOW_NAMES: Record<"week" | "session", string> = {
+    week: "Weekly",
+    session: "Session",
+};
+
+function usageWindowWarningName(kind: UsageWindowKind, window: ComposerModelUsageWindow): string {
+    return kind === "extra" ? window.label : USAGE_WINDOW_NAMES[kind];
+}
 
 /**
  * The one window an account warns about, on the closed pill and on its
- * service's header alike: the week when it is low, otherwise the session, and
- * none while both have room. A window holding a spent account back is critical
- * whatever its number says.
+ * service's header alike: the week when it is low, otherwise the session or
+ * an extra window, and none while all have room. A window holding a spent
+ * account back is critical whatever its number says.
  */
 function usageWarning(usage: ComposerModelAccountUsage | undefined) {
+    const windowEntries: readonly (readonly [
+        UsageWindowKind,
+        ComposerModelUsageWindow | undefined,
+    ])[] = [
+        ["week", usage?.week],
+        ["session", usage?.session],
+        ...(usage?.extraWindows ?? []).map((extra) => ["extra", extra] as const),
+    ];
     // A spent account whose reset passed unread is not counted on: its window
     // warns with the empty ring of a number not known, never as having room.
     const limit = usage?.limit;
     if (limit?.state === "unconfirmed") {
-        const kind = usage?.week?.lapsed ? "week" : usage?.session?.lapsed ? "session" : undefined;
-        const window = kind === undefined ? undefined : usage?.[kind];
-        if (kind !== undefined && window !== undefined)
+        const lapsed = windowEntries.find(([, window]) => window?.lapsed);
+        if (lapsed !== undefined && lapsed[1] !== undefined) {
+            const [kind, window] = lapsed;
             return {
                 kind,
                 window,
                 left: undefined,
                 tone: "ample" as const,
-                label: `${USAGE_WINDOW_NAMES[kind]} limit reset ${limit.reset} · not confirmed yet`,
+                label: `${usageWindowWarningName(kind, window)} limit reset ${limit.reset} · not confirmed yet`,
             };
+        }
     }
-    const candidates = (["week", "session"] as const).flatMap((kind) => {
-        const window = usage?.[kind];
+    const candidates = windowEntries.flatMap(([kind, window]) => {
         // A lapsed window's number is from before it started over, so it warns of nothing.
         if (window === undefined || window.lapsed) return [];
         const left = usageLeft(window);
@@ -485,7 +502,7 @@ function usageWarning(usage: ComposerModelAccountUsage | undefined) {
     });
     const warning = candidates[0];
     if (warning === undefined) return undefined;
-    const name = `${USAGE_WINDOW_NAMES[warning.kind]} limit`;
+    const name = `${usageWindowWarningName(warning.kind, warning.window)} limit`;
     const resets = warning.window.resets ? ` · ${warning.window.resets}` : "";
     return {
         ...warning,
@@ -595,7 +612,9 @@ function usageDetailsHeight(
     const lines: number[] = [];
     if (usage?.week) lines.push(windowsUniform ? USAGE_LINE : USAGE_LINE_PRIMARY);
     if (usage?.session) lines.push(USAGE_LINE);
-    if (!usage?.week && !usage?.session) lines.push(USAGE_LINE);
+    for (const _extra of usage?.extraWindows ?? []) lines.push(USAGE_LINE);
+    if (!usage?.week && !usage?.session && (usage?.extraWindows?.length ?? 0) === 0)
+        lines.push(USAGE_LINE);
     const freshness = usage && now !== undefined ? usageFreshnessLines(usage, now) : undefined;
     if (freshness) {
         const count =
@@ -652,7 +671,10 @@ export function ComposerModelAccountUsageDetails(props: {
                 <UsageLine primary={props.windowsUniform !== true} window={usage.week} />
             ) : null}
             {usage?.session ? <UsageLine window={usage.session} /> : null}
-            {usage?.week || usage?.session ? null : (
+            {(usage?.extraWindows ?? []).map((window) => (
+                <UsageLine key={window.label} window={window} />
+            ))}
+            {usage?.week || usage?.session || (usage?.extraWindows?.length ?? 0) > 0 ? null : (
                 <span
                     className="happy-composer-model-control__usage-unknown"
                     data-happy-desktop-ui="composer-model-control-usage-unknown"
@@ -765,7 +787,7 @@ function usageAge(at: number, now: number) {
 
 /** The caption's lines, or `undefined` when it has nothing to say. */
 function usageFreshnessLines(usage: ComposerModelAccountUsage, now: number) {
-    const windows = [usage.week, usage.session].filter(
+    const windows = [usage.week, usage.session, ...(usage.extraWindows ?? [])].filter(
         (window): window is ComposerModelUsageWindow => window !== undefined,
     );
     const newest = Math.max(

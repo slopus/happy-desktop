@@ -131,6 +131,7 @@ export function happyAgentPermissionLabel(mode: HappyAgentPermissionMode): strin
 /** Display names for the provider types the daemon configures. */
 const SERVICE_NAMES: Readonly<Record<string, string>> = {
     anthropic: "Anthropic",
+    antigravity: "Antigravity",
     bedrock: "Amazon Bedrock",
     claude: "Claude",
     "claude-code": "Claude Code",

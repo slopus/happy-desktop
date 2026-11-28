@@ -12,6 +12,7 @@ import "./styles/composer-model-control.css";
 import "./styles/icon.css";
 import "./styles/tooltip.css";
 import {
+    ComposerModelAccountUsageDetails,
     ComposerModelControl,
     type ComposerModelAccountLimit,
     type ComposerModelAccountUsage,
@@ -592,3 +593,59 @@ it("warns of at most one window, week first, on the pill and the header alike", 
         });
     }
 }, 60000);
+
+it("projects Antigravity Gemini and Claude/GPT windows and renders all of them in details", async () => {
+    const antigravity: HappyAgentProviderUsageEntry = {
+        providerId: "antigravity",
+        refreshedAt: NOW - 2 * MINUTE,
+        usage: {
+            capturedAt: NOW - 2 * MINUTE,
+            exhausted: false,
+            fiveHour: { usedPercent: 10, resetsAt: NOW + 70 * MINUTE },
+            weekly: { usedPercent: 76, resetsAt: NOW + 3 * 1_440 * MINUTE },
+            claudeGptFiveHour: { usedPercent: 0 },
+            claudeGptWeekly: { usedPercent: 85, resetsAt: NOW + 4 * 1_440 * MINUTE },
+        },
+    };
+    const projected = happyAgentComposerModelUsageProject(snapshot([antigravity]), NOW).get(
+        "antigravity",
+    );
+    expect(projected).toEqual({
+        week: { label: "Gemini Week", usedPercent: 76, resets: "resets Thu 3:00 PM" },
+        session: { label: "Gemini 5h", usedPercent: 10, resets: "resets 4:10 PM" },
+        extraWindows: [
+            { label: "Claude/GPT Week", usedPercent: 85, resets: "resets Fri 3:00 PM" },
+            { label: "Claude/GPT 5h", usedPercent: 0 },
+        ],
+        updatedAt: NOW - 2 * MINUTE,
+    });
+
+    const view = createRenderer().render(
+        () => <ComposerModelAccountUsageDetails now={NOW} usage={projected} windowsUniform />,
+        { width: 420, height: 260, padding: 16 },
+    );
+    await view.ready();
+    const lines = Array.from(
+        view.container.querySelectorAll('[data-happy-desktop-ui="composer-model-control-usage"]'),
+    ).map((line) =>
+        line.querySelector(".happy-composer-model-control__usage-label")?.textContent?.trim(),
+    );
+    expect(lines).toEqual(["Gemini Week", "Gemini 5h", "Claude/GPT Week", "Claude/GPT 5h"]);
+
+    const reservedView = createRenderer().render(
+        () => (
+            <ComposerModelAccountUsageDetails
+                now={NOW}
+                reserve={[projected]}
+                usage={{ updatedAt: NOW }}
+                windowsUniform
+            />
+        ),
+        { width: 420, height: 260, padding: 16 },
+    );
+    await reservedView.ready();
+    const details = reservedView.container.querySelector<HTMLElement>(
+        '[data-happy-desktop-ui="composer-model-control-usage-details"]',
+    );
+    expect(Number.parseInt(details?.style.minHeight ?? "0", 10)).toBeGreaterThanOrEqual(80);
+});
