@@ -134,7 +134,8 @@ export function ProfileSetupForm(props: ProfileSetupFormProps) {
                 placeholder={
                     <Avatar
                         className="happy-picture-picker__image"
-                        initials={initialsOf(props.name)}
+                        // With no name yet, the "?" Settings › Profile draws.
+                        initials={initialsOf(props.name) || "?"}
                         size="lg"
                         // The lg avatar's 14px initials, scaled to the picture's side.
                         style={{
