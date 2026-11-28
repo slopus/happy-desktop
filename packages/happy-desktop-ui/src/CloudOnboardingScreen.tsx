@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
-import type { HappyAgentPluginImage } from "happy-desktop-state";
 import { CopyButton } from "./CopyButton";
-import { PluginMark } from "./pages/plugins/pluginPresentation";
+import {
+    CloudOnboardingToolsBody,
+    type CloudOnboardingToolsBodyProps,
+} from "./CloudOnboardingTools";
 import { QRCode } from "./QRCode";
 import { ScrollArea } from "./Scrollbar";
 import { Spinner } from "./Spinner";
@@ -41,23 +43,6 @@ export interface CloudOnboardingInferenceOption {
     /** Connected already, through the team or the reader's own account. */
     readonly connected: boolean;
     /** A sign-in or dialog this option opened is still going. */
-    readonly busy?: boolean;
-    readonly onSelect?: () => void;
-}
-
-/** One plugin offered on the plugins gate. */
-export interface CloudOnboardingPlugin {
-    readonly id: string;
-    readonly name: string;
-    readonly description: string;
-    readonly image: HappyAgentPluginImage | null;
-    /** The server requires an active installation before the reader may continue. */
-    readonly required: boolean;
-    /**
-     * `available` is not installed; `setup` is installed and waiting for a
-     * sign-in; `connected` is active.
-     */
-    readonly state: "available" | "setup" | "connected";
     readonly busy?: boolean;
     readonly onSelect?: () => void;
 }
@@ -104,13 +89,10 @@ export type CloudOnboardingView =
           readonly options: readonly CloudOnboardingInferenceOption[];
           readonly error?: string;
       }
-    | {
+    | ({
+          /** GitHub in the Code box, then every other tool by the job it does. */
           readonly kind: "plugins";
-          /** Required plugins first, then the rest worth offering. */
-          readonly plugins: readonly CloudOnboardingPlugin[];
-          readonly loading?: boolean;
-          readonly error?: string;
-      }
+      } & CloudOnboardingToolsBodyProps)
     | {
           readonly kind: "teammates";
           readonly email: string;
@@ -266,18 +248,6 @@ function Hint(props: {
             </p>
         </div>
     );
-}
-
-/**
- * The plugins step before its catalog is read: the frames of the three rows it
- * offers when no plugin is required, so the rows arrive in room that was held.
- */
-function PluginRowsPending() {
-    return [0, 1, 2].map((index) => (
-        <div className="happy-cloud-onboarding__row" data-pending="true" key={index}>
-            {index === 1 ? <Spinner size={16} /> : null}
-        </div>
-    ));
 }
 
 /** Who may talk to the admin bot, said once under what it can do. */
@@ -443,54 +413,11 @@ function page(
         case "plugins":
             return {
                 title: "Connect your tools",
-                copy: "Plugins let agents work in the tools your team already uses.",
-                body: (
-                    <div
-                        className="happy-cloud-onboarding__list"
-                        data-happy-desktop-ui="cloud-onboarding-plugins"
-                    >
-                        {view.loading && view.plugins.length === 0 ? (
-                            <PluginRowsPending />
-                        ) : (
-                            view.plugins.map((plugin) => (
-                                <div
-                                    className="happy-cloud-onboarding__row"
-                                    data-happy-desktop-ui="cloud-onboarding-plugin"
-                                    key={plugin.id}
-                                >
-                                    <PluginMark image={plugin.image} size="row" />
-                                    <span className="happy-cloud-onboarding__row-text">
-                                        <span className="happy-cloud-onboarding__row-title">
-                                            {plugin.name}
-                                            {plugin.required ? <Tag label="Required" /> : null}
-                                        </span>
-                                        <span className="happy-cloud-onboarding__row-detail">
-                                            {plugin.description}
-                                        </span>
-                                    </span>
-                                    {plugin.state === "connected" ? (
-                                        <span className="happy-cloud-onboarding__done">
-                                            <Icon name="check" size={14} />
-                                            Connected
-                                        </span>
-                                    ) : (
-                                        <Button
-                                            disabled={!plugin.onSelect}
-                                            loading={plugin.busy}
-                                            onClick={plugin.onSelect}
-                                            size="small"
-                                            variant="secondary"
-                                            width={96}
-                                        >
-                                            {plugin.state === "setup" ? "Finish" : "Connect"}
-                                        </Button>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                        <Hint text={view.error} />
-                    </div>
-                ),
+                copy:
+                    view.github || view.loading
+                        ? "Start with GitHub, so agents can work in your team's code."
+                        : "Plugins let agents work in the tools your team already uses.",
+                body: <CloudOnboardingToolsBody {...view} />,
             };
         case "teammates":
             return {
@@ -842,7 +769,7 @@ export function CloudOnboardingScreen(props: CloudOnboardingScreenProps) {
             {...(props.exit ? { exit: { ...props.exit, label: "Save and exit" } } : {})}
             backdrop={{ appearance: props.appearance, kind: "sky" }}
             className={
-                props.view.kind === "inference"
+                props.view.kind === "inference" || props.view.kind === "plugins"
                     ? "happy-cloud-onboarding happy-cloud-onboarding--wide"
                     : "happy-cloud-onboarding"
             }

@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 import {
-    HappyAgentPluginFieldsError,
     type HappyAgentCloudProvidersSnapshot,
     type HappyAgentCloudProvidersStore,
     type HappyAgentOnboardingGate,
@@ -9,22 +8,20 @@ import {
     type HappyAgentPaymentsStore,
     type HappyAgentProvidersStore,
     happyAgentMoneyExponent,
-    type HappyAgentPluginsSnapshot,
     type HappyAgentPluginsStore,
     type HappyAgentProfileSnapshot,
     type HappyAgentProfileStore,
 } from "happy-desktop-state";
 import {
-    CloudOnboardingPluginDialog,
     CloudOnboardingScreen,
     HappyAgentProviderAddDialog,
     type CloudOnboardingInferenceOption,
-    type CloudOnboardingPlugin,
     type CloudOnboardingScreenProps,
     type ThemeMode,
 } from "happy-desktop-ui";
 import { AppCustomProviderDialog, providerAddProps } from "../views/AppHappyAgentSettingsView";
 import { methodText, moneyText, PAYMENT_PRESETS } from "../views/AppPaymentsSettings";
+import { cloudOnboardingToolsDialog, cloudOnboardingToolsView } from "./AppCloudOnboardingTools";
 
 const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = {
     profile: "Profile",
@@ -47,9 +44,6 @@ const TILE_VENDORS: Readonly<
     chatgpt: "codex",
     grok: "grok",
 };
-
-/** How many plugins the plugins step offers: the required ones, then others to fill. */
-const PLUGIN_ROWS = 3;
 
 const noopSubscribe = () => () => undefined;
 const noSnapshot = () => undefined;
@@ -124,50 +118,6 @@ function inferenceOptions(
     return options.map(({ onSelect, ...option }) => (onSelect ? { ...option, onSelect } : option));
 }
 
-function pluginRows(
-    gate: Extract<HappyAgentOnboardingGate, { readonly kind: "plugins" }>,
-    plugins: HappyAgentPluginsSnapshot | undefined,
-    connecting: string | undefined,
-    connect: ((pluginId: string) => void) | undefined,
-): readonly CloudOnboardingPlugin[] {
-    // A feature plugin is the person's own and already installed; it connects nothing.
-    const catalog = (plugins?.plugins ?? []).filter((plugin) => plugin.kind === "integration");
-    const required = gate.plugins.filter((plugin) => plugin.required);
-    // The gate's own list stands in where the catalog could not be read.
-    const offered = [
-        ...new Set([
-            ...required.map((plugin) => plugin.id),
-            ...catalog.map((plugin) => plugin.id),
-            ...gate.plugins.map((plugin) => plugin.id),
-        ]),
-    ].slice(0, Math.max(PLUGIN_ROWS, required.length));
-    return offered.map((id) => {
-        const entry = catalog.find((plugin) => plugin.id === id);
-        const gateEntry = gate.plugins.find((plugin) => plugin.id === id);
-        const installations = (plugins?.installations ?? []).filter(
-            (installation) => installation.pluginId === id && installation.available,
-        );
-        const state =
-            gateEntry?.active || installations.some((entry) => entry.status === "active")
-                ? "connected"
-                : installations.length > 0
-                  ? "setup"
-                  : "available";
-        return {
-            id,
-            name: entry?.name ?? gateEntry?.name ?? id,
-            description: entry?.description ?? "",
-            image: entry?.image ?? null,
-            required: gate.required.includes(id),
-            state,
-            ...(connecting === id ? { busy: true } : {}),
-            ...(!connect || state === "connected" || (connecting !== undefined && connecting !== id)
-                ? {}
-                : { onSelect: () => connect(id) }),
-        };
-    });
-}
-
 /**
  * A Happy Cloud server's onboarding: the gate the server puts on screen, drawn
  * by `CloudOnboardingScreen`, with each step's action handed to the store that
@@ -237,15 +187,19 @@ export function AppCloudOnboarding(props: {
             : undefined;
     const open = (url: string) =>
         props.onExternalOpen ? props.onExternalOpen(url) : window.open(url, "_blank", "noopener");
-    // The sign-in the plugins gate opened, while its installation still needs one.
-    const setup = props.snapshot.pluginSetup;
-    const setupPlugin = plugins?.plugins.find((plugin) => plugin.id === setup?.pluginId);
-    const setupInstallation = plugins?.installations.find(
-        (installation) =>
-            installation.id === setup?.installationId &&
-            installation.available &&
-            installation.status !== "active",
-    );
+    const tools =
+        gate.kind === "plugins"
+            ? cloudOnboardingToolsView({
+                  gate,
+                  plugins,
+                  // A server whose health does not say it serves plugins has no
+                  // store: its plugins are listed from the gate, not offered.
+                  connectable: pluginsStore !== undefined,
+                  snapshot: props.snapshot,
+                  store,
+                  open,
+              })
+            : undefined;
     const screen = ((): Pick<
         CloudOnboardingScreenProps,
         "view" | "action" | "skip" | "footnote"
@@ -371,17 +325,9 @@ export function AppCloudOnboarding(props: {
                 return {
                     view: {
                         kind: "plugins",
-                        // A server whose health does not say it serves plugins has no
-                        // store: its required plugins are listed from the gate, not offered.
-                        plugins: pluginRows(
-                            gate,
-                            plugins,
-                            props.snapshot.pluginConnecting,
-                            pluginsStore ? (id) => store.pluginConnect(id, { open }) : undefined,
-                        ),
-                        loading: pluginsStore ? (plugins?.loading ?? true) : false,
-                        ...((flow.error ?? plugins?.error?.message)
-                            ? { error: flow.error ?? plugins?.error?.message }
+                        ...tools!,
+                        ...((flow.error ?? tools?.error)
+                            ? { error: flow.error ?? tools?.error }
                             : {}),
                     },
                     action: proceed,
@@ -527,35 +473,15 @@ export function AppCloudOnboarding(props: {
                 exit={{ onSelect: store.onboardingExit }}
                 {...screen}
             />
-            {pluginsStore && setup && setupPlugin && setupInstallation ? (
-                <CloudOnboardingPluginDialog
-                    description={setupPlugin.description}
-                    image={setupPlugin.image}
-                    installation={setupInstallation}
-                    methods={setupPlugin.authMethods}
-                    name={setupPlugin.name}
-                    onClose={store.pluginSetupClose}
-                    onConfigure={async (installationId, methodId, values) => {
-                        try {
-                            await pluginsStore.installationConfigure(
-                                installationId,
-                                methodId,
-                                values,
-                            );
-                        } catch (error) {
-                            if (error instanceof HappyAgentPluginFieldsError)
-                                return { message: error.message, fields: error.fields };
-                            throw error;
-                        }
-                        store.pluginSetupClose();
-                        return undefined;
-                    }}
-                    onConnect={async (installationId, methodId) => {
-                        await pluginsStore.installationConnect(installationId, methodId, { open });
-                        store.pluginSetupClose();
-                    }}
-                />
-            ) : null}
+            {tools
+                ? cloudOnboardingToolsDialog({
+                      view: tools,
+                      plugins,
+                      snapshot: props.snapshot,
+                      store,
+                      open,
+                  })
+                : null}
             {providersStore && providers?.add ? (
                 <HappyAgentProviderAddDialog
                     {...providerAddProps(providers, providersStore, props.onExternalOpen)}
