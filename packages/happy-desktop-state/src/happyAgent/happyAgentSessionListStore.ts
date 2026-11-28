@@ -522,6 +522,19 @@ export interface HappyAgentSessionListStore {
     ): string | undefined;
 
     /**
+     * Whether the host's own catalog says this group has no folder to read: a
+     * workspace still being created, one that failed, one being or already
+     * removed, a project still cloning, or a folder gone from disk. The host
+     * refuses every file read there, so nothing is asked of it.
+     *
+     * Also `true` for an archived task and for an id the catalog has been read
+     * and does not hold, which is how the host withdraws a workspace the moment
+     * its removal starts. Until the catalog is read nothing is known, so
+     * nothing is refused here and the host is the one to say.
+     */
+    groupCheckoutUnavailable(groupId: HappyAgentGroupId): boolean;
+
+    /**
      * Why a conversation cannot be started in a group or sent to, or `undefined`
      * when it can. Broader than `groupWriteRefusal`: a workspace whose checkout
      * is still being prepared may accept the user's intent, but Happy holds that
@@ -2568,6 +2581,30 @@ export function happyAgentSessionListStoreCreate(
             return catalogListed
                 ? HAPPY_AGENT_GROUP_UNLISTED_REFUSAL
                 : HAPPY_AGENT_GROUP_UNREAD_REFUSAL;
+        },
+        groupCheckoutUnavailable(groupId) {
+            const { catalog, catalogListed } = internal.getState();
+            const worktree = catalog.worktrees.find((entry) => entry.id === groupId);
+            if (worktree !== undefined)
+                return happyAgentWorktreeWriteRefusal(worktree) !== undefined;
+            const project = catalog.projects.find((entry) => entry.id === groupId);
+            if (project !== undefined) return happyAgentProjectWriteRefusal(project) !== undefined;
+            // A bot's, a task's and a Surface chat's folder is made with it and
+            // stays for as long as it is listed.
+            if (
+                catalog.bots.some((bot) => bot.workspaceId === groupId) ||
+                taskWorkspaceListed(groupId) ||
+                happyAgentBotSubtasks(subtaskRoots(catalog)).some(
+                    (task) => task.workspaceId === groupId,
+                ) ||
+                catalog.tasks.some((task) => !task.archived && task.workspaceId === groupId) ||
+                surfaceChatRefusal(groupId, undefined) !== null
+            )
+                return false;
+            // What is left is an archived task, or an id the catalog has been
+            // read and does not hold: the host has withdrawn it, as it does a
+            // workspace the moment its removal starts.
+            return catalogListed;
         },
         groupConversationRefusal(groupId, sessionId) {
             const { catalog, catalogListed } = internal.getState();

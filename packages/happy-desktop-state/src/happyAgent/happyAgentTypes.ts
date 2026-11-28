@@ -1082,10 +1082,15 @@ export interface HappyAgentWorkspaceFileTreePage {
 /**
  * Why a checkout's files cannot be listed at all, as opposed to one read that
  * failed: a Happy Cloud conversation with no compute attached has no folder to
- * list yet, one whose compute is offline has no machine to read it from, and a
- * server without the route never will.
+ * list yet, one whose compute is offline has no machine to read it from, a
+ * server without the route never will, and a checkout the host says is not
+ * there (still being created, failed, removed, or gone from disk) has no folder.
  */
-export type HappyAgentWorkspaceFilesUnavailable = "noCompute" | "computeOffline" | "unsupported";
+export type HappyAgentWorkspaceFilesUnavailable =
+    | "noCompute"
+    | "computeOffline"
+    | "unsupported"
+    | "checkoutUnavailable";
 
 /** What reading one checkout directory answered. */
 export type HappyAgentWorkspaceFileTreeRead =

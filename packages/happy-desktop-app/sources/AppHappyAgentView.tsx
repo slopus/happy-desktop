@@ -13422,9 +13422,12 @@ function HappyAgentPanelBody(props: {
                                             ? "The computer is offline."
                                             : props.workspaceFiles?.unavailable === "unsupported"
                                               ? "Files aren't available on this server."
-                                              : props.workspaceFiles?.directories.get("")?.error
-                                                ? "Files could not be loaded."
-                                                : "No files."
+                                              : props.workspaceFiles?.unavailable ===
+                                                  "checkoutUnavailable"
+                                                ? "This workspace's folder isn't available."
+                                                : props.workspaceFiles?.directories.get("")?.error
+                                                  ? "Files could not be loaded."
+                                                  : "No files."
                                       : changesUnavailable
                                         ? "Git changes are temporarily unavailable."
                                         : "No changed files."

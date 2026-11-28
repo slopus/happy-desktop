@@ -6957,6 +6957,9 @@ export function happyAgentWorkspaceStoreCreate(
         read: { readonly cursor?: string; readonly refresh?: true } = {},
     ): void {
         if (disposed || workspaceFilesGroupId !== groupId) return;
+        // A checkout the host says is not there answers every read with a
+        // refusal, so it is not asked; its record changing is what asks again.
+        if (workspaceFilesCheckoutReconcile()) return;
         if (workspaceFiles?.directories.get(path)?.loading) {
             if (read.refresh) workspaceFilesRefreshPending.add(path);
             return;
@@ -6983,6 +6986,31 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         }
         workspaceFilesDirectoryLoadPump();
+    }
+
+    /**
+     * Keeps the tree in step with whether its checkout has a folder at all, and
+     * answers whether it has none. A workspace that is still being created, or
+     * is on its way out, lists nothing and says so; the moment its record says
+     * the folder is there, the root is read without the reader reopening it.
+     */
+    function workspaceFilesCheckoutReconcile(): boolean {
+        const groupId = workspaceFilesGroupId;
+        if (groupId === undefined) return false;
+        if (list.groupCheckoutUnavailable(groupId)) {
+            if (workspaceFiles?.unavailable !== "checkoutUnavailable") {
+                workspaceFilesReset("checkoutUnavailable");
+                recompute();
+            }
+            return true;
+        }
+        if (workspaceFiles?.unavailable === "checkoutUnavailable") {
+            workspaceFilesReset();
+            if (groupId === addressedGroupId && fileScopeOf(groupId) === "all")
+                workspaceFilesDirectoryEnsure(groupId, "");
+            recompute();
+        }
+        return false;
     }
 
     /** Loads a directory once, or retries the page that most recently failed. */
@@ -7399,6 +7427,7 @@ export function happyAgentWorkspaceStoreCreate(
             fileTabsReconcile();
             pendingProjectClonesApply();
             sessionCreateFailureApply();
+            workspaceFilesCheckoutReconcile();
             catalogAuthoritativeApply();
             subtasksRemovedApply();
             retainedListApply();
