@@ -164,7 +164,7 @@ const SPECIMENS: readonly {
     },
     {
         label: "Servers",
-        detail: "the account's servers to join, or bootstrap a new one from its button; an invite's link adds its server",
+        detail: "the account's servers to join or open, or create your own from its button; an invite's link adds its server",
         view: {
             kind: "servers",
             servers: { status: "ready", servers: [ACME, GUILD] },
@@ -185,7 +185,7 @@ const SPECIMENS: readonly {
     },
     {
         label: "Create first",
-        detail: "no servers yet, so create leads",
+        detail: "the account's first server; Back lists its servers, none yet",
         view: { kind: "create", name: "", availability: "idle", back: false },
     },
     {
@@ -273,6 +273,7 @@ export function CloudConnectScreenPage() {
                                     onEmailCodeResend={noop}
                                     onEmailChangeOpen={noop}
                                     onServerPick={noop}
+                                    onServerOpen={noop}
                                     onServersContinue={noop}
                                     {...(specimen.view.kind === "create"
                                         ? { picture: PICTURE }

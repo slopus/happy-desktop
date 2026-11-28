@@ -30,10 +30,12 @@ const OWNER: readonly { readonly id: string; readonly label: string }[] = [
     { id: "plugins", label: "Tools" },
     { id: "compute", label: "Computer" },
     { id: "teammates", label: "Team" },
+    { id: "mobileApp", label: "Phone" },
 ];
 const MEMBER: typeof OWNER = [
     { id: "profile", label: "Profile" },
     { id: "compute", label: "Computer" },
+    { id: "mobileApp", label: "Phone" },
 ];
 
 /**
@@ -148,12 +150,28 @@ function Create(props: {
     readonly pictureUrl?: string;
     readonly crop?: ProfilePhotoCropSource;
 }) {
-    const view: CloudConnectView = {
-        kind: "create",
-        name: "acme",
-        availability: "available",
-        back: false,
-    };
+    return (
+        <Sheet
+            mode={props.mode}
+            {...(props.pictureUrl ? { pictureUrl: props.pictureUrl } : {})}
+            {...(props.crop ? { crop: props.crop } : {})}
+            view={{ kind: "create", name: "acme", availability: "available", back: false }}
+        />
+    );
+}
+
+/** The account's servers: one already in this app, one joined just now, one to join. */
+const ACME = { id: "acme", displayName: "Acme", name: "acme", inApp: true as const };
+const GUILD = { id: "guild", displayName: "Design Guild", name: "design-guild" };
+const LABS = { id: "labs", displayName: "Acme Labs", name: "acme-labs" };
+
+/** The sidebar's "+" over the app: the sheet, as the window draws it. */
+function Sheet(props: {
+    readonly mode: ThemeMode;
+    readonly view: CloudConnectView;
+    readonly pictureUrl?: string;
+    readonly crop?: ProfilePhotoCropSource;
+}) {
     return (
         <CloudConnectScreen
             appearance={props.mode}
@@ -175,6 +193,7 @@ function Create(props: {
             onEmailOpen={noop}
             onLogoPress={noop}
             onServerPick={noop}
+            onServerOpen={noop}
             onServersContinue={noop}
             onTestLoginChange={noop}
             onTestPasswordChange={noop}
@@ -187,7 +206,7 @@ function Create(props: {
                 onCropCancel: noop,
                 onCropConfirm: noop,
             }}
-            view={view}
+            view={props.view}
         />
     );
 }
@@ -216,6 +235,20 @@ function profile(
     };
 }
 
+/** The phone step, as `AppCloudOnboarding` hands it over: optional, not done. */
+const phone: Omit<CloudOnboardingScreenProps, "appearance" | "steps"> = {
+    currentStep: "mobileApp",
+    serverLabel: "Acme",
+    action: { label: "Continue", disabled: true, onSelect: noop },
+    skip: { onSelect: noop },
+    view: {
+        kind: "mobileApp",
+        appStoreUrl: "https://apps.apple.com/us/app/happy-claude-code-client/id6748571505",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=com.ex3ndr.happy",
+        registered: false,
+    },
+};
+
 interface Shot {
     /** The round 4 mockup's file name, without appearance and size. */
     readonly id: string;
@@ -226,6 +259,65 @@ interface Shot {
 }
 
 const shots: readonly Shot[] = [
+    {
+        id: "e01-servers",
+        label: "The sidebar's + · the account's servers: open, join, or create your own",
+        light: true,
+        render: (mode) => (
+            <Sheet
+                mode={mode}
+                view={{
+                    kind: "servers",
+                    servers: { status: "ready", servers: [ACME, GUILD, LABS] },
+                    joins: new Map(),
+                }}
+            />
+        ),
+    },
+    {
+        id: "e01a-servers-joined",
+        label: "The sidebar's + · one joined, so Continue",
+        render: (mode) => (
+            <Sheet
+                mode={mode}
+                view={{
+                    kind: "servers",
+                    servers: { status: "ready", servers: [ACME, GUILD, LABS] },
+                    joins: new Map([[GUILD.id, "joined"]]),
+                }}
+            />
+        ),
+    },
+    {
+        id: "e01b-servers-none",
+        label: "The sidebar's + · an account on no server yet",
+        light: true,
+        render: (mode) => (
+            <Sheet
+                mode={mode}
+                view={{
+                    kind: "servers",
+                    servers: { status: "ready", servers: [] },
+                    joins: new Map(),
+                }}
+            />
+        ),
+    },
+    {
+        id: "e01c-servers-first-run",
+        label: "First run · from the start page, nothing behind it, so no close button",
+        render: (mode) => (
+            <Sheet
+                mode={mode}
+                view={{
+                    kind: "servers",
+                    servers: { status: "ready", servers: [] },
+                    joins: new Map(),
+                    start: true,
+                }}
+            />
+        ),
+    },
     {
         id: "o02-create",
         label: "Create a server · nothing uploaded, the shader",
@@ -267,6 +359,17 @@ const shots: readonly Shot[] = [
         id: "o03b-profile-no-name",
         label: "Profile · no name typed yet",
         render: (mode) => <Gate flow={OWNER} mode={mode} props={profile("")} />,
+    },
+    {
+        id: "o20-phone-after-bootstrap",
+        label: "Phone · the owner's last step, seven segments with Server",
+        light: true,
+        render: (mode) => <Gate created flow={OWNER} mode={mode} props={phone} />,
+    },
+    {
+        id: "m13-next-phone",
+        label: "Member · phone, the last step",
+        render: (mode) => <Gate flow={MEMBER} mode={mode} props={phone} />,
     },
     {
         id: "m03-next-profile",
@@ -317,8 +420,8 @@ export function OnboardingPicturesPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The server's and the person's pictures in Happy Cloud onboarding, in the real frame."
-            title="Onboarding pictures"
+            summary="How Happy Cloud onboarding starts, from the sidebar's + to the server's first steps, and the server's and the person's pictures, in the real frame."
+            title="Onboarding entry and pictures"
         >
             <div ref={releaseUnaskedFocus} style={{ display: "contents" }}>
                 {captures.map(({ shot, window, mode }, index) => (
