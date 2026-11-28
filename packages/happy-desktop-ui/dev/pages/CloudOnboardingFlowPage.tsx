@@ -17,9 +17,7 @@ const WINDOWS = [
 const noop = () => undefined;
 const photoUrl = new URL("../assets/profile-photo.webp", import.meta.url).href;
 
-/** An admin's walk, which leads with the step that created the server. */
 const STEPS = [
-    { id: "server", label: "Server" },
     { id: "profile", label: "Profile" },
     { id: "inference", label: "AI" },
     { id: "plugins", label: "Plugins" },
