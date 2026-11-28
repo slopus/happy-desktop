@@ -7006,8 +7006,10 @@ export function happyAgentWorkspaceStoreCreate(
         }
         if (workspaceFiles?.unavailable === "checkoutUnavailable") {
             workspaceFilesReset();
+            // Through the same door as any other open, so a conversation with
+            // no compute is still not asked.
             if (groupId === addressedGroupId && fileScopeOf(groupId) === "all")
-                workspaceFilesDirectoryEnsure(groupId, "");
+                workspaceFilesEnsure(groupId);
             recompute();
         }
         return false;
