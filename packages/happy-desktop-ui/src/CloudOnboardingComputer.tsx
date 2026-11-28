@@ -503,7 +503,7 @@ function facts(
         {
             icon: "download-outline",
             lead: "Installs",
-            text: "a runner in your user account. No admin password is needed.",
+            text: "a signed runner in your user account. No admin password is needed. It starts when you log in.",
         },
         {
             icon: "terminal-outline",
