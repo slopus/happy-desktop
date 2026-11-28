@@ -309,6 +309,13 @@ interface LocalHappyAgent {
     node?: HappyAgentNodeStore;
     nodeUnsubscribe?: () => void;
     protocolMismatch?: HappyAgentProtocolMismatch;
+    /**
+     * The picture chosen when this server was created, held in this window
+     * until its creator's profile is saved: the server takes a picture only
+     * from someone with a profile. A quit before then loses it.
+     */
+    picturePending?: HappyAgentAvatarImage;
+    pictureUnfollow?: () => void;
     url?: string;
     /** Opens this remote's connection afresh, with nothing carried over. */
     reopen?: () => void;
@@ -737,6 +744,8 @@ export function happyAgentDirectoryStoreCreate(
         happyAgent.taskRepositoriesUnsubscribe = undefined;
         happyAgent.nodeUnsubscribe?.();
         happyAgent.nodeUnsubscribe = undefined;
+        happyAgent.pictureUnfollow?.();
+        happyAgent.pictureUnfollow = undefined;
         happyAgent.attentionUnfollow?.();
         happyAgent.attentionUnfollow = undefined;
         happyAgent.node?.[Symbol.dispose]();
@@ -787,6 +796,27 @@ export function happyAgentDirectoryStoreCreate(
             new Blob([picture.data], { type: picture.contentType }),
             { "content-type": picture.contentType },
         ).catch(failed);
+    };
+
+    /**
+     * Sends a held picture once this connection's profile store says the
+     * creator's profile is saved, in this run, however long that takes.
+     */
+    const pictureFollow = (remote: LocalHappyAgent): void => {
+        remote.pictureUnfollow?.();
+        remote.pictureUnfollow = undefined;
+        const profile = remote.connection?.setup?.profile;
+        if (!profile || remote.picturePending === undefined) return;
+        const check = (): void => {
+            const picture = remote.picturePending;
+            if (picture === undefined || !profile.get().saved) return;
+            remote.picturePending = undefined;
+            remote.pictureUnfollow?.();
+            remote.pictureUnfollow = undefined;
+            nodePictureSend(remote.entry.id, picture);
+        };
+        remote.pictureUnfollow = profile.subscribe(check);
+        check();
     };
 
     function cloudForget(connectionId: string): void {
@@ -1043,6 +1073,7 @@ export function happyAgentDirectoryStoreCreate(
         // offered at once rather than after the daemon first answers: first-run
         // mobile pairing must not wait on anything the workspace needs.
         happyAgent.entry = { ...happyAgent.entry, setup: happyAgent.connection.setup };
+        pictureFollow(happyAgent);
         // The installation's own name and picture ride the same sync feed as
         // the rest of this connection, so the rail tile follows a rename or a
         // new picture as soon as the daemon announces it.
@@ -1384,7 +1415,11 @@ export function happyAgentDirectoryStoreCreate(
                                         message: "Happy couldn't finish signing in to this server.",
                                     };
                                 roster?.connectionSelect(item.id);
-                                if (picture) nodePictureSend(item.id, picture);
+                                const remote = remotes.get(item.id);
+                                if (picture && remote) {
+                                    remote.picturePending = picture;
+                                    pictureFollow(remote);
+                                }
                                 return { ok: true };
                             },
                             happyAgentCloudForget: cloudForget,
