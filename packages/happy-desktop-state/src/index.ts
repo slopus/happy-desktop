@@ -286,6 +286,8 @@ export * from "./happyAgent/happyAgentZonesStore.js";
 export * from "./happyAgent/happyAgentZoneReach.js";
 export * from "./pipelines/pipelineTypes.js";
 export * from "./pipelines/pipelinesStore.js";
+export * from "./handbook/handbookTypes.js";
+export { happyAgentHandbookStoreCreate } from "./handbook/handbookStore.js";
 export * from "./pipelines/pipelineStore.js";
 export * from "./pipelines/pipelineRunStore.js";
 export * from "./pipelines/pipelineNodeLogStore.js";

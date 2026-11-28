@@ -169,6 +169,8 @@ import {
     type FeatureAvailabilityWriter,
 } from "../features/featureAvailabilityStore.js";
 import { happyAgentZonesStoreCreate, type HappyAgentZonesStore } from "./happyAgentZonesStore.js";
+import { happyAgentHandbookStoreCreate } from "../handbook/handbookStore.js";
+import type { HappyAgentHandbookStore } from "../handbook/handbookTypes.js";
 import { pipelinesStoreCreate, type PipelinesStore } from "../pipelines/pipelinesStore.js";
 import { pipelineStoreCreate, type PipelineStore } from "../pipelines/pipelineStore.js";
 import { pipelineRunStoreCreate, type PipelineRunStore } from "../pipelines/pipelineRunStore.js";
@@ -378,6 +380,11 @@ export interface HappyAgentWorkspaceClient {
     pipelineRunPreload(runId: string): void;
     /** One node's log in one run, live; materialized per node run and kept. Undefined where `pipelines()` is. */
     pipelineNodeLog(runId: string, nodeId: string): PipelineNodeLogStore | undefined;
+    /**
+     * The team's handbook; undefined on a server whose health does not say
+     * `capabilities.handbook`, which keeps its global instructions instead.
+     */
+    handbook(): HappyAgentHandbookStore | undefined;
     /** Cloud development previews; undefined on ordinary Happy Agent connections. */
     previews(): HappyAgentPreviewsStore | undefined;
     /** Settings › Usage's year of daily token totals; undefined where it cannot be read. */
@@ -917,6 +924,7 @@ export function happyAgentWorkspaceClientCreate(
     const pipelineRequestOf = (request: HappyCloudRequest): HappyCloudRequest =>
         (pipelineRequest ??= featureAvailabilityOf(request).writer.requestWatch(request));
     let zonesStore: HappyAgentZonesStore | undefined;
+    let handbookStore: HappyAgentHandbookStore | undefined;
     let pipelinesStore: PipelinesStore | undefined;
     const pipelineStores = new Map<string, PipelineStore>();
     let pipelineRunCache: PipelineRunCache | undefined;
@@ -1466,6 +1474,19 @@ export function happyAgentWorkspaceClientCreate(
             });
             return zonesStore;
         },
+        handbook() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            if (!happyAgentHealthCapability(deps.connection.sync.health(), "handbook"))
+                return handbookStore;
+            handbookStore ??= happyAgentHandbookStoreCreate({
+                request,
+                sync: deps.connection.sync,
+                selfUserId: async () => (await deps.client.getProfile()).profile.userId ?? null,
+            });
+            return handbookStore;
+        },
         pipelines() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const request = deps.cloudRequest;
@@ -1844,6 +1865,8 @@ export function happyAgentWorkspaceClientCreate(
             pipelineRequest = undefined;
             zonesStore?.[Symbol.dispose]();
             zonesStore = undefined;
+            handbookStore?.[Symbol.dispose]();
+            handbookStore = undefined;
             pipelinesStore?.[Symbol.dispose]();
             pipelinesStore = undefined;
             for (const store of pipelineStores.values()) store[Symbol.dispose]();

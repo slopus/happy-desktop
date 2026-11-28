@@ -7,3 +7,8 @@ export {
     type FakeDaemonCall,
     type FakeHappyAgentDaemon,
 } from "./fakeHappyAgentDaemon.js";
+export {
+    fakeHandbookClusterCreate,
+    type FakeHandbookCall,
+    type FakeHandbookCluster,
+} from "./fakeHandbookCluster.js";

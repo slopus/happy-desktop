@@ -54,7 +54,11 @@ export type HappyCloudEventType =
     | "zone.updated"
     | "zone.deleted"
     | "zone.plugins"
-    | "agent.zone";
+    | "agent.zone"
+    | "handbook.created"
+    | "handbook.updated"
+    | "handbook.applied"
+    | "handbook.removed";
 
 /**
  * Events the daemon sends that the published protocol package does not name
