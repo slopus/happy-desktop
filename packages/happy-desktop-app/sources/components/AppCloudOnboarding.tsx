@@ -28,7 +28,7 @@ const STEP_LABELS: Readonly<Record<HappyAgentOnboardingGate["kind"], string>> = 
     avatar: "Photo",
     adminBot: "Admin bot",
     inference: "AI",
-    plugins: "Plugins",
+    plugins: "Tools",
     teammates: "Team",
     mobileApp: "Phone",
     paymentMethod: "Payment",
