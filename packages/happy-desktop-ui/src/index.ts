@@ -653,14 +653,21 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
-    CloudOnboardingPluginDialog,
-    type CloudOnboardingPluginDialogProps,
-} from "./CloudOnboardingPluginDialog";
+    CloudOnboardingGitHubDialog,
+    CloudOnboardingToolDialog,
+    CloudOnboardingToolsBody,
+    type CloudOnboardingGitHubDialogProps,
+    type CloudOnboardingTool,
+    type CloudOnboardingToolDialogProps,
+    type CloudOnboardingToolForm,
+    type CloudOnboardingToolsBodyProps,
+    type CloudOnboardingToolsGitHub,
+    type CloudOnboardingToolsJob,
+} from "./CloudOnboardingTools";
 export {
     CloudOnboardingScreen,
     type CloudOnboardingAmount,
     type CloudOnboardingInvite,
-    type CloudOnboardingPlugin,
     type CloudOnboardingScreenProps,
     type CloudOnboardingStep,
     type CloudOnboardingView,

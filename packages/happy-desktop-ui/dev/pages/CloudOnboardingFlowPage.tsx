@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { CloudOnboardingPluginDialog } from "../../src/CloudOnboardingPluginDialog";
 import {
     CloudOnboardingScreen,
     type CloudOnboardingScreenProps,
@@ -151,103 +150,43 @@ const screens: readonly Screen[] = [
             footnote: "Connect GitHub to continue.",
             view: {
                 kind: "plugins",
-                plugins: [
+                github: { image: null, connected: false, app: true, onConnect: noop },
+                jobs: [
                     {
-                        id: "github",
-                        name: "GitHub",
-                        description: "Repositories, issues and pull requests",
-                        image: null,
-                        required: true,
-                        state: "setup",
-                        onSelect: noop,
-                    },
-                    {
-                        id: "linear",
-                        name: "Linear",
-                        description: "Issues, projects and cycles",
-                        image: null,
-                        required: false,
-                        state: "connected",
-                    },
-                    {
-                        id: "slack",
-                        name: "Slack",
-                        description: "Channels and messages",
-                        image: null,
-                        required: false,
-                        state: "available",
-                        busy: true,
-                        onSelect: noop,
-                    },
-                ],
-            },
-        },
-    },
-    {
-        id: "plugins-token",
-        label: "Plugins, signing in with a token",
-        props: {
-            currentStep: "plugins",
-            serverLabel: "Acme",
-            action: { label: "Continue", disabled: true, onSelect: noop },
-            footnote: "Connect GitHub to continue.",
-            view: {
-                kind: "plugins",
-                plugins: [
-                    {
-                        id: "github",
-                        name: "GitHub",
-                        description: "Repositories, issues and pull requests",
-                        image: null,
-                        required: true,
-                        state: "setup",
-                        onSelect: noop,
-                    },
-                ],
-            },
-        },
-        dialog: (
-            <CloudOnboardingPluginDialog
-                description="Repositories, issues and pull requests"
-                image={null}
-                installation={{
-                    id: "inst-github",
-                    pluginId: "github",
-                    kind: "integration",
-                    name: "GitHub",
-                    ordinal: 1,
-                    label: null,
-                    status: "notConfigured",
-                    error: null,
-                    authMethod: null,
-                    toolPrefix: null,
-                    image: null,
-                    available: true,
-                }}
-                methods={[
-                    {
-                        type: "fields",
-                        id: "token",
-                        label: "Access token",
-                        fields: [
+                        id: "ship",
+                        title: "Ship",
+                        kind: "job",
+                        tools: [
                             {
-                                key: "token",
-                                label: "Personal access token",
-                                help: "A fine-grained token with read access to the repositories agents work in.",
-                                required: true,
-                                secret: true,
-                                multiline: false,
+                                id: "vercel",
+                                name: "Vercel",
+                                image: null,
+                                summary: "Deployments, logs and domains",
+                                needs: "Access token",
+                                connected: false,
                             },
                         ],
+                        onOpen: noop,
                     },
-                    { type: "oauth", id: "app", label: "GitHub App", scopes: [] },
-                ]}
-                name="GitHub"
-                onClose={noop}
-                onConfigure={async () => undefined}
-                onConnect={async () => undefined}
-            />
-        ),
+                    {
+                        id: "rest",
+                        title: "",
+                        kind: "rest",
+                        tools: [
+                            {
+                                id: "linear",
+                                name: "Linear",
+                                image: null,
+                                summary: "",
+                                needs: "",
+                                connected: true,
+                            },
+                        ],
+                        onOpen: noop,
+                    },
+                ],
+            },
+        },
     },
     {
         id: "teammates",

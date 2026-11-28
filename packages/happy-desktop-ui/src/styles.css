@@ -172,6 +172,7 @@
 @import "./styles/profile-setup.css";
 @import "./styles/cloud-onboarding.css";
 @import "./styles/cloud-onboarding-provider.css";
+@import "./styles/cloud-onboarding-tools.css";
 @import "./styles/happy-agent-payments.css";
 @import "./styles/cloud-web-sign-in.css";
 @import "./styles/reordering-list.css";

@@ -17,9 +17,11 @@ import {
     HappyCloudRequestRefusal,
     type HappyCloudRequest,
 } from "./happyAgentProviderCredentials.js";
-import type {
-    HappyAgentPluginConnectTarget,
-    HappyAgentPluginsStore,
+import { HAPPY_AGENT_PLUGIN_GITHUB, type HappyAgentPluginJob } from "./happyAgentPluginJobs.js";
+import {
+    HappyAgentPluginFieldsError,
+    type HappyAgentPluginConnectTarget,
+    type HappyAgentPluginsStore,
 } from "./happyAgentPluginsStore.js";
 import { UserError } from "../types.js";
 import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
@@ -105,6 +107,41 @@ export interface HappyAgentOnboardingInvites {
     readonly error?: string;
 }
 
+/** A plugin's sign-in form open over the plugins gate. */
+export interface HappyAgentOnboardingPluginForm {
+    readonly pluginId: string;
+    /** The fields method being filled in; a plugin may offer more than one. */
+    readonly methodId: string;
+    /** What is typed, by field key. It goes nowhere but the server's setup. */
+    readonly values: ReadonlyMap<string, string>;
+    /** Why the server refused the last submit, and what is wrong with each field by key. */
+    readonly refusal?: {
+        readonly message: string;
+        readonly fields: ReadonlyMap<string, string>;
+    };
+}
+
+/**
+ * The dialog open over the plugins gate. `github` explains the GitHub App and
+ * sends the person to GitHub, with the token form a view behind it, or alone
+ * where the server does not offer the App. `job` lists one job's tools, and a
+ * tool's form opens in the same dialog; `rest` lists the tools no job claims.
+ */
+export type HappyAgentOnboardingPluginDialog =
+    | {
+          readonly kind: "github";
+          /** GitHub's page was opened and the installation is not active yet. */
+          readonly waiting: boolean;
+          readonly form?: HappyAgentOnboardingPluginForm;
+          /** Why sending the person to GitHub failed. */
+          readonly error?: string;
+      }
+    | {
+          readonly kind: "job";
+          readonly job: Exclude<HappyAgentPluginJob, "code"> | "rest";
+          readonly form?: HappyAgentOnboardingPluginForm;
+      };
+
 export interface HappyAgentOnboardingSnapshot {
     readonly state?: HappyAgentOnboardingState;
     /** The admin bot's name as typed; absent until edited, when the server's stands. */
@@ -112,11 +149,7 @@ export interface HappyAgentOnboardingSnapshot {
     readonly invites: HappyAgentOnboardingInvites;
     /** The plugin the plugins gate is installing or signing in. */
     readonly pluginConnecting?: string;
-    /**
-     * The installation whose sign-in is open over the plugins gate: its
-     * plugin asks for fields, or offers more than one way in.
-     */
-    readonly pluginSetup?: { readonly pluginId: string; readonly installationId: string };
+    readonly pluginDialog?: HappyAgentOnboardingPluginDialog;
     /**
      * A Happy Cloud server's onboarding gates and where the reader is in them.
      * Absent where the server has no gates; the reader is let in once it has no
@@ -166,12 +199,35 @@ export interface HappyAgentOnboardingStore {
     inviteEmailSend(): void;
     inviteLinkCreate(): void;
     /**
-     * Installs a plugin the plugins gate offers, when it is not yet, and sends
-     * `target` to its sign-in; the server finishes it and the gate reads again.
+     * Opens GitHub's dialog, on its token form where the server does not
+     * offer the GitHub App, or one job's list of tools.
      */
-    pluginConnect(pluginId: string, target: HappyAgentPluginConnectTarget): void;
-    /** Closes the plugin sign-in `pluginConnect` opened; the gate reads again. */
-    pluginSetupClose(): void;
+    pluginDialogOpen(
+        dialog:
+            | { readonly kind: "github" }
+            | { readonly kind: "job"; readonly job: Exclude<HappyAgentPluginJob, "code"> | "rest" },
+    ): void;
+    /** Closes the dialog; nothing typed is kept. The gate reads again. */
+    pluginDialogClose(): void;
+    /** From a form back to the view it was opened from: the job's list, or GitHub's App. */
+    pluginDialogBack(): void;
+    /** Opens a plugin's sign-in form in the dialog, on its first fields method. */
+    pluginFormOpen(pluginId: string): void;
+    /** Switches the open form to another of its plugin's fields methods. */
+    pluginFormMethodSelect(methodId: string): void;
+    pluginFormValueUpdate(key: string, value: string): void;
+    /**
+     * Installs the form's plugin for the team when it is not yet, and signs
+     * it in with what is typed. Done, GitHub's dialog closes and a job's
+     * returns to its list; refused, the form says why.
+     */
+    pluginFormSubmit(): void;
+    /**
+     * Installs a plugin when it is not yet and sends `target` to its browser
+     * sign-in; the server finishes it and the gate reads again. Sent again,
+     * it opens the page again.
+     */
+    pluginSignInOpen(pluginId: string, target: HappyAgentPluginConnectTarget): void;
     /** Leaves the last page for the app. */
     finaleDismiss(): void;
     /** Reads the gates again, as when the window comes back to the front. */
@@ -367,8 +423,20 @@ export function happyAgentOnboardingStoreCreate(
         )
             return;
         const flow = local || state !== snapshot.state ? flowOf(state) : snapshot.flow;
-        const { flow: _previous, ...rest } = next;
-        snapshot = { ...rest, state, ...(flow ? { flow } : {}) };
+        const { flow: _previous, pluginDialog, ...rest } = next;
+        // GitHub sent the person back connected: the dialog that sent them there is done.
+        const gate = flow?.current;
+        const connected =
+            pluginDialog?.kind === "github" &&
+            pluginDialog.waiting &&
+            gate?.kind === "plugins" &&
+            gate.plugins.some((entry) => entry.id === HAPPY_AGENT_PLUGIN_GITHUB && entry.active);
+        snapshot = {
+            ...rest,
+            state,
+            ...(flow ? { flow } : {}),
+            ...(pluginDialog && !connected ? { pluginDialog } : {}),
+        };
         for (const listener of listeners) listener();
     };
     const reconcile = async (signal: AbortSignal): Promise<void> => {
@@ -605,6 +673,42 @@ export function happyAgentOnboardingStoreCreate(
                 publish({ ...snapshot, invites: { ...rest, error: refused.message } }, true);
             });
     }
+    const pluginsOf = (): HappyAgentPluginsStore => {
+        const plugins = options.plugins?.();
+        if (!plugins) throw new UserError("This server has no plugins.");
+        return plugins;
+    };
+    /** The team's installation of a plugin, made now when it has none. */
+    const pluginInstallation = async (
+        plugins: HappyAgentPluginsStore,
+        pluginId: string,
+    ): Promise<string> => {
+        const installed = plugins
+            .get()
+            .installations.find((entry) => entry.pluginId === pluginId && entry.available);
+        return installed?.id ?? (await plugins.pluginInstall(pluginId));
+    };
+    /** The method a plugin signs in with in the browser on this server, if it has one. */
+    const pluginBrowserSignIn = (pluginId: string): string | undefined =>
+        options
+            .plugins?.()
+            ?.get()
+            .plugins.find((entry) => entry.id === pluginId)
+            ?.authMethods.find((method) => method.type === "oauth")?.id;
+    /** An empty form for one of a plugin's fields methods, its first unless one is named. */
+    const pluginFormFor = (
+        pluginId: string,
+        methodId?: string,
+    ): HappyAgentOnboardingPluginForm | undefined => {
+        const methods =
+            options
+                .plugins?.()
+                ?.get()
+                .plugins.find((entry) => entry.id === pluginId)
+                ?.authMethods.filter((method) => method.type === "fields") ?? [];
+        const method = methods.find((entry) => entry.id === methodId) ?? methods[0];
+        return method ? { pluginId, methodId: method.id, values: new Map() } : undefined;
+    };
     const cloud = (): HappyCloudRequest => {
         if (!options.cloudRequest) throw new Error("This server has no onboarding gates.");
         return options.cloudRequest;
@@ -814,52 +918,176 @@ export function happyAgentOnboardingStoreCreate(
         inviteLinkCreate() {
             if (!snapshot.invites.creating) inviteCreate(undefined);
         },
-        pluginConnect(pluginId, target) {
+        pluginDialogOpen(dialog) {
             if (snapshot.flow?.current?.kind !== "plugins") return;
-            const gateId = snapshot.flow.current.id;
-            publish({ ...snapshot, pluginConnecting: pluginId }, true);
-            gateRun(gateId, async () => {
-                try {
-                    const plugins = options.plugins?.();
-                    if (!plugins) throw new UserError("This server has no plugins.");
-                    const { plugins: catalog, installations } = plugins.get();
-                    const plugin = catalog.find((entry) => entry.id === pluginId);
-                    const installed = installations.find(
-                        (entry) => entry.pluginId === pluginId && entry.available,
-                    );
-                    if (installed?.status === "active") return;
-                    const installationId = installed?.id ?? (await plugins.pluginInstall(pluginId));
-                    const methods = plugin?.authMethods ?? [];
-                    if (plugin && !plugin.authRequired && methods.length === 0) return;
-                    // One OAuth sign-in goes straight to the browser; fields, or a
-                    // choice of ways in, are asked for over the gate.
-                    const only = methods.length === 1 ? methods[0] : undefined;
-                    if (only?.type === "oauth") {
-                        await plugins.installationConnect(installationId, only.id, target);
-                        return;
-                    }
-                    if (methods.length === 0)
-                        throw new UserError(
-                            `${plugin?.name ?? "This plugin"} has no way to sign in on this server.`,
-                        );
-                    snapshot = { ...snapshot, pluginSetup: { pluginId, installationId } };
-                } finally {
+            if (dialog.kind === "job") {
+                publish({ ...snapshot, pluginDialog: { kind: "job", job: dialog.job } }, true);
+                return;
+            }
+            // Without the App, the token is the only way in, so its form is the dialog.
+            const form = pluginBrowserSignIn(HAPPY_AGENT_PLUGIN_GITHUB)
+                ? undefined
+                : pluginFormFor(HAPPY_AGENT_PLUGIN_GITHUB);
+            publish(
+                {
+                    ...snapshot,
+                    pluginDialog: { kind: "github", waiting: false, ...(form ? { form } : {}) },
+                },
+                true,
+            );
+        },
+        pluginDialogClose() {
+            if (!snapshot.pluginDialog) return;
+            const { pluginDialog: _closed, ...rest } = snapshot;
+            publish(rest, true);
+            const active = controller;
+            if (active && !disposed) void reconcile(active.signal).catch(() => undefined);
+        },
+        pluginDialogBack() {
+            const dialog = snapshot.pluginDialog;
+            if (!dialog?.form) return;
+            if (dialog.kind === "github" && !pluginBrowserSignIn(HAPPY_AGENT_PLUGIN_GITHUB)) return;
+            const { form: _left, ...rest } = dialog;
+            publish({ ...snapshot, pluginDialog: rest }, true);
+        },
+        pluginFormOpen(pluginId) {
+            const dialog = snapshot.pluginDialog;
+            const form = pluginFormFor(pluginId);
+            if (!dialog || !form) return;
+            publish({ ...snapshot, pluginDialog: { ...dialog, form } }, true);
+        },
+        pluginFormMethodSelect(methodId) {
+            const dialog = snapshot.pluginDialog;
+            if (!dialog?.form || dialog.form.methodId === methodId) return;
+            const form = pluginFormFor(dialog.form.pluginId, methodId);
+            if (form) publish({ ...snapshot, pluginDialog: { ...dialog, form } }, true);
+        },
+        pluginFormValueUpdate(key, value) {
+            const dialog = snapshot.pluginDialog;
+            if (!dialog?.form) return;
+            const { refusal: _cleared, ...form } = dialog.form;
+            publish(
+                {
+                    ...snapshot,
+                    pluginDialog: {
+                        ...dialog,
+                        form: { ...form, values: new Map(form.values).set(key, value) },
+                    },
+                },
+                true,
+            );
+        },
+        pluginFormSubmit() {
+            const dialog = snapshot.pluginDialog;
+            const form = dialog?.form;
+            if (!dialog || !form || snapshot.pluginConnecting !== undefined || disposed) return;
+            const { refusal: _cleared, ...sent } = form;
+            publish(
+                {
+                    ...snapshot,
+                    pluginConnecting: form.pluginId,
+                    pluginDialog: { ...dialog, form: sent },
+                },
+                true,
+            );
+            /** The form is still the one sent, so what the server said is said on it. */
+            const onForm = (): HappyAgentOnboardingPluginDialog | undefined => {
+                const current = snapshot.pluginDialog;
+                return current?.form?.pluginId === form.pluginId &&
+                    current.form.methodId === form.methodId
+                    ? current
+                    : undefined;
+            };
+            void (async () => {
+                const plugins = pluginsOf();
+                const installationId = await pluginInstallation(plugins, form.pluginId);
+                await plugins.installationConfigure(installationId, form.methodId, form.values);
+            })()
+                .then(
+                    () => {
+                        const current = onForm();
+                        if (!current) return;
+                        if (current.kind === "github") {
+                            const { pluginDialog: _done, ...rest } = snapshot;
+                            snapshot = rest;
+                            return;
+                        }
+                        const { form: _done, ...list } = current;
+                        snapshot = { ...snapshot, pluginDialog: list };
+                    },
+                    (error: unknown) => {
+                        const current = onForm();
+                        if (!current?.form) return;
+                        const refusal =
+                            error instanceof HappyAgentPluginFieldsError
+                                ? { message: error.message, fields: error.fields }
+                                : {
+                                      message: happyAgentUserError(error).message,
+                                      fields: new Map<string, string>(),
+                                  };
+                        snapshot = {
+                            ...snapshot,
+                            pluginDialog: { ...current, form: { ...current.form, refusal } },
+                        };
+                    },
+                )
+                .finally(() => {
+                    if (disposed) return;
                     const { pluginConnecting: _done, ...rest } = snapshot;
-                    snapshot = rest;
+                    publish(rest, true);
+                    const active = controller;
+                    if (active) void reconcile(active.signal).catch(() => undefined);
+                });
+        },
+        pluginSignInOpen(pluginId, target) {
+            const gate = snapshot.flow?.current;
+            if (gate?.kind !== "plugins" || snapshot.pluginConnecting !== undefined || disposed)
+                return;
+            const dialog = snapshot.pluginDialog;
+            if (dialog?.kind === "github") {
+                const { error: _cleared, ...github } = dialog;
+                snapshot = { ...snapshot, pluginDialog: github };
+            }
+            publish({ ...snapshot, pluginConnecting: pluginId }, true);
+            void (async () => {
+                const plugins = pluginsOf();
+                const method = pluginBrowserSignIn(pluginId);
+                if (!method) {
+                    const name = plugins.get().plugins.find((entry) => entry.id === pluginId)?.name;
+                    throw new UserError(
+                        `${name ?? "This plugin"} has no sign-in in the browser on this server.`,
+                    );
                 }
-            });
+                const installationId = await pluginInstallation(plugins, pluginId);
+                await plugins.installationConnect(installationId, method, target);
+            })()
+                .then(
+                    () => {
+                        const current = snapshot.pluginDialog;
+                        if (current?.kind === "github")
+                            snapshot = { ...snapshot, pluginDialog: { ...current, waiting: true } };
+                    },
+                    (error: unknown) => {
+                        const message = happyAgentUserError(error).message;
+                        const current = snapshot.pluginDialog;
+                        if (current?.kind === "github")
+                            snapshot = {
+                                ...snapshot,
+                                pluginDialog: { ...current, error: message },
+                            };
+                        else gateError = { gate: gate.id, message };
+                    },
+                )
+                .finally(() => {
+                    if (disposed) return;
+                    const { pluginConnecting: _done, ...rest } = snapshot;
+                    publish(rest, true);
+                });
         },
         finaleDismiss() {
             if (!snapshot.finale) return;
             const { finale: _left, ...rest } = snapshot;
             publish(rest, true);
-        },
-        pluginSetupClose() {
-            if (!snapshot.pluginSetup) return;
-            const { pluginSetup: _closed, ...rest } = snapshot;
-            publish(rest, true);
-            const active = controller;
-            if (active && !disposed) void reconcile(active.signal).catch(() => undefined);
         },
         onboardingRead() {
             const active = controller;
