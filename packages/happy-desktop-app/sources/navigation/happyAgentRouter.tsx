@@ -260,6 +260,27 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             </>
         ) : entry?.session ? (
             <Outlet />
+        ) : entry?.status === "error" && entry.remoteId !== undefined ? (
+            // A server that failed before its first workspace says so in words
+            // and offers the one thing to do; what failed is not news to a person.
+            <>
+                <WindowDragRegion />
+                <EmptyState
+                    data-testid="happy-agent-unreachable"
+                    description="Happy couldn't connect to this server. Check your connection and try again."
+                    icon="shield"
+                    size="panel"
+                    title={`Can't reach ${entry.label}`}
+                    {...(context.happyAgents.happyAgentReset
+                        ? {
+                              action: {
+                                  label: "Try again",
+                                  onClick: () => context.happyAgents.happyAgentReset?.(entry.id),
+                              },
+                          }
+                        : {})}
+                />
+            </>
         ) : (
             <SplashScreen
                 note={entry?.message ?? `Connecting to ${entry?.label ?? "Happy Agent"}…`}
