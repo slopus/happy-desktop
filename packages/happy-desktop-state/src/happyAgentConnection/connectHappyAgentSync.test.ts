@@ -21,6 +21,7 @@ import type {
     ProjectGroup,
     HappyAgentConnection,
     SessionState,
+    TaskGroup,
 } from "./types.js";
 import { sidebarReadAheadOrder } from "./types.js";
 import {
@@ -3255,4 +3256,103 @@ it("asks a drained daemon that stopped a bounded number of times, and comes back
 
     daemon.streamRefuse(undefined);
     await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+});
+
+it("keeps a loading session's activity with its buffered turn while the task row moves at once", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const { connection } = harnessOpen(daemon);
+    let tasks: readonly TaskGroup[] = [];
+    let groupsLive = false;
+    connection.connectGroups({
+        onChange(_projects, state, _bots, next) {
+            groupsLive = state.connection === "live";
+            tasks = next;
+        },
+        onError: () => undefined,
+    });
+    await vi.waitFor(() => expect(groupsLive).toBe(true));
+    // The new task's history read is still in flight when its first turn starts.
+    const releaseHistory = daemon.pause("getMessages");
+    const creation = connection.createTask();
+    const sessionId = creation.agentId;
+    const chat = happyAgentChatStoreCreate(sessionId as HappyAgentSessionId, {
+        catalog: happyAgentModelCatalogProject(daemon.configGet()),
+        connectActions: connection,
+        connectMutationSubscribe: () => () => undefined,
+        transcriptConnect: ({ sessionId: id, onChange, onError }) => {
+            const transcript = connection.connectSession({
+                sessionId: id,
+                onChange: (elements, session) => onChange(elements, session, []),
+                onError,
+            });
+            return {
+                close: () => transcript.close(),
+                loadMore: (token) => transcript.loadMore(token),
+            };
+        },
+    });
+    const turnlessThinking: string[] = [];
+    const unsubscribe = chat.subscribe(() => {
+        const snapshot = chat.get();
+        if (snapshot.workingPhase === "thinking" && snapshot.runId === undefined)
+            turnlessThinking.push(snapshot.runStatus);
+    });
+    const session = sessionWatch(connection, sessionId);
+    try {
+        connection.sendMessage(sessionId, "hello");
+        await creation.task;
+        await vi.waitFor(() => {
+            expect(daemon.callCount("getMessages")).toBe(1);
+            expect(daemon.callCount("sendMessage")).toBe(1);
+        });
+        const sent = daemon.calls.find((call) => call.method === "sendMessage")!.args[1] as {
+            id: string;
+        };
+        daemon.eventEmit("run.started", {
+            agentId: sessionId,
+            run: fakeRun({ id: "r1", status: "running" }),
+            acceptedMessageIds: [sent.id],
+        });
+        const idle = daemon.agentGet(sessionId);
+        const thinking = { ...idle, status: "thinking" as const, version: daemon.versionNext() };
+        daemon.agentReplace(thinking);
+        daemon.eventEmit("agent.updated", {
+            agentId: sessionId,
+            previousVersion: idle.version,
+            version: thinking.version,
+            changes: { status: "thinking" },
+        });
+        await vi.waitFor(() =>
+            expect(tasks.find((task) => task.id === creation.taskId)?.session.status).toBe(
+                "running",
+            ),
+        );
+        // The turn that status describes is still buffered behind the history read.
+        expect(chat.get().runId).toBeUndefined();
+        expect(turnlessThinking).toEqual([]);
+        expect(session.session?.activity.kind).toBe("idle");
+
+        releaseHistory();
+        await vi.waitFor(() => {
+            expect(chat.get().runId).toBe("r1");
+            expect(session.session?.activity.kind).toBe("thinking");
+        });
+        // The replay left the session on the newest version: the next change applies to it.
+        const getAgentCalls = daemon.callCount("getAgent");
+        const working = { ...thinking, status: "working" as const, version: daemon.versionNext() };
+        daemon.agentReplace(working);
+        daemon.eventEmit("agent.updated", {
+            agentId: sessionId,
+            previousVersion: thinking.version,
+            version: working.version,
+            changes: { status: "working" },
+        });
+        await vi.waitFor(() => expect(session.session?.activity.kind).toBe("generating_message"));
+        expect(daemon.callCount("getAgent")).toBe(getAgentCalls);
+        expect(turnlessThinking).toEqual([]);
+    } finally {
+        releaseHistory();
+        unsubscribe();
+        chat[Symbol.dispose]();
+    }
 });

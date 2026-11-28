@@ -1442,8 +1442,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 projects: stored.projects,
                 workspaces: stored.workspaces,
             };
+        // A loading session keeps the agent it showed: the status belongs with the turns it
+        // describes, which wait for the snapshot. The load hands over the newest version.
         const entry = sessions.get(agent.id);
-        if (entry !== undefined) {
+        if (entry !== undefined && !entry.hydrating) {
             entry.agent = agent;
             entry.workspace = workspaceOf(agent.workspaceId);
         }
@@ -2069,8 +2071,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     return bootstrap;
                 // The controls need the session's own selection, not its history.
                 // Keep local draft edits made while this snapshot was in flight.
-                entry.agent = bootstrap.agent;
-                entry.workspace = workspaceOf(bootstrap.agent.workspaceId);
+                // The agent's status waits for the history its turns are in.
+                if (entry.agent === undefined) {
+                    entry.agent = bootstrap.agent;
+                    entry.workspace = workspaceOf(bootstrap.agent.workspaceId);
+                }
                 reconcileLoadedSelection(
                     entry,
                     draftRevision,
@@ -2174,6 +2179,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             .catch((error: unknown) => {
                 if (rootController.signal.aborted) return;
                 entry.hydrating = false;
+                // No snapshot to replay onto: the session catches up with the agent as held.
+                const held = agentOf(entry.id);
+                if (held !== undefined) {
+                    entry.agent = held;
+                    entry.workspace = workspaceOf(held.workspaceId);
+                }
                 entry.broadcastMissed = false;
                 const buffered = entry.bufferedEvents.splice(0);
                 for (const event of buffered) applyEvent(event);
@@ -2955,8 +2966,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const hydratingEntry = eventAgentId === undefined ? undefined : sessions.get(eventAgentId);
         if (hydratingEntry?.hydrating === true) {
             hydratingEntry.bufferedEvents.push(event);
-            // The sidebar row shows the agent itself, so it moves on now. Replayed after the
-            // load, the same version is a no-op unless the snapshot put back an older one.
+            // The sidebar row shows the agent itself, so it moves on now; the loading session
+            // keeps its own until the replay. Replayed after the load, the same version is a
+            // no-op unless the snapshot put back an older one.
             if (event.type !== "agent.updated") return;
         }
         switch (event.type) {
