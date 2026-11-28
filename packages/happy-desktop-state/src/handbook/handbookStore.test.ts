@@ -310,6 +310,9 @@ it("shows why a page or folder action did not happen", async () => {
     handbook.folderDelete("hf_a" as never);
     await settled(handbook, () => handbook.get().failure !== undefined);
     expect(handbook.get().failure?.code).toBe("not_empty");
+    // A removed page is not shown, but its folder holds it until deleting moves it out.
+    cluster.folderAdd({ id: "hf_old", name: "Old" });
+    cluster.itemAdd({ id: STYLE, title: "Style", folderId: "hf_old" });
     handbook.failureDismiss();
     expect(handbook.get().failure).toBeUndefined();
 
@@ -331,4 +334,16 @@ it("shows why a page or folder action did not happen", async () => {
 
     const id = await handbook.itemCreate("Forecast", "hf_a" as never);
     expect(cluster.folderOf(id)).toBe("hf_a");
+
+    expect(await handbook.itemRemove(STYLE)).toBe(true);
+    await settled(handbook, () => !handbook.get().items.some((item) => item.id === STYLE));
+    handbook.folderDelete("hf_old" as never);
+    await settled(handbook, () => !handbook.get().folders.some((folder) => folder.id === "hf_old"));
+    expect(cluster.folder("hf_old")).toBeUndefined();
+    expect(cluster.folderOf(STYLE)).toBeNull();
+
+    handbook.folderCreateOpen(null);
+    handbook.folderNameUpdate("Sales/Ops");
+    handbook.folderSubmit();
+    expect(handbook.get().folderEdit?.error?.message).toBe("A folder name can't contain “/”.");
 });

@@ -296,7 +296,8 @@ export function fakeHandbookClusterCreate(
             if (method !== "POST") return refuse(404, "not_found", "Not found.");
             const parentId = typeof body.parentId === "string" ? body.parentId : null;
             const name = String(body.name ?? "").trim();
-            if (name.length === 0 || name.length > 100) refuse(400, "bad_request", "Bad name.");
+            if (name.length === 0 || name.length > 100 || name.includes("/"))
+                refuse(400, "bad_request", "Bad name.");
             if (parentId !== null && !folders.has(parentId))
                 refuse(404, "not_found", "No such folder.");
             if (depthOf(parentId) + 1 > FOLDER_DEPTH_MAX) refuse(400, "bad_request", "Too deep.");
@@ -332,6 +333,8 @@ export function fakeHandbookClusterCreate(
             if (depthOf(parentId) + heightOf(folder.id) > FOLDER_DEPTH_MAX)
                 refuse(400, "bad_request", "Too deep.");
         }
+        if (name.length === 0 || name.length > 100 || name.includes("/"))
+            refuse(400, "bad_request", "Bad name.");
         if (siblingNamed(parentId, name, folder.id)) refuse(409, "conflict", "Name taken.");
         folder.name = name;
         folder.parentId = parentId;
@@ -471,7 +474,11 @@ export function fakeHandbookClusterCreate(
         const rest = parts[3];
         if (rest === undefined) {
             if (method === "PATCH") {
-                writable(item);
+                // A removed item may still move, so the folder it is in can be emptied.
+                const moveOnly = Object.keys(body).every((key) =>
+                    ["folderId", "order", "mutationId"].includes(key),
+                );
+                if (!moveOnly) writable(item);
                 if (typeof body.title === "string") item.title = body.title;
                 if (typeof body.description === "string") item.description = body.description;
                 if (typeof body.alwaysInContext === "boolean")

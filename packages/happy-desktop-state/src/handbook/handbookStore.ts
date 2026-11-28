@@ -109,6 +109,8 @@ function folderRefusal(error: unknown, name?: string): UserError {
     }
     switch (handbookStatus(error)) {
         case 400:
+            if (name?.includes("/"))
+                return new UserError("A folder name can't contain “/”.", "invalid", error);
             return new UserError(
                 `Folders nest at most ${String(HAPPY_AGENT_HANDBOOK_FOLDER_DEPTH_MAX)} levels deep, and a folder can't move into itself.`,
                 "invalid",
@@ -199,6 +201,12 @@ export function happyAgentHandbookStoreCreate(
     let folderMutationId: string | undefined;
     let folderCreateId: HappyAgentHandbookFolderId | undefined;
     let moveMutationId: string | undefined;
+    /**
+     * Where each removed item lives. The page never shows them, but a folder
+     * holding one is not empty, so deleting the folder moves them to the root.
+     */
+    let removedFolders: ReadonlyMap<HappyAgentHandbookItemId, HappyAgentHandbookFolderId> =
+        new Map();
 
     const itemOf = (itemId: string): HappyAgentHandbookItem | undefined =>
         store.getState().items.find((item) => item.id === itemId);
@@ -219,6 +227,7 @@ export function happyAgentHandbookStoreCreate(
     }> => {
         const folders = new Map<HappyAgentHandbookFolderId, HappyAgentHandbookFolder>();
         const items: HappyAgentHandbookItem[] = [];
+        const removed = new Map<HappyAgentHandbookItemId, HappyAgentHandbookFolderId>();
         let cursor: string | undefined;
         for (let page = 0; page < LIST_PAGES_MAX; page += 1) {
             const answer = recordOf(
@@ -237,10 +246,13 @@ export function happyAgentHandbookStoreCreate(
                 const read = handbookItemRead(entry);
                 // A removed item is history only; the page lists what agents can be given.
                 if (read && !read.removed) items.push(read.item);
+                else if (read && read.item.folderId !== null)
+                    removed.set(read.item.id, read.item.folderId);
             }
             if (typeof answer?.cursor !== "string" || answer.cursor.length === 0) break;
             cursor = answer.cursor;
         }
+        removedFolders = removed;
         return { folders: [...folders.values()].sort(itemOrder), items: items.sort(itemOrder) };
     };
 
@@ -782,6 +794,14 @@ export function happyAgentHandbookStoreCreate(
             if (disposed || !edit || edit.saving) return;
             const name = edit.name.trim();
             if (name.length === 0) return;
+            // A path names a page by its folders, separated by "/".
+            if (name.includes("/")) {
+                folderEditSet({
+                    ...edit,
+                    error: new UserError("A folder name can't contain “/”.", "invalid"),
+                });
+                return;
+            }
             folderMutationId ??= idCreate();
             const mutationId = folderMutationId;
             const target = edit.target;
@@ -845,7 +865,18 @@ export function happyAgentHandbookStoreCreate(
                 return;
             }
             failureSet(undefined);
-            void deps.request("DELETE", handbookFolderPath(folderId)).then(
+            const removed = [...removedFolders].filter(([, inside]) => inside === folderId);
+            void (async () => {
+                for (const [itemId] of removed)
+                    await deps.request("PATCH", handbookPath(itemId), {
+                        folderId: null,
+                        mutationId: idCreate(),
+                    });
+                return deps.request(
+                    "DELETE",
+                    `${handbookFolderPath(folderId)}?mutationId=${encodeURIComponent(idCreate())}`,
+                );
+            })().then(
                 () => {
                     if (disposed) return;
                     const current = store.getState().folders;
