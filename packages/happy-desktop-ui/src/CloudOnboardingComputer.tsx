@@ -543,13 +543,13 @@ function facts(
 }
 
 /**
- * The explainer's height as drawn at the opening window. Its top is set from
- * it and the card hangs from there, as tall as its text. A shorter window
- * drops the cards' second lines, and the stylesheet gives that height there.
+ * The explainer's height at the opening window, measured; its text is fixed,
+ * so it is centred on it. A shorter window drops the cards' second lines, and
+ * the stylesheet gives that height there.
  */
 const EXPLAINER_HEIGHT: Readonly<Record<CloudOnboardingComputerReader, number>> = {
-    owner: 471,
-    member: 527,
+    owner: 431,
+    member: 507,
 };
 
 /** "How is this secured?": the page's diagram, one to one without the buttons, and the plain statements under it. */

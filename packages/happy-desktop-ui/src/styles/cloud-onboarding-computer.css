@@ -429,11 +429,11 @@
     /* The explainer is 14px shorter without the cards' second lines; it stays
        centred on that height. Modal writes its anchor inline. */
     .happy-modal.happy-computer-step-dialog--owner {
-        --happy-modal-frame-height: 457px !important;
+        --happy-modal-frame-height: 417px !important;
     }
 
     .happy-modal.happy-computer-step-dialog--member {
-        --happy-modal-frame-height: 513px !important;
+        --happy-modal-frame-height: 493px !important;
     }
 }
 
