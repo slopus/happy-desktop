@@ -55,21 +55,23 @@ function profilerEntryPlugin(enabled: boolean): Plugin {
 }
 
 /**
- * A renderer served over HTTPS (the hosted Nightly renderer, and the Portless
- * development server) reaches the daemon at `http://happy-agent`, which the
- * shell marks as a secure origin. Chromium still announces every image, video
- * and audio element on that origin as "Mixed Content ... automatically
- * upgraded to HTTPS", although it then leaves a secure origin's URL alone. With
+ * The hosted Nightly renderer is an HTTPS document that reaches the daemon at
+ * `http://happy-agent`, which the shell marks as a secure origin. Chromium
+ * still announces every image, video and audio element on that origin as
+ * "Mixed Content ... automatically upgraded to HTTPS", although it then leaves
+ * a secure origin's URL alone. With
  * `upgrade-insecure-requests` in the page's own policy that announcement is
  * never made: secure origins (happy-agent, localhost) stay on HTTP as before,
- * and any other `http:` request is upgraded quietly. The bundled renderer is a
- * `file:` document with no such warning, so its policy is left as written.
+ * and any other `http:` request is upgraded quietly. Only that build gets it:
+ * the bundled renderer is a `file:` document with no such warning, and a
+ * development page may be served over plain HTTP, where upgrading its own
+ * scripts would leave it blank.
  */
-function httpsDocumentPolicyPlugin(build: boolean): Plugin {
+function httpsDocumentPolicyPlugin(enabled: boolean): Plugin {
     return {
         name: "happy-https-document-policy",
-        transformIndexHtml(html, context) {
-            if (!build && !context.server) return html;
+        transformIndexHtml(html) {
+            if (!enabled) return html;
             const policy = /(http-equiv="Content-Security-Policy"\s+content="[^"]+)"/u;
             if (!policy.test(html))
                 throw new Error("Happy renderer Content-Security-Policy was not found.");
