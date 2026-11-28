@@ -425,12 +425,16 @@ export type CloudOnboardingComputerCommand =
     | { readonly kind: "ready"; readonly text: string }
     | { readonly kind: "failed"; readonly error: string };
 
+/** The add dialog's height as drawn, at every window size. */
+const ADD_HEIGHT = 402;
+
 /**
  * "Add server or sandbox": the commands for other machines, all in view at
  * once: a label, the command with its copy control, and one quiet line each.
- * One view, centred on its own height. Nothing drills in and nothing needs
- * confirming, so there is no Back and no button row. A machine that joins
- * shows up in the page's list.
+ * Its top is set by the height drawn for it, so a refusal longer than one
+ * line grows the card down instead of moving it. Nothing drills in and nothing
+ * needs confirming, so there is no Back and no button row. A machine that
+ * joins shows up in the page's list.
  */
 export function CloudOnboardingComputerAddDialog(props: {
     readonly command: CloudOnboardingComputerCommand;
@@ -439,7 +443,9 @@ export function CloudOnboardingComputerAddDialog(props: {
     return (
         <ModalOverlay className="happy-computer-step-overlay" onDismiss={props.onClose}>
             <Modal
+                anchorHeight={ADD_HEIGHT}
                 className="happy-computer-step-dialog"
+                frame="anchored"
                 leading={<Chip glyph="server-outline" />}
                 onClose={props.onClose}
                 size="medium"
