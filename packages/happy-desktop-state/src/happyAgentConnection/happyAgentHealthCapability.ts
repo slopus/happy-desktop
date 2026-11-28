@@ -3,7 +3,7 @@ import type { HappyAgentHealth } from "./happyAgentSync.js";
 /**
  * Capabilities a surface gates on: artifact covers, a feed read for some kinds
  * of subject only, Gen UI secret forms, plugins, payments, pipelines, feature
- * plugins, and provider sign-in.
+ * plugins, provider sign-in, and the repositories of joined tasks.
  */
 export type HappyAgentHealthCapabilityName =
     | "artifactCovers"
@@ -13,7 +13,8 @@ export type HappyAgentHealthCapabilityName =
     | "payments"
     | "pipelines"
     | "features"
-    | "providerSignIn";
+    | "providerSignIn"
+    | "taskRepositories";
 
 /** Whether this daemon said it can; a daemon that has not said, or has not answered yet, cannot. */
 export function happyAgentHealthCapability(

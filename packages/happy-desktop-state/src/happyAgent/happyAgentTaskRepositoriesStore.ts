@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type { UserError } from "../types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
@@ -44,7 +45,10 @@ export interface HappyAgentRepositoryLook {
 }
 
 export interface HappyAgentTaskRepositoriesSnapshot {
-    /** `unsupported` is a server without the route, where no task shows repositories. */
+    /**
+     * `unsupported` is a server that does not say `capabilities.taskRepositories`
+     * or has no such route, where no task shows repositories.
+     */
     readonly status: "loading" | "ready" | "unsupported";
     /** Why the last read failed; what was read before stays. */
     readonly error?: UserError;
@@ -181,15 +185,26 @@ export function happyAgentTaskRepositoriesStoreCreate(deps: {
         };
     };
 
+    const unsupported = (): void => {
+        if (!disposed && store.getState().status !== "unsupported")
+            store.setState({ status: "unsupported", tasks: NONE, changed: UNCHANGED });
+    };
+
     const read = async (): Promise<void> => {
+        const health = deps.sync.health();
+        // Asked again once the connection has said what it serves.
+        if (health === undefined) return;
+        if (!happyAgentHealthCapability(health, "taskRepositories")) {
+            unsupported();
+            return;
+        }
         let answer: unknown;
         try {
             answer = await deps.request("GET", "v0/tasks/repositories");
         } catch (error) {
             // A server from before task repositories has no such route.
             if (error instanceof HappyCloudRequestRefusal && error.status === 404) {
-                if (!disposed)
-                    store.setState({ status: "unsupported", tasks: NONE, changed: UNCHANGED });
+                unsupported();
                 return;
             }
             throw error;
@@ -291,8 +306,9 @@ export function happyAgentTaskRepositoriesStoreCreate(deps: {
             })) {
                 const greeting = !greeted;
                 greeted = true;
-                // The first read was sent after this subscription was installed.
-                if (input.kind === "error" || (greeting && input.kind !== "update")) continue;
+                // The first read was sent after this subscription was installed;
+                // a first bootstrap brings the health that read may have lacked.
+                if (input.kind === "error" || (greeting && input.kind === "reconcile")) continue;
                 // News of the connection itself, which the follower replays on
                 // subscribing, changes no repository.
                 if (
