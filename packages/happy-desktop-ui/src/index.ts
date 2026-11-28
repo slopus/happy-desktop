@@ -653,7 +653,6 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
-    CLOUD_ONBOARDING_TOOLS_TALLEST,
     CloudOnboardingGitHubDialog,
     CloudOnboardingToolDialog,
     CloudOnboardingToolsBody,

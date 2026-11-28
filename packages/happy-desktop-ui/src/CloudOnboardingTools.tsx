@@ -80,23 +80,14 @@ const GITHUB_STEPS = [
 const TEAM_NOTE = "One connection for your whole team.";
 
 /**
- * The height of each flow's tallest view, measured on the server's own
- * catalog and its fields' own help: GitHub's first look (or its token form,
- * where the server offers no App), and each job's tallest form (Ship's is
- * Kubernetes, Mobile apps' App Store Connect, Web and browsing's Browserbase,
- * Growth's RevenueCat, and the rest's Remote MCP). A dialog's top is set once
- * so that view is centred; shorter views hang from the same top. A view
- * taller than the window puts the top at the gutter, and its body scrolls.
+ * Where each dialog's top is set, as the height of the view centred there:
+ * GitHub's first look, and the design's key form (Vercel's) for every job's
+ * dialog and for GitHub's token form alone. A constant, not the tallest real
+ * form: how many fields a form has is the server's, so a taller one grows
+ * down from the same top and scrolls inside the card at the window's gutter.
  */
-export const CLOUD_ONBOARDING_TOOLS_TALLEST = {
-    github: 517,
-    githubToken: 481,
-    ship: 845,
-    apps: 665,
-    web: 471,
-    growth: 519,
-    rest: 665,
-} as const satisfies Readonly<Record<string, number>>;
+const ANCHOR_GITHUB = 517;
+const ANCHOR_KEY_FORM = 471;
 
 function Mark(props: {
     readonly image: HappyAgentPluginImage | null;
@@ -468,8 +459,6 @@ export interface CloudOnboardingGitHubDialogProps {
     readonly error?: string;
     /** The token form, when it is the view. */
     readonly token?: CloudOnboardingToolForm;
-    /** The height of the flow's tallest view, which sets the card's top once. */
-    readonly anchorHeight: number;
     readonly onContinue: () => void;
     readonly onTokenOpen: () => void;
     readonly onBack: () => void;
@@ -487,7 +476,7 @@ export function CloudOnboardingGitHubDialog(props: CloudOnboardingGitHubDialogPr
     const token = props.token;
     return (
         <ToolsDialog
-            anchorHeight={props.anchorHeight}
+            anchorHeight={props.app ? ANCHOR_GITHUB : ANCHOR_KEY_FORM}
             busy={token?.busy === true}
             footer={
                 token ? (
@@ -600,8 +589,6 @@ export interface CloudOnboardingToolDialogProps {
     readonly job: CloudOnboardingToolsJob;
     /** The tool whose form is open, behind Back to the list. */
     readonly form?: CloudOnboardingToolForm & { readonly tool: CloudOnboardingTool };
-    /** The height of the flow's tallest view, which sets the card's top once. */
-    readonly anchorHeight: number;
     readonly onToolOpen: (toolId: string) => void;
     readonly onBack: () => void;
     readonly onClose: () => void;
@@ -616,7 +603,7 @@ export function CloudOnboardingToolDialog(props: CloudOnboardingToolDialogProps)
     const { form, job } = props;
     return (
         <ToolsDialog
-            anchorHeight={props.anchorHeight}
+            anchorHeight={ANCHOR_KEY_FORM}
             busy={form?.busy === true}
             leading={
                 <span className="happy-cloud-tools-dialog__chip">

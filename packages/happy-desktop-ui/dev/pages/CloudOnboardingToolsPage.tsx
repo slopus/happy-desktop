@@ -11,7 +11,6 @@ import type { CSSProperties, ReactNode } from "react";
 import type { HappyAgentPluginAuthField, HappyAgentPluginImage } from "happy-desktop-state";
 import { CloudOnboardingScreen, type CloudOnboardingStep } from "../../src/CloudOnboardingScreen";
 import {
-    CLOUD_ONBOARDING_TOOLS_TALLEST,
     CloudOnboardingGitHubDialog,
     CloudOnboardingToolDialog,
     type CloudOnboardingTool,
@@ -493,11 +492,6 @@ function github(
 ) {
     return (
         <CloudOnboardingGitHubDialog
-            anchorHeight={
-                app
-                    ? CLOUD_ONBOARDING_TOOLS_TALLEST.github
-                    : CLOUD_ONBOARDING_TOOLS_TALLEST.githubToken
-            }
             app={app}
             busy={false}
             image={CATALOG.github.tool.image}
@@ -513,13 +507,12 @@ function github(
 
 function tools(
     state: State,
-    jobId: keyof typeof CLOUD_ONBOARDING_TOOLS_TALLEST,
+    jobId: string,
     open?: { readonly id: PluginId; readonly form: CloudOnboardingToolForm },
 ) {
     const job = jobs(state).find((entry) => entry.id === jobId)!;
     return (
         <CloudOnboardingToolDialog
-            anchorHeight={CLOUD_ONBOARDING_TOOLS_TALLEST[jobId]}
             job={job}
             onBack={noop}
             onClose={noop}

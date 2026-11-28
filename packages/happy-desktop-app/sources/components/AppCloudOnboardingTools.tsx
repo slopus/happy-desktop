@@ -11,7 +11,6 @@ import {
     type HappyAgentPluginsSnapshot,
 } from "happy-desktop-state";
 import {
-    CLOUD_ONBOARDING_TOOLS_TALLEST,
     CloudOnboardingGitHubDialog,
     CloudOnboardingToolDialog,
     type CloudOnboardingTool,
@@ -161,11 +160,6 @@ export function cloudOnboardingToolsDialog(input: {
         if (!github) return null;
         return (
             <CloudOnboardingGitHubDialog
-                anchorHeight={
-                    github.app
-                        ? CLOUD_ONBOARDING_TOOLS_TALLEST.github
-                        : CLOUD_ONBOARDING_TOOLS_TALLEST.githubToken
-                }
                 app={github.app}
                 busy={snapshot.pluginConnecting === HAPPY_AGENT_PLUGIN_GITHUB}
                 image={github.image}
@@ -188,7 +182,6 @@ export function cloudOnboardingToolsDialog(input: {
     const tool = dialog.form && job.tools.find((entry) => entry.id === dialog.form?.pluginId);
     return (
         <CloudOnboardingToolDialog
-            anchorHeight={CLOUD_ONBOARDING_TOOLS_TALLEST[dialog.job]}
             job={job}
             onBack={store.pluginDialogBack}
             onClose={store.pluginDialogClose}
