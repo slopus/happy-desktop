@@ -1,0 +1,593 @@
+/*
+ * The computer step of a Happy Cloud server's onboarding, and its two dialogs
+ * (CloudOnboardingComputer.tsx).
+ *
+ * One ink variable, so the same parts read on the onboarding sky and inside a
+ * dialog's surface. A window shorter than 760px is compact: the cards drop
+ * their second lines and the list holds one row instead of two. The step body
+ * is measured on the setup page and the dialogs on their overlay, both the
+ * window's size.
+ */
+
+.happy-computer-step,
+.happy-computer-step-dialog .happy-modal__dialog {
+    --cs-ink: var(--onboarding-foreground);
+    --cs-quiet: color-mix(in srgb, var(--cs-ink) 72%, transparent);
+    --cs-fill: color-mix(in srgb, var(--cs-ink) 6%, transparent);
+    --cs-edge: color-mix(in srgb, var(--cs-ink) 12%, transparent);
+}
+
+.happy-computer-step-dialog .happy-modal__dialog {
+    --cs-ink: var(--text);
+}
+
+/*
+ * One rhythm, the footer's: the words of "Skip for now" sit 21px under
+ * Continue. So the pair sits 20px under the diagram, the words of "How is
+ * this secured?" 20px under the pair (a 14px gap and the small ghost's own
+ * 6px), and the first row about 20px under those words (the ghost's 6px and
+ * the list's 16px fade band).
+ */
+.happy-computer-step {
+    display: flex;
+    flex-direction: column;
+    align-self: center;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 640px;
+    color: var(--cs-ink);
+    font-family: var(--happy-font-ui);
+}
+
+/* ---- The diagram ----------------------------------------------------------- */
+
+/* The two ends share the row equally, so they are always one size. */
+.happy-computer-step__diagram {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.happy-computer-step__node {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--cs-fill);
+    box-shadow: inset 0 0 0 1px var(--cs-edge);
+}
+
+/* In the dialog the ends are frames, not cards: no fill, a 1px divider. The
+   border replaces the page's inset edge, so every box is the page's size. */
+.happy-computer-step__diagram[data-surface="dialog"] .happy-computer-step__node {
+    padding: 11px 13px;
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+}
+
+.happy-computer-step__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-computer-step__head-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-computer-step__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--cs-ink) 10%, transparent);
+    color: var(--cs-ink);
+}
+
+.happy-computer-step__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-computer-step__detail {
+    color: var(--cs-quiet);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-computer-step__points {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-computer-step__point {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: color-mix(in srgb, var(--cs-ink) 78%, transparent);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-computer-step__point-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--cs-quiet);
+}
+
+.happy-computer-step__bullet {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* The link sits centred between the cards: each word in the middle of its own
+   line, and under it, in the code face, one example of what crosses. */
+.happy-computer-step__link {
+    display: flex;
+    flex: 0 0 188px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-computer-step__wire {
+    display: flex;
+    align-items: center;
+    height: 16px;
+    color: var(--cs-quiet);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-computer-step__wire-rule {
+    flex: 1 1 0;
+    min-width: 8px;
+    height: 0;
+    border-top: 1px solid var(--cs-quiet);
+}
+
+.happy-computer-step__wire-label {
+    flex: none;
+    padding: 0 6px;
+}
+
+.happy-computer-step__wire-head {
+    display: flex;
+    flex: none;
+}
+
+.happy-computer-step__wire[data-dir="forward"] .happy-computer-step__wire-head {
+    margin-left: -5px;
+}
+
+.happy-computer-step__wire[data-dir="back"] .happy-computer-step__wire-head {
+    margin-right: -5px;
+}
+
+.happy-computer-step__example {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--cs-ink) 78%, transparent);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    line-height: 16px;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.happy-computer-step__example:first-of-type {
+    margin-bottom: 10px;
+}
+
+/* ---- The buttons ------------------------------------------------------------ */
+
+/* The two buttons, 20px under the diagram, and "How is this secured?" under
+   them. The list follows with no gap of its own: its fade band is the room. */
+.happy-computer-step__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding-top: 20px;
+}
+
+/* Two boxes of one width, centred as a pair. Neither ever changes size. */
+.happy-computer-step__pair {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.happy-computer-step__pair > * {
+    flex: none;
+}
+
+/* The first button's box in its other states: 232x36, the Button's own pill. */
+.happy-computer-step__connect {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 232px;
+    height: 36px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px var(--cs-edge);
+    color: var(--cs-quiet);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    white-space: nowrap;
+}
+
+.happy-computer-step__connect[data-state="connected"] {
+    color: var(--cs-ink);
+}
+
+.happy-computer-step__connect[data-state="connected"] .happy-icon {
+    color: var(--success);
+}
+
+/* ---- The list --------------------------------------------------------------- */
+
+/*
+ * The list's room is held from the start, narrow and centred, and shows
+ * nothing until a computer joins. 32px rows 4px apart. The scrollport fades
+ * through 16px at each end, as the step body does, and pads its rows by the
+ * same 16px, so at rest the first row and, scrolled to the end, the last row
+ * sit whole and unfaded; only rows scrolled beyond fade. Two rows in a regular
+ * window, with the top of a third in the fade; one in a compact window.
+ */
+.happy-computer-step__list {
+    --cs-row: 32px;
+    --cs-row-gap: 4px;
+    --cs-fade: 16px;
+    flex: none;
+    align-self: center;
+    box-sizing: border-box;
+    width: 240px;
+    height: calc(2 * var(--cs-row) + var(--cs-row-gap) + 2 * var(--cs-fade));
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black var(--cs-fade),
+        black calc(100% - var(--cs-fade)),
+        transparent
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black var(--cs-fade),
+        black calc(100% - var(--cs-fade)),
+        transparent
+    );
+}
+
+/* Why a Windows host cannot join, in the first row's place and height. */
+.happy-computer-step__list-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: var(--cs-row);
+    margin: var(--cs-fade) 0;
+    color: var(--cs-quiet);
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-computer-step__rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cs-row-gap);
+    margin: 0;
+    padding: var(--cs-fade) 0;
+    list-style: none;
+}
+
+.happy-computer-step__computer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: var(--cs-row);
+    padding: 0 10px;
+    border-radius: 8px;
+    background: var(--cs-fill);
+    color: var(--cs-ink);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-computer-step__computer-mark {
+    display: flex;
+    flex: none;
+    color: var(--cs-quiet);
+}
+
+.happy-computer-step__computer-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-computer-step__computer-name,
+.happy-computer-step__computer-note {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.happy-computer-step__computer-name {
+    font-weight: 500;
+}
+
+/* A second line shares the row's 32px with the name: 15 and 13. */
+.happy-computer-step__computer-note {
+    color: var(--cs-quiet);
+    font-size: 11px;
+    line-height: 13px;
+}
+
+.happy-computer-step__computer-text:has(.happy-computer-step__computer-note)
+    > .happy-computer-step__computer-name {
+    line-height: 15px;
+}
+
+/* The state's one box at the row's end: a small spinner while a machine
+   joins, the check online, a failure's mark, or a quiet word. */
+.happy-computer-step__computer-state {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    width: 48px;
+    color: var(--cs-quiet);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* A failure reads as the kit's attention tone: ink words, a red mark. */
+.happy-computer-step__failed {
+    display: flex;
+    color: var(--text-destructive);
+}
+
+.happy-computer-step__check {
+    display: flex;
+    color: var(--success);
+}
+
+/* ---- Compact: a window shorter than 760px ---------------------------------- */
+
+/* The page is measured on the setup page, which is the window. */
+@container (max-height: 759px) {
+    .happy-computer-step .happy-computer-step__node {
+        padding: 10px 14px;
+    }
+
+    .happy-computer-step .happy-computer-step__detail {
+        display: none;
+    }
+
+    .happy-computer-step__list {
+        height: calc(var(--cs-row) + 2 * var(--cs-fade));
+    }
+}
+
+/* A dialog is measured on its overlay, whose box is the window less its 24px
+   gutter on each side: 711px is a 759px window. */
+@container (max-height: 711px) {
+    .happy-computer-step__diagram[data-surface="dialog"] .happy-computer-step__node {
+        padding: 9px 13px;
+    }
+
+    .happy-computer-step-dialog .happy-computer-step__detail {
+        display: none;
+    }
+
+    /* The explainer is 14px shorter without the cards' second lines; it stays
+       centred on that height. Modal writes its anchor inline. */
+    .happy-modal.happy-computer-step-dialog--owner {
+        --happy-modal-frame-height: 457px !important;
+    }
+
+    .happy-modal.happy-computer-step-dialog--member {
+        --happy-modal-frame-height: 513px !important;
+    }
+}
+
+/* ---- Dialogs --------------------------------------------------------------- */
+
+/* The dialogs size themselves and their density by the overlay, which covers
+   the window. */
+.happy-modal-overlay.happy-computer-step-overlay {
+    container-type: size;
+}
+
+/* "How is this secured?" takes the medium frame, so it keeps the same top as
+   "Add server or sandbox", and is exactly as wide as the page's diagram plus
+   the dialog's sides, so the diagram is the page's to the pixel: min(640px,
+   window - 96px) is the page body's width (the overlay's box is the window
+   less 48px), and the modal body's content keeps 25px on each side. */
+.happy-modal-overlay > .happy-modal.happy-computer-step-dialog--explainer > .happy-modal__dialog {
+    width: calc(min(640px, 100cqw - 48px) + 50px);
+}
+
+/* The header chip as the frame rule builds it: 28px, 7px corners, 16px glyph. */
+.happy-computer-step__chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+/* The commands for other machines: no frame around them, all in view. A
+   label, the command's own field, one quiet line. */
+.happy-computer-step__scripts {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-computer-step__script {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.happy-computer-step__script-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-computer-step__script-mark {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    width: 16px;
+}
+
+.happy-computer-step__script-note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* The command's field runs the column's full width, so every field is one box. */
+.happy-computer-step__script > .happy-setup-command {
+    width: 100%;
+}
+
+/* Where the command will stand, in its field's box, while it is made or if it
+   was refused. */
+.happy-computer-step__command-pending {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: var(--happy-radius-window);
+    box-shadow: inset 0 0 0 1px var(--divider);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-computer-step__command-pending[data-tone="attention"] {
+    color: var(--text-destructive);
+}
+
+.happy-computer-step__script[data-off] .happy-computer-step__script-mark,
+.happy-computer-step__script[data-off] .happy-computer-step__script-note {
+    opacity: 0.72;
+}
+
+.happy-computer-step__tag {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--cs-ink) 10%, transparent);
+    color: var(--cs-ink);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+    white-space: nowrap;
+}
+
+/* "How is this secured?": the page's diagram, with its ends drawn as frames,
+   and the plain statements under it. */
+.happy-computer-step__explainer {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    color: var(--cs-ink);
+}
+
+.happy-computer-step__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-computer-step__fact {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: color-mix(in srgb, var(--cs-ink) 78%, transparent);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-computer-step__fact-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 20px;
+    color: var(--cs-ink);
+}
+
+.happy-computer-step__fact b {
+    color: var(--cs-ink);
+    font-weight: 600;
+}

@@ -653,6 +653,16 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
+    CloudOnboardingComputerAddDialog,
+    CloudOnboardingComputerExplainerDialog,
+    type CloudOnboardingComputerCommand,
+    type CloudOnboardingComputerConnect,
+    type CloudOnboardingComputerOs,
+    type CloudOnboardingComputerReader,
+    type CloudOnboardingComputerRow,
+    type CloudOnboardingComputerRowState,
+} from "./CloudOnboardingComputer";
+export {
     CloudOnboardingPluginDialog,
     type CloudOnboardingPluginDialogProps,
 } from "./CloudOnboardingPluginDialog";
