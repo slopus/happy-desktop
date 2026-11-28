@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Avatar } from "./Avatar";
 import { Button } from "./Button";
+import { PicturePicker, type PictureChoice } from "./PicturePicker";
 import { SetupDrift } from "./SetupDrift";
 import { SetupPage, type SetupPageProps } from "./SetupPage";
 import { TextField } from "./TextField";
@@ -132,6 +133,11 @@ export type CloudConnectView =
 export interface CloudConnectScreenProps {
     readonly appearance: ThemeMode;
     readonly view: CloudConnectView;
+    /**
+     * The picture a new server is given on the create step, held on this
+     * device until the server exists. Absent, the step asks only for a name.
+     */
+    readonly picture?: PictureChoice;
     /** The close button, Esc, and Cancel: back to the app. */
     onClose(): void;
     /** A Happy Agent of the reader's own, or their team's: drafted to the Chief of Staff. */
@@ -200,6 +206,9 @@ function availabilityHint(
             return "3–32 lowercase letters, digits or dashes, not starting or ending with a dash.";
     }
 }
+
+/** The new server's picture on the create step, as large as its tile on the servers step. */
+const CREATE_PICTURE_SIDE = 72;
 
 function CloudConnectServerImage(props: {
     readonly server: CloudConnectServer;
@@ -766,7 +775,11 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                         );
                     }
                     case "create": {
-                        const hint = view.error ?? availabilityHint(view.availability, view.name);
+                        const picture = props.picture;
+                        const hint =
+                            view.error ??
+                            picture?.error ??
+                            availabilityHint(view.availability, view.name);
                         return (
                             <SetupPage
                                 {...frame}
@@ -786,6 +799,37 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                 title="Bootstrap a server"
                             >
                                 <div className="happy-cloud-connect__column">
+                                    {picture ? (
+                                        <PicturePicker
+                                            {...(picture.crop ? { crop: picture.crop } : {})}
+                                            data-testid="cloud-connect-picture"
+                                            disabled={view.busy === true}
+                                            layout="column"
+                                            noun="picture"
+                                            onChoose={picture.onChoose}
+                                            onCropCancel={picture.onCropCancel}
+                                            onCropConfirm={picture.onCropConfirm}
+                                            opening={picture.opening}
+                                            {...(picture.url ? { pictureUrl: picture.url } : {})}
+                                            placeholder={
+                                                <Avatar
+                                                    className="happy-picture-picker__image"
+                                                    initials={view.name.slice(0, 1).toUpperCase()}
+                                                    // The placeholder the server will wear in the rail.
+                                                    placeholderSeed={view.name}
+                                                    size="lg"
+                                                    style={{
+                                                        width: CREATE_PICTURE_SIDE,
+                                                        height: CREATE_PICTURE_SIDE,
+                                                        borderRadius: "25%",
+                                                    }}
+                                                    type="agent"
+                                                />
+                                            }
+                                            shape="rounded"
+                                            side={CREATE_PICTURE_SIDE}
+                                        />
+                                    ) : null}
                                     <TextField
                                         aria-label="Server name"
                                         autoFocus
@@ -805,6 +849,7 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                         className="happy-cloud-connect__hint"
                                         data-tone={
                                             view.error !== undefined ||
+                                            picture?.error !== undefined ||
                                             view.availability === "taken" ||
                                             view.availability === "reserved" ||
                                             view.availability === "invalid"

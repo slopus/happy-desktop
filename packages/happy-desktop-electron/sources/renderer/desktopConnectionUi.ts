@@ -158,6 +158,9 @@ export function desktopConnectionUiCreate(input: {
             ...(input.directory.happyAgentSignInCancel
                 ? { happyAgentSignInCancel: input.directory.happyAgentSignInCancel }
                 : {}),
+            ...(input.directory.pictureFailureDismiss
+                ? { pictureFailureDismiss: input.directory.pictureFailureDismiss }
+                : {}),
         },
         dispose() {
             unsubscribe();
