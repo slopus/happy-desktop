@@ -26,6 +26,8 @@ export interface HappyAgentCloudCredential {
     readonly coolingUntil: number | null;
     /** When the server may use it, as the server stores it; carried over unread when it is rekeyed. */
     readonly usage?: unknown;
+    /** The endpoint it sends requests to, such as a proxy; the vendor's own API when absent. */
+    readonly baseUrl?: string;
 }
 
 /**
@@ -59,6 +61,8 @@ export interface HappyAgentCloudCapabilities {
     /** Whether a Claude setup token (`oauth_token`) is accepted. */
     readonly claudeSetupToken: boolean;
     readonly claudeSignIn: boolean;
+    /** Whether an API key may name its own endpoint, and may then have no key at all. */
+    readonly credentialEndpoints: boolean;
 }
 
 export type HappyAgentCloudKeyVendor = "openai" | "anthropic" | "grok" | "bedrock";
@@ -70,8 +74,13 @@ export type HappyAgentCloudTarget = { readonly scope: "private" } | { readonly p
 export interface HappyAgentCloudCredentialInput {
     readonly vendor: string;
     readonly kind: "api_key" | "aws_keys" | "oauth_token";
-    /** AWS keys travel as the JSON text of `{ accessKeyId, secretAccessKey, region? }`. */
+    /**
+     * AWS keys travel as the JSON text of `{ accessKeyId, secretAccessKey, region? }`.
+     * Empty only for an API key with its own `baseUrl` that takes none.
+     */
     readonly secret: string;
+    /** An API key's own endpoint; the vendor's own API when absent. */
+    readonly baseUrl?: string;
     readonly label: string;
     /** Settings to start with, as when a key is replaced; the server's defaults when absent. */
     readonly enabled?: boolean;
@@ -125,6 +134,12 @@ export interface HappyAgentCloudProvidersApi {
     /** Creates a named connection for the team or the reader; answers its ID. */
     connectionCreate(name: string, scope: HappyAgentCloudScope): Promise<{ readonly id: string }>;
     credentialLabelUpdate(connectionId: string, credentialId: string, label: string): Promise<void>;
+    /** Points an API key at its own endpoint, or back at the vendor's own API with `null`. */
+    credentialEndpointUpdate(
+        connectionId: string,
+        credentialId: string,
+        baseUrl: string | null,
+    ): Promise<void>;
     /**
      * Sets the region the team's Bedrock keys route to. It is team
      * configuration, not part of a key, and needs `providers.manage`.
@@ -196,6 +211,9 @@ function credentialRead(value: unknown): HappyAgentCloudCredential | undefined {
                 ? entry.coolingUntil
                 : null,
         ...(entry.usage === undefined ? {} : { usage: entry.usage }),
+        ...(typeof entry.baseUrl === "string" && entry.baseUrl !== ""
+            ? { baseUrl: entry.baseUrl }
+            : {}),
     };
 }
 
@@ -303,6 +321,7 @@ export function happyAgentCloudProvidersApiCreate(
                       capabilities: {
                           claudeSetupToken: capabilities.claudeSetupToken === true,
                           claudeSignIn: capabilities.claudeSignIn === true,
+                          credentialEndpoints: capabilities.credentialEndpoints === true,
                       },
                   }
                 : { connections };
@@ -313,6 +332,7 @@ export function happyAgentCloudProvidersApiCreate(
                     vendor: input.vendor,
                     kind: input.kind,
                     secret: input.secret,
+                    ...(input.baseUrl === undefined ? {} : { baseUrl: input.baseUrl }),
                     label: input.label,
                     ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
                     ...(input.usage === undefined ? {} : { usage: input.usage }),
@@ -355,6 +375,13 @@ export function happyAgentCloudProvidersApiCreate(
                 "PATCH",
                 `${credentials(connectionId)}/${encodeURIComponent(credentialId)}`,
                 { label },
+            );
+        },
+        credentialEndpointUpdate: async (connectionId, credentialId, baseUrl) => {
+            await request(
+                "PATCH",
+                `${credentials(connectionId)}/${encodeURIComponent(credentialId)}`,
+                { baseUrl },
             );
         },
         bedrockRegionSave: async (region) => {
@@ -422,6 +449,22 @@ export function happyAgentCloudCredentialReplaceable(
     credential: HappyAgentCloudCredential,
 ): credential is HappyAgentCloudCredential & { readonly kind: "api_key" | "oauth_token" } {
     return credential.kind === "api_key" || credential.kind === "oauth_token";
+}
+
+/** The vendors whose API keys may send requests to an endpoint of their own, such as a proxy. */
+export type HappyAgentCloudEndpointVendor = "openai" | "anthropic" | "grok";
+
+/**
+ * The vendor whose API an endpoint of a credential's own must speak: an
+ * OpenAI, Anthropic or xAI API key's. None for sign-ins, setup tokens and
+ * Bedrock, which always run on the vendor's own.
+ */
+export function happyAgentCloudCredentialEndpointVendor(
+    credential: Pick<HappyAgentCloudCredential, "vendor" | "kind">,
+): HappyAgentCloudEndpointVendor | undefined {
+    if (credential.kind !== "api_key") return undefined;
+    const vendor = credential.vendor;
+    return vendor === "openai" || vendor === "anthropic" || vendor === "grok" ? vendor : undefined;
 }
 
 /** What a connection is called on screen: Happy (free), My account, or its own name. */

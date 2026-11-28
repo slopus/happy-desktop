@@ -35,13 +35,19 @@ export interface HappyAgentAiProviderCredentialRow {
     readonly replaceWith?: "key" | "token";
     /** Whether its sign-in can be run again here. */
     readonly reauth?: boolean;
+    /**
+     * Where an API key sends its requests, when it may say: `url` its own
+     * endpoint, such as a proxy, or absent for the vendor's own API at
+     * `official`. Absent for a sign-in or setup token, which always run on the vendor's own.
+     */
+    readonly endpoint?: { readonly url?: string; readonly official: string };
 }
 
 /** The one thing open on the sheet: its name, or one token's name, secret or removal. */
 export type HappyAgentAiProviderSheetAction =
     | { readonly kind: "name" }
     | {
-          readonly kind: "label" | "secret" | "remove";
+          readonly kind: "label" | "secret" | "endpoint" | "remove";
           readonly credentialId: string;
       };
 
@@ -77,6 +83,9 @@ export interface HappyAgentAiProviderSheetProps {
     onActionCancel: () => void;
     onCredentialLabelSave: (label: string) => void;
     onCredentialSecretSave: (secret: string) => void;
+    onCredentialEndpointOpen: (credentialId: string) => void;
+    /** Empty sends it to the vendor's own API again. */
+    onCredentialEndpointSave: (baseUrl: string) => void;
     onCredentialRemove: (credentialId: string) => void;
     /** Adds a token to this provider; absent where the reader may not. */
     onAdd?: () => void;
@@ -99,10 +108,21 @@ const STATE_VARIANTS: Record<HappyAgentAiProviderCredentialState, BadgeVariant> 
     disabled: "neutral",
 };
 
+/** An endpoint as a token's line names it: its host, or the URL where it has none. */
+function endpointHost(url: string): string {
+    try {
+        return new URL(url).host || url;
+    } catch {
+        return url;
+    }
+}
+
 function credentialMeta(credential: HappyAgentAiProviderCredentialRow): string {
+    const url = credential.endpoint?.url;
+    const meta = url ? `${credential.meta} · via ${endpointHost(url)}` : credential.meta;
     return credential.state === "cooling" && credential.coolingUntil
-        ? `${credential.meta} · Tried again at ${credential.coolingUntil}`
-        : credential.meta;
+        ? `${meta} · Tried again at ${credential.coolingUntil}`
+        : meta;
 }
 
 function actionKey(action: HappyAgentAiProviderSheetAction | undefined): string {
@@ -139,7 +159,9 @@ export function HappyAgentAiProviderSheet(props: HappyAgentAiProviderSheetProps)
               ? props.name
               : action?.kind === "label"
                 ? (opened?.label ?? "")
-                : "";
+                : action?.kind === "endpoint"
+                  ? (opened?.endpoint?.url ?? "")
+                  : "";
     const valueUpdate = (next: string): void => setHeld({ key, value: next });
     const addBusy = props.add?.panel.phase === "busy";
     const close = (): void => {
@@ -312,6 +334,9 @@ function CredentialList(
                 const locked = busy || entry.saving === true;
                 const labelSave = valueSave(props.onCredentialLabelSave);
                 const secretSave = valueSave(props.onCredentialSecretSave);
+                const endpointSave = (): void => {
+                    if (!busy) props.onCredentialEndpointSave(props.value);
+                };
                 const secretWord = entry.replaceWith === "token" ? "token" : "key";
                 return (
                     <Box
@@ -374,6 +399,17 @@ function CredentialList(
                                         variant="ghost"
                                     >
                                         {`Replace ${secretWord}`}
+                                    </Button>
+                                ) : null}
+                                {entry.endpoint ? (
+                                    <Button
+                                        disabled={locked}
+                                        icon="link"
+                                        onClick={() => props.onCredentialEndpointOpen(entry.id)}
+                                        size="small"
+                                        variant="ghost"
+                                    >
+                                        Endpoint
                                     </Button>
                                 ) : null}
                                 {entry.reauth ? (
@@ -440,6 +476,27 @@ function CredentialList(
                                     onSubmit={secretSave}
                                     onValueChange={props.valueUpdate}
                                     type="password"
+                                    value={props.value}
+                                />
+                            </ActionPanel>
+                        ) : current === "endpoint" && entry.endpoint ? (
+                            <ActionPanel
+                                busy={busy}
+                                confirm="Save"
+                                error={props.openError}
+                                onCancel={props.onActionCancel}
+                                onConfirm={endpointSave}
+                            >
+                                <TextField
+                                    autoComplete="off"
+                                    autoFocus
+                                    disabled={busy}
+                                    fullWidth
+                                    hint="A proxy or gateway that speaks the vendor’s API. Leave empty for the vendor itself."
+                                    label="Endpoint"
+                                    onSubmit={endpointSave}
+                                    onValueChange={props.valueUpdate}
+                                    placeholder={entry.endpoint.official}
                                     value={props.value}
                                 />
                             </ActionPanel>

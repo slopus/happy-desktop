@@ -17,6 +17,7 @@ import type {
     HappyAgentProvidersSnapshot,
     HappyAgentProvidersStore,
     HappyAgentCloudConnection,
+    HappyAgentCloudCredential,
     HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
     HappyAgentProviderSignInAccount,
@@ -74,6 +75,7 @@ import {
     happyAgentCloudProviderAddOptions,
     happyAgentCloudProviderAddTeamOnly,
     happyAgentCloudConnectionNamed,
+    happyAgentCloudCredentialEndpointVendor,
     happyAgentCloudCredentialReplaceable,
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
@@ -111,7 +113,9 @@ import {
     type HappyAgentCustomProviderDialogProps,
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
+    HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS,
     HappyAgentAiProviders,
+    type HappyAgentAiProviderCredentialRow,
     type HappyAgentAiProviderRow,
     type HappyAgentAiProviderSheetProps,
     type HappyAgentProviderAddDialogProps,
@@ -2651,6 +2655,24 @@ function cloudProviderRows(
         .map(cloudProviderRow);
 }
 
+/**
+ * Where an API key sends its requests, for its row: its own endpoint or the
+ * vendor's, where this server lets a key name one.
+ */
+function cloudCredentialEndpoint(
+    snapshot: HappyAgentCloudProvidersSnapshot,
+    credential: HappyAgentCloudCredential,
+): Pick<HappyAgentAiProviderCredentialRow, "endpoint"> {
+    const vendor = happyAgentCloudCredentialEndpointVendor(credential);
+    if (!snapshot.endpoints || !vendor) return {};
+    return {
+        endpoint: {
+            ...(credential.baseUrl === undefined ? {} : { url: credential.baseUrl }),
+            official: HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS[vendor],
+        },
+    };
+}
+
 /** The sheet of the provider that is open, while it is listed. */
 function providerDetailProps(
     snapshot: HappyAgentCloudProvidersSnapshot,
@@ -2693,6 +2715,7 @@ function providerDetailProps(
                       ...(happyAgentCloudCredentialReplaceable(credential)
                           ? { replaceWith: credential.kind === "api_key" ? "key" : "token" }
                           : {}),
+                      ...cloudCredentialEndpoint(snapshot, credential),
                       ...(credential.kind === "oauth" &&
                       ((credential.vendor === "codex" && snapshot.signIns.has("codex")) ||
                           (credential.vendor === "claude-code" && snapshot.signIns.has("claude")))
@@ -2728,6 +2751,8 @@ function providerDetailProps(
         onActionCancel: () => store.detailActionCancel(),
         onCredentialLabelSave: (label) => store.credentialLabelSave(label),
         onCredentialSecretSave: (secret) => store.credentialSecretSave(secret),
+        onCredentialEndpointOpen: (credentialId) => store.credentialEndpointOpen(credentialId),
+        onCredentialEndpointSave: (baseUrl) => store.credentialEndpointSave(baseUrl),
         onCredentialRemove: (credentialId) => store.credentialRemove(connection.id, credentialId),
         ...(editable ? { onAdd: () => store.credentialAddOpen() } : {}),
         ...(editable && happyAgentCloudConnectionNamed(connection)
@@ -2754,8 +2779,11 @@ function providerAddFormProps(
         ...(add.signIn ? { signIn: add.signIn } : {}),
         ...(add.error ? { error: add.error } : {}),
         teamRoutingEditable: snapshot.teamAllowed,
+        endpoints: snapshot.endpoints,
+        endpoint: add.endpoint,
         onFlowSelect: (flow) => store.addFlowSelect(flow),
         onLabelChange: (label) => store.addLabelUpdate(label),
+        onEndpointChange: (endpoint) => store.addEndpointUpdate(endpoint),
         onApiKeySubmit: (secret, region) => store.apiKeySubmit(secret, region),
         onAwsKeysSubmit: (input) => store.awsKeysSubmit(input),
         onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),

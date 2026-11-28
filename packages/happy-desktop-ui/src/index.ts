@@ -1282,6 +1282,7 @@ export {
     type HappyAgentAiProviderSheetProps,
 } from "./pages/settings/HappyAgentAiProviderSheet";
 export {
+    HAPPY_AGENT_PROVIDER_OFFICIAL_ENDPOINTS,
     HappyAgentProviderAddDialog,
     HappyAgentProviderAddPanel,
     type HappyAgentProviderAddDestination,
