@@ -171,13 +171,11 @@ export function HappyAgentHandbookSurface(props: {
             onAlwaysInContextChange: (value) => handbook.alwaysInContextUpdate(itemId, value),
             onHistoryToggle: handbook.historyToggle,
             onApply: () => handbook.reviewOpen([itemId]),
-            // Failures leave the draft as it was, which the list already shows.
-            onDiscard: () => void handbook.itemDiscard(itemId).catch(() => undefined),
+            onDiscard: () => handbook.itemDiscard(itemId),
             onRemove: () =>
-                void handbook.itemRemove(itemId).then(
-                    () => props.onItemOpen(),
-                    () => undefined,
-                ),
+                void handbook.itemRemove(itemId).then((removed) => {
+                    if (removed) props.onItemOpen();
+                }),
         };
     })();
 
@@ -305,7 +303,7 @@ export function HappyAgentHandbookSurface(props: {
                 )
             }
             onItemCreate={() =>
-                void handbook.itemCreate("Untitled").then(props.onItemOpen, () => undefined)
+                void handbook.itemCreate("Untitled", null).then(props.onItemOpen, () => undefined)
             }
             onItemSelect={props.onItemOpen}
             {...(review ? { review } : {})}

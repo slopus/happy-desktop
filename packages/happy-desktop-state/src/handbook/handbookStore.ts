@@ -8,6 +8,8 @@ import { happyAgentHandbookDraftStoreCreate } from "./handbookDraftStore.js";
 import { happyAgentHandbookHistoryStoreCreate } from "./handbookHistoryStore.js";
 import {
     handbookComparisonRead,
+    handbookFolderPath,
+    handbookFolderRead,
     handbookItemRead,
     handbookPath,
     handbookRefusalCode,
@@ -17,17 +19,22 @@ import {
     listOf,
     recordOf,
 } from "./handbookRead.js";
-import type {
-    HappyAgentHandbookDraftStore,
-    HappyAgentHandbookHistoryStore,
-    HappyAgentHandbookItem,
-    HappyAgentHandbookItemId,
-    HappyAgentHandbookMetadataChange,
-    HappyAgentHandbookMetadataEdit,
-    HappyAgentHandbookReview,
-    HappyAgentHandbookReviewItem,
-    HappyAgentHandbookSnapshot,
-    HappyAgentHandbookStore,
+import {
+    HAPPY_AGENT_HANDBOOK_FOLDER_DEPTH_MAX,
+    type HappyAgentHandbookDraftStore,
+    type HappyAgentHandbookFolder,
+    type HappyAgentHandbookFolderEdit,
+    type HappyAgentHandbookFolderId,
+    type HappyAgentHandbookMove,
+    type HappyAgentHandbookHistoryStore,
+    type HappyAgentHandbookItem,
+    type HappyAgentHandbookItemId,
+    type HappyAgentHandbookMetadataChange,
+    type HappyAgentHandbookMetadataEdit,
+    type HappyAgentHandbookReview,
+    type HappyAgentHandbookReviewItem,
+    type HappyAgentHandbookSnapshot,
+    type HappyAgentHandbookStore,
 } from "./handbookTypes.js";
 
 const HANDBOOK_EVENTS = [
@@ -35,6 +42,9 @@ const HANDBOOK_EVENTS = [
     "handbook.updated",
     "handbook.applied",
     "handbook.removed",
+    "handbook.folder.created",
+    "handbook.folder.updated",
+    "handbook.folder.deleted",
 ] as const;
 
 /** How long typing in a title or description rests before it is sent. */
@@ -72,10 +82,42 @@ interface MetadataSending {
     readonly fields: MetadataFields;
 }
 
-function itemOrder(left: HappyAgentHandbookItem, right: HappyAgentHandbookItem): number {
+function itemOrder(
+    left: HappyAgentHandbookItem | HappyAgentHandbookFolder,
+    right: HappyAgentHandbookItem | HappyAgentHandbookFolder,
+): number {
     // The server compares `order` bytewise; so does this, not by locale.
     if (left.order !== right.order) return left.order < right.order ? -1 : 1;
     return left.createdAt - right.createdAt;
+}
+
+/** What a folder write's refusal means, in words its dialog or the page can show. */
+function folderRefusal(error: unknown, name?: string): UserError {
+    switch (handbookRefusalCode(error)) {
+        case "conflict":
+            return new UserError(
+                `There's already a folder named “${name ?? "that"}” here.`,
+                "conflict",
+                error,
+            );
+        case "not_empty":
+            return new UserError(
+                "Only an empty folder can be deleted. Move its pages and folders out first; removed pages still count.",
+                "not_empty",
+                error,
+            );
+    }
+    switch (handbookStatus(error)) {
+        case 400:
+            return new UserError(
+                `Folders nest at most ${String(HAPPY_AGENT_HANDBOOK_FOLDER_DEPTH_MAX)} levels deep, and a folder can't move into itself.`,
+                "invalid",
+                error,
+            );
+        case 404:
+            return new UserError("That folder no longer exists.", "not_found", error);
+    }
+    return happyAgentUserError(error);
 }
 
 /** What an apply refusal means, in words the review can show. */
@@ -129,7 +171,9 @@ export function happyAgentHandbookStoreCreate(
     const idCreate = cuid2Create(now);
     const store = createStore<HappyAgentHandbookSnapshot>()(() => ({
         status: "loading",
+        folders: [],
         items: [],
+        search: "",
         access: { edit: false, apply: false },
         viewerId: null,
         edits: EDITS_NONE,
@@ -151,6 +195,10 @@ export function happyAgentHandbookStoreCreate(
     let reviewTimer: ReturnType<typeof setTimeout> | undefined;
     /** The apply being tried, kept so a retry after no answer repeats its mutation ID. */
     let applyMutationId: string | undefined;
+    /** The folder write and the move being tried, kept the same way. */
+    let folderMutationId: string | undefined;
+    let folderCreateId: HappyAgentHandbookFolderId | undefined;
+    let moveMutationId: string | undefined;
 
     const itemOf = (itemId: string): HappyAgentHandbookItem | undefined =>
         store.getState().items.find((item) => item.id === itemId);
@@ -165,7 +213,11 @@ export function happyAgentHandbookStoreCreate(
 
     // ---- Reading ---------------------------------------------------------
 
-    const listRead = async (): Promise<HappyAgentHandbookItem[]> => {
+    const listRead = async (): Promise<{
+        folders: HappyAgentHandbookFolder[];
+        items: HappyAgentHandbookItem[];
+    }> => {
+        const folders = new Map<HappyAgentHandbookFolderId, HappyAgentHandbookFolder>();
         const items: HappyAgentHandbookItem[] = [];
         let cursor: string | undefined;
         for (let page = 0; page < LIST_PAGES_MAX; page += 1) {
@@ -177,6 +229,10 @@ export function happyAgentHandbookStoreCreate(
                         : `v0/handbook?cursor=${encodeURIComponent(cursor)}`,
                 ),
             );
+            for (const entry of listOf(answer?.folders)) {
+                const folder = handbookFolderRead(entry);
+                if (folder) folders.set(folder.id, folder);
+            }
             for (const entry of listOf(answer?.items)) {
                 const read = handbookItemRead(entry);
                 // A removed item is history only; the page lists what agents can be given.
@@ -185,12 +241,12 @@ export function happyAgentHandbookStoreCreate(
             if (typeof answer?.cursor !== "string" || answer.cursor.length === 0) break;
             cursor = answer.cursor;
         }
-        return items.sort(itemOrder);
+        return { folders: [...folders.values()].sort(itemOrder), items: items.sort(itemOrder) };
     };
 
     const read = async (): Promise<void> => {
         viewerRead ??= (deps.selfUserId?.() ?? Promise.resolve(null)).catch(() => null);
-        const [items, permissions, viewerId] = await Promise.all([
+        const [{ folders, items }, permissions, viewerId] = await Promise.all([
             listRead(),
             deps.request("GET", "v0/permissions"),
             viewerRead,
@@ -211,6 +267,7 @@ export function happyAgentHandbookStoreCreate(
             {
                 ...rest,
                 status: "ready",
+                folders: referencesPreserve(current.folders, folders),
                 items: referencesPreserve(current.items, items),
                 access,
                 viewerId,
@@ -526,6 +583,54 @@ export function happyAgentHandbookStoreCreate(
         if (changed) reviewSet({ ...review, items });
     };
 
+    // ---- Folders and failures --------------------------------------------
+
+    /** Sets or clears one optional field of the snapshot, leaving no `undefined` key behind. */
+    const optionalSet = <Key extends "failure" | "folderEdit" | "move">(
+        key: Key,
+        value: HappyAgentHandbookSnapshot[Key],
+    ): void => {
+        if (disposed) return;
+        const state = store.getState();
+        if (value === undefined) {
+            if (state[key] === undefined) return;
+            const rest = { ...state };
+            delete rest[key];
+            store.setState(rest, true);
+        } else store.setState({ [key]: value }, false);
+    };
+
+    /** Records why a page or folder action did not happen, and hands the error back. */
+    const failureSet = (failure: UserError | undefined): UserError | undefined => {
+        optionalSet("failure", failure);
+        return failure;
+    };
+    const folderEditSet = (edit: HappyAgentHandbookFolderEdit | undefined): void =>
+        optionalSet("folderEdit", edit);
+    const moveSet = (move: HappyAgentHandbookMove | undefined): void => optionalSet("move", move);
+
+    const folderOf = (folderId: string): HappyAgentHandbookFolder | undefined =>
+        store.getState().folders.find((folder) => folder.id === folderId);
+
+    /** How deep a folder sits: a top-level folder is 1. */
+    const folderDepth = (folderId: HappyAgentHandbookFolderId): number => {
+        let depth = 0;
+        let current = folderOf(folderId);
+        while (current && depth <= HAPPY_AGENT_HANDBOOK_FOLDER_DEPTH_MAX) {
+            depth += 1;
+            current = current.parentId === null ? undefined : folderOf(current.parentId);
+        }
+        return depth;
+    };
+
+    const folderReplace = (folder: HappyAgentHandbookFolder): void => {
+        const current = store.getState().folders;
+        const next = current.some((entry) => entry.id === folder.id)
+            ? current.map((entry) => (entry.id === folder.id ? folder : entry))
+            : [...current, folder];
+        store.setState({ folders: referencesPreserve(current, [...next].sort(itemOrder)) }, false);
+    };
+
     // ---- Public ----------------------------------------------------------
 
     return {
@@ -548,20 +653,28 @@ export function happyAgentHandbookStoreCreate(
                 if (listeners.size === 0) followStop();
             };
         },
-        async itemCreate(title) {
+        async itemCreate(title, folderId) {
             if (disposed) throw new UserError("The handbook is closed.");
             if (!store.getState().access.edit)
-                throw new UserError("You can't add to the handbook.", "forbidden");
+                return Promise.reject(
+                    failureSet(new UserError("You can't add to the handbook.", "forbidden")),
+                );
+            failureSet(undefined);
             const id = idCreate() as HappyAgentHandbookItemId;
             let answer: unknown;
             try {
                 answer = await deps.request("POST", "v0/handbook", {
                     id,
                     title,
+                    ...(folderId === null ? {} : { folderId }),
                     mutationId: idCreate(),
                 });
             } catch (error) {
-                throw happyAgentUserError(error);
+                throw failureSet(
+                    handbookStatus(error) === 404
+                        ? folderRefusal(error)
+                        : happyAgentUserError(error),
+                );
             }
             const created = handbookItemRead(recordOf(answer)?.item);
             if (created && !disposed) itemReplace(created.item);
@@ -577,35 +690,220 @@ export function happyAgentHandbookStoreCreate(
         alwaysInContextUpdate(itemId, value) {
             metadataUpdate(itemId, { alwaysInContext: value }, 0);
         },
-        async itemDiscard(itemId) {
-            if (!store.getState().access.edit)
-                throw new UserError("You can't change the handbook.", "forbidden");
-            try {
-                await deps.request("POST", handbookPath(itemId, "/discard"), {
-                    mutationId: idCreate(),
-                });
-            } catch (error) {
-                throw happyAgentUserError(error);
+        itemDiscard(itemId) {
+            if (disposed) return;
+            if (!store.getState().access.edit) {
+                failureSet(new UserError("You can't change the handbook.", "forbidden"));
+                return;
             }
-            load();
+            failureSet(undefined);
+            void deps
+                .request("POST", handbookPath(itemId, "/discard"), { mutationId: idCreate() })
+                .then(
+                    () => load(),
+                    (error: unknown) => {
+                        failureSet(happyAgentUserError(error));
+                    },
+                );
         },
         async itemRemove(itemId) {
-            if (!store.getState().access.apply)
-                throw new UserError(
-                    "Only people who can apply the handbook can remove an item.",
-                    "forbidden",
+            if (disposed) return false;
+            if (!store.getState().access.apply) {
+                failureSet(
+                    new UserError(
+                        "Only people who can apply the handbook can remove a page.",
+                        "forbidden",
+                    ),
                 );
+                return false;
+            }
+            failureSet(undefined);
             try {
                 await deps.request("POST", handbookPath(itemId, "/remove"), {
                     mutationId: idCreate(),
                 });
             } catch (error) {
-                throw happyAgentUserError(error);
+                failureSet(happyAgentUserError(error));
+                return false;
             }
-            if (disposed) return;
+            if (disposed) return true;
             const current = store.getState().items;
             store.setState({ items: current.filter((item) => item.id !== itemId) }, false);
             load();
+            return true;
+        },
+        failureDismiss() {
+            failureSet(undefined);
+        },
+        searchUpdate(value) {
+            if (!disposed && store.getState().search !== value)
+                store.setState({ search: value }, false);
+        },
+        folderCreateOpen(parentId) {
+            const state = store.getState();
+            if (disposed || !state.access.edit || state.folderEdit?.saving) return;
+            if (parentId !== null && folderDepth(parentId) >= HAPPY_AGENT_HANDBOOK_FOLDER_DEPTH_MAX)
+                return;
+            folderMutationId = undefined;
+            folderCreateId = undefined;
+            folderEditSet({
+                target: { kind: "create", parentId },
+                name: "",
+                icon: null,
+                saving: false,
+            });
+        },
+        folderEditOpen(folderId) {
+            const state = store.getState();
+            const folder = folderOf(folderId);
+            if (disposed || !state.access.edit || !folder || state.folderEdit?.saving) return;
+            folderMutationId = undefined;
+            folderEditSet({
+                target: { kind: "edit", folderId },
+                name: folder.name,
+                icon: folder.icon,
+                saving: false,
+            });
+        },
+        folderNameUpdate(value) {
+            const edit = store.getState().folderEdit;
+            if (!edit || edit.saving || edit.name === value) return;
+            const { error: _cleared, ...rest } = edit;
+            folderEditSet({ ...rest, name: value });
+        },
+        folderIconUpdate(value) {
+            const edit = store.getState().folderEdit;
+            if (!edit || edit.saving || edit.icon === value) return;
+            const { error: _cleared, ...rest } = edit;
+            folderEditSet({ ...rest, icon: value });
+        },
+        folderSubmit() {
+            const edit = store.getState().folderEdit;
+            if (disposed || !edit || edit.saving) return;
+            const name = edit.name.trim();
+            if (name.length === 0) return;
+            folderMutationId ??= idCreate();
+            const mutationId = folderMutationId;
+            const target = edit.target;
+            const topLevel =
+                target.kind === "create"
+                    ? target.parentId === null
+                    : folderOf(target.folderId)?.parentId === null;
+            const { error: _cleared, ...rest } = edit;
+            folderEditSet({ ...rest, saving: true });
+            let request: Promise<unknown>;
+            if (target.kind === "create") {
+                folderCreateId ??= idCreate() as HappyAgentHandbookFolderId;
+                request = deps.request("POST", handbookFolderPath(), {
+                    id: folderCreateId,
+                    ...(target.parentId === null ? {} : { parentId: target.parentId }),
+                    name,
+                    ...(topLevel && edit.icon !== null ? { icon: edit.icon } : {}),
+                    mutationId,
+                });
+            } else {
+                const folder = folderOf(target.folderId);
+                request = deps.request("PATCH", handbookFolderPath(target.folderId), {
+                    ...(folder?.name === name ? {} : { name }),
+                    ...(topLevel && folder?.icon !== edit.icon ? { icon: edit.icon } : {}),
+                    mutationId,
+                });
+            }
+            void request.then(
+                (answer) => {
+                    if (disposed || store.getState().folderEdit?.target !== target) return;
+                    folderMutationId = undefined;
+                    folderCreateId = undefined;
+                    const folder = handbookFolderRead(recordOf(answer)?.folder);
+                    if (folder) folderReplace(folder);
+                    folderEditSet(undefined);
+                    load();
+                },
+                (error: unknown) => {
+                    if (disposed) return;
+                    if (handbookStatus(error) !== undefined) {
+                        folderMutationId = undefined;
+                        folderCreateId = undefined;
+                    }
+                    const current = store.getState().folderEdit;
+                    if (current?.target !== target) return;
+                    folderEditSet({ ...current, saving: false, error: folderRefusal(error, name) });
+                },
+            );
+        },
+        folderEditClose() {
+            const edit = store.getState().folderEdit;
+            if (!edit || edit.saving) return;
+            folderMutationId = undefined;
+            folderCreateId = undefined;
+            folderEditSet(undefined);
+        },
+        folderDelete(folderId) {
+            if (disposed) return;
+            if (!store.getState().access.edit) {
+                failureSet(new UserError("You can't change the handbook.", "forbidden"));
+                return;
+            }
+            failureSet(undefined);
+            void deps.request("DELETE", handbookFolderPath(folderId)).then(
+                () => {
+                    if (disposed) return;
+                    const current = store.getState().folders;
+                    store.setState(
+                        { folders: current.filter((folder) => folder.id !== folderId) },
+                        false,
+                    );
+                    load();
+                },
+                (error: unknown) => {
+                    failureSet(folderRefusal(error));
+                },
+            );
+        },
+        moveOpen(target) {
+            const state = store.getState();
+            if (disposed || !state.access.edit || state.move?.moving !== undefined) return;
+            moveMutationId = undefined;
+            moveSet({ target });
+        },
+        moveSubmit(folderId) {
+            const move = store.getState().move;
+            if (disposed || !move || move.moving !== undefined) return;
+            const target = move.target;
+            moveMutationId ??= idCreate();
+            const mutationId = moveMutationId;
+            moveSet({ target, moving: folderId });
+            const request =
+                target.kind === "item"
+                    ? deps.request("PATCH", handbookPath(target.itemId), { folderId, mutationId })
+                    : deps.request("PATCH", handbookFolderPath(target.folderId), {
+                          parentId: folderId,
+                          mutationId,
+                      });
+            void request.then(
+                (answer) => {
+                    if (disposed || store.getState().move?.target !== target) return;
+                    moveMutationId = undefined;
+                    const record = recordOf(answer);
+                    const item = handbookItemRead(record?.item);
+                    if (item && !item.removed) itemReplace(item.item);
+                    const folder = handbookFolderRead(record?.folder);
+                    if (folder) folderReplace(folder);
+                    moveSet(undefined);
+                    load();
+                },
+                (error: unknown) => {
+                    if (disposed || store.getState().move?.target !== target) return;
+                    if (handbookStatus(error) !== undefined) moveMutationId = undefined;
+                    moveSet({ target, error: folderRefusal(error) });
+                },
+            );
+        },
+        moveClose() {
+            const move = store.getState().move;
+            if (!move || move.moving !== undefined) return;
+            moveMutationId = undefined;
+            moveSet(undefined);
         },
         historyToggle() {
             if (!disposed) store.setState({ historyOpen: !store.getState().historyOpen }, false);

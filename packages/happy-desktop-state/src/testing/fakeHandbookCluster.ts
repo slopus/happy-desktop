@@ -39,8 +39,22 @@ interface FakeRevision {
     readonly markdown: string;
 }
 
+interface FakeFolder {
+    readonly id: string;
+    parentId: string | null;
+    name: string;
+    icon: string | null;
+    order: string;
+    readonly createdBy: string;
+    readonly createdAt: number;
+    updatedAt: number;
+}
+
+const FOLDER_DEPTH_MAX = 4;
+
 interface FakeItem {
     readonly id: string;
+    folderId: string | null;
     title: string;
     description: string;
     alwaysInContext: boolean;
@@ -64,7 +78,21 @@ export interface FakeHandbookCluster {
         readonly text?: string;
         readonly alwaysInContext?: boolean;
         readonly by?: string;
+        readonly folderId?: string;
     }): void;
+    /** Adds a folder as someone else would. */
+    folderAdd(input: {
+        readonly id: string;
+        readonly name: string;
+        readonly parentId?: string;
+        readonly icon?: string;
+    }): void;
+    /** Where an item lives now; `null` for the root. */
+    folderOf(itemId: string): string | null;
+    /** A folder as the cluster holds it, or undefined once deleted. */
+    folder(
+        folderId: string,
+    ): { readonly parentId: string | null; readonly name: string } | undefined;
     /** Someone writes in a draft: the whole text becomes `text`, as one change. */
     draftWrite(itemId: string, text: string, by?: string): number;
     /** Applies an item at its current draft, as someone else would. */
@@ -87,6 +115,7 @@ export function fakeHandbookClusterCreate(
 ): FakeHandbookCluster {
     const viewerId = options.viewerId ?? "u_viewer";
     const items = new Map<string, FakeItem>();
+    const folders = new Map<string, FakeFolder>();
     const calls: FakeHandbookCall[] = [];
     const mutations = new Map<string, unknown>();
     const faults: { method: string; path: string; status?: number; body?: unknown }[] = [];
@@ -145,6 +174,7 @@ export function fakeHandbookClusterCreate(
             description: item.description,
             alwaysInContext: item.alwaysInContext,
             order: item.order,
+            folderId: item.folderId,
             createdBy: item.createdBy,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
@@ -202,6 +232,7 @@ export function fakeHandbookClusterCreate(
     const itemAdd: FakeHandbookCluster["itemAdd"] = (input) => {
         const item: FakeItem = {
             id: input.id,
+            folderId: input.folderId ?? null,
             title: input.title,
             description: "",
             alwaysInContext: input.alwaysInContext ?? false,
@@ -216,6 +247,97 @@ export function fakeHandbookClusterCreate(
         };
         items.set(item.id, item);
         if (input.text !== undefined) write(item, input.text, input.by ?? viewerId);
+    };
+
+    const folderAdd: FakeHandbookCluster["folderAdd"] = (input) => {
+        folders.set(input.id, {
+            id: input.id,
+            parentId: input.parentId ?? null,
+            name: input.name,
+            icon: input.icon ?? null,
+            order: `a${String((order += 1)).padStart(4, "0")}`,
+            createdBy: viewerId,
+            createdAt: clock,
+            updatedAt: clock,
+        });
+    };
+
+    const depthOf = (folderId: string | null): number => {
+        let depth = 0;
+        for (let id = folderId; id !== null; id = folders.get(id)?.parentId ?? null) depth += 1;
+        return depth;
+    };
+
+    const heightOf = (folderId: string): number =>
+        1 +
+        Math.max(
+            0,
+            ...[...folders.values()]
+                .filter((folder) => folder.parentId === folderId)
+                .map((folder) => heightOf(folder.id)),
+        );
+
+    const siblingNamed = (parentId: string | null, name: string, except?: string): boolean =>
+        [...folders.values()].some(
+            (folder) =>
+                folder.parentId === parentId &&
+                folder.id !== except &&
+                folder.name.toLowerCase() === name.toLowerCase(),
+        );
+
+    const folderRoute = (
+        method: string,
+        id: string | undefined,
+        body: Record<string, unknown>,
+        remember: (answer: unknown) => unknown,
+    ): unknown => {
+        if (!fake.granted.includes("handbook.edit")) refuse(403, "forbidden", "No.");
+        if (id === undefined) {
+            if (method !== "POST") return refuse(404, "not_found", "Not found.");
+            const parentId = typeof body.parentId === "string" ? body.parentId : null;
+            const name = String(body.name ?? "").trim();
+            if (name.length === 0 || name.length > 100) refuse(400, "bad_request", "Bad name.");
+            if (parentId !== null && !folders.has(parentId))
+                refuse(404, "not_found", "No such folder.");
+            if (depthOf(parentId) + 1 > FOLDER_DEPTH_MAX) refuse(400, "bad_request", "Too deep.");
+            if (siblingNamed(parentId, name)) refuse(409, "conflict", "Name taken.");
+            const folderId =
+                typeof body.id === "string" ? body.id : `hf_${String(folders.size + 1)}`;
+            folderAdd({
+                id: folderId,
+                name,
+                ...(parentId === null ? {} : { parentId }),
+                ...(typeof body.icon === "string" ? { icon: body.icon } : {}),
+            });
+            return remember({ folder: { ...folders.get(folderId)! } });
+        }
+        const folder = folders.get(decodeURIComponent(id));
+        if (!folder) return refuse(404, "not_found", "No such folder.");
+        if (method === "DELETE") {
+            const holds =
+                [...folders.values()].some((entry) => entry.parentId === folder.id) ||
+                [...items.values()].some((item) => item.folderId === folder.id);
+            if (holds) refuse(409, "not_empty", "Not empty.");
+            folders.delete(folder.id);
+            return {};
+        }
+        const name = typeof body.name === "string" ? body.name.trim() : folder.name;
+        const parentId =
+            body.parentId === undefined ? folder.parentId : (body.parentId as string | null);
+        if (parentId !== folder.parentId) {
+            if (parentId !== null && !folders.has(parentId))
+                refuse(404, "not_found", "No such folder.");
+            for (let at = parentId; at !== null; at = folders.get(at)?.parentId ?? null)
+                if (at === folder.id) refuse(400, "bad_request", "Into itself.");
+            if (depthOf(parentId) + heightOf(folder.id) > FOLDER_DEPTH_MAX)
+                refuse(400, "bad_request", "Too deep.");
+        }
+        if (siblingNamed(parentId, name, folder.id)) refuse(409, "conflict", "Name taken.");
+        folder.name = name;
+        folder.parentId = parentId;
+        if (body.icon !== undefined) folder.icon = body.icon as string | null;
+        folder.updatedAt = clock;
+        return remember({ folder: { ...folder } });
     };
 
     const sessionsOf = (item: FakeItem) => {
@@ -289,18 +411,23 @@ export function fakeHandbookClusterCreate(
         if (parts.length === 2) {
             if (method === "GET")
                 return {
+                    folders: [...folders.values()].map((folder) => ({ ...folder })),
                     items: [...items.values()].map(wireItem),
                     cursor: null,
                 };
             if (!fake.granted.includes("handbook.edit")) refuse(403, "forbidden", "No.");
             const id = typeof body.id === "string" ? body.id : `hb_${String(items.size + 1)}`;
+            if (typeof body.folderId === "string" && !folders.has(body.folderId))
+                refuse(404, "not_found", "No such folder.");
             itemAdd({
+                ...(typeof body.folderId === "string" ? { folderId: body.folderId } : {}),
                 id,
                 title: String(body.title),
                 ...(typeof body.text === "string" ? { text: body.text } : {}),
             });
             return remember({ item: wireItem(items.get(id)!) });
         }
+        if (parts[2] === "folders") return folderRoute(method, parts[3], body, remember);
         if (parts[2] === "apply") {
             if (!fake.granted.includes("handbook.apply")) refuse(403, "forbidden", "No.");
             const requested = (body.items as { id: string; baseSeq: number }[]).map((entry) => ({
@@ -349,6 +476,12 @@ export function fakeHandbookClusterCreate(
                 if (typeof body.description === "string") item.description = body.description;
                 if (typeof body.alwaysInContext === "boolean")
                     item.alwaysInContext = body.alwaysInContext;
+                if (body.folderId !== undefined) {
+                    const folderId = body.folderId as string | null;
+                    if (folderId !== null && !folders.has(folderId))
+                        refuse(404, "not_found", "No such folder.");
+                    item.folderId = folderId;
+                }
                 item.updatedAt = clock;
                 return remember({ item: wireItem(item) });
             }
@@ -482,6 +615,14 @@ export function fakeHandbookClusterCreate(
             return route(method, path, (body ?? {}) as Record<string, unknown>);
         },
         itemAdd,
+        folderAdd,
+        folderOf(itemId) {
+            return itemFor(itemId).folderId;
+        },
+        folder(folderId) {
+            const folder = folders.get(folderId);
+            return folder ? { parentId: folder.parentId, name: folder.name } : undefined;
+        },
         draftWrite(itemId, text, by = viewerId) {
             return write(itemFor(itemId), text, by);
         },

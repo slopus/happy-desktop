@@ -58,7 +58,10 @@ export type HappyCloudEventType =
     | "handbook.created"
     | "handbook.updated"
     | "handbook.applied"
-    | "handbook.removed";
+    | "handbook.removed"
+    | "handbook.folder.created"
+    | "handbook.folder.updated"
+    | "handbook.folder.deleted";
 
 /**
  * Events the daemon sends that the published protocol package does not name

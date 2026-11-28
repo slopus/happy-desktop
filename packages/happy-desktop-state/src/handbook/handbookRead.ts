@@ -8,6 +8,8 @@ import { UserError } from "../types.js";
 import type {
     HappyAgentHandbookApplied,
     HappyAgentHandbookComparison,
+    HappyAgentHandbookFolder,
+    HappyAgentHandbookFolderId,
     HappyAgentHandbookItem,
     HappyAgentHandbookItemId,
     HappyAgentHandbookRevision,
@@ -97,6 +99,40 @@ function appliedRead(value: unknown): HappyAgentHandbookApplied | null | undefin
     return { revision, seq, appliedBy: applied.appliedBy, appliedAt };
 }
 
+export function handbookFolderPath(folderId?: HappyAgentHandbookFolderId): string {
+    return folderId === undefined
+        ? "v0/handbook/folders"
+        : `v0/handbook/folders/${encodeURIComponent(folderId)}`;
+}
+
+/** A folder as the list or a write answers it. */
+export function handbookFolderRead(value: unknown): HappyAgentHandbookFolder | undefined {
+    const folder = recordOf(value);
+    if (!folder) return undefined;
+    const createdAt = numberOf(folder.createdAt);
+    const updatedAt = numberOf(folder.updatedAt);
+    if (
+        typeof folder.id !== "string" ||
+        (folder.parentId !== null && typeof folder.parentId !== "string") ||
+        typeof folder.name !== "string" ||
+        typeof folder.order !== "string" ||
+        typeof folder.createdBy !== "string" ||
+        createdAt === undefined ||
+        updatedAt === undefined
+    )
+        return undefined;
+    return {
+        id: folder.id as HappyAgentHandbookFolderId,
+        parentId: folder.parentId as HappyAgentHandbookFolderId | null,
+        name: folder.name,
+        icon: typeof folder.icon === "string" ? folder.icon : null,
+        order: folder.order,
+        createdBy: folder.createdBy,
+        createdAt,
+        updatedAt,
+    };
+}
+
 /** An item as the list or a write answers it, with whether it was removed. */
 export function handbookItemRead(
     value: unknown,
@@ -127,6 +163,10 @@ export function handbookItemRead(
             description: typeof item.description === "string" ? item.description : "",
             alwaysInContext: item.alwaysInContext,
             order: item.order,
+            folderId:
+                typeof item.folderId === "string"
+                    ? (item.folderId as HappyAgentHandbookFolderId)
+                    : null,
             createdBy: item.createdBy,
             createdAt,
             updatedAt,

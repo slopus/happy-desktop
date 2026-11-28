@@ -228,3 +228,107 @@ it("builds the history from revisions and sessions, and reads a change only when
         if (cluster.draftText(DEPLOYS) !== "One.") throw new Error(cluster.draftText(DEPLOYS));
     });
 });
+
+it("lists folders, and makes, renames and refuses them in their dialog", async () => {
+    const { cluster, handbook } = setup();
+    cluster.folderAdd({ id: "hf_sales", name: "Sales", icon: "trending-up-outline" });
+    cluster.folderAdd({ id: "hf_enable", name: "Enablement", parentId: "hf_sales" });
+    cluster.itemAdd({ id: DEPLOYS, title: "Deploys", folderId: "hf_enable" });
+    handbook.subscribe(() => undefined);
+    await settled(handbook, () => handbook.get().status === "ready");
+    expect(handbook.get().folders.map((folder) => [folder.name, folder.parentId])).toEqual([
+        ["Sales", null],
+        ["Enablement", "hf_sales"],
+    ]);
+    expect(handbook.get().items[0]?.folderId).toBe("hf_enable");
+
+    handbook.folderCreateOpen("hf_sales" as never);
+    handbook.folderNameUpdate("enablement");
+    handbook.folderSubmit();
+    await settled(handbook, () => handbook.get().folderEdit?.error !== undefined);
+    expect(handbook.get().folderEdit?.error?.message).toBe(
+        "There's already a folder named “enablement” here.",
+    );
+    handbook.folderNameUpdate("Forecast");
+    handbook.folderSubmit();
+    await settled(handbook, () => handbook.get().folderEdit === undefined);
+    expect(handbook.get().folders.map((folder) => folder.name)).toContain("Forecast");
+
+    handbook.folderEditOpen("hf_sales" as never);
+    handbook.folderIconUpdate("megaphone-outline");
+    handbook.folderNameUpdate("Revenue");
+    handbook.folderSubmit();
+    await settled(handbook, () => handbook.get().folderEdit === undefined);
+    expect(cluster.folder("hf_sales")?.name).toBe("Revenue");
+    expect(handbook.get().folders.find((folder) => folder.id === "hf_sales")?.icon).toBe(
+        "megaphone-outline",
+    );
+});
+
+it("moves items and folders, and says why a move was refused", async () => {
+    const { cluster, handbook } = setup();
+    cluster.folderAdd({ id: "hf_a", name: "A" });
+    cluster.folderAdd({ id: "hf_b", name: "B", parentId: "hf_a" });
+    cluster.folderAdd({ id: "hf_c", name: "C", parentId: "hf_b" });
+    cluster.folderAdd({ id: "hf_d", name: "D", parentId: "hf_c" });
+    cluster.folderAdd({ id: "hf_x", name: "X" });
+    cluster.folderAdd({ id: "hf_y", name: "Y", parentId: "hf_x" });
+    cluster.itemAdd({ id: DEPLOYS, title: "Deploys" });
+    handbook.subscribe(() => undefined);
+    await settled(handbook, () => handbook.get().status === "ready");
+
+    handbook.moveOpen({ kind: "item", itemId: DEPLOYS });
+    cluster.failNext("PATCH", `v0/handbook/${DEPLOYS}`);
+    handbook.moveSubmit("hf_d" as never);
+    await settled(handbook, () => handbook.get().move?.error !== undefined);
+    handbook.moveSubmit("hf_d" as never);
+    await settled(handbook, () => handbook.get().move === undefined);
+    expect(cluster.folderOf(DEPLOYS)).toBe("hf_d");
+    // Tried again after no answer, the move kept its mutation ID.
+    const moves = cluster.calls.filter((call) => call.path === `v0/handbook/${DEPLOYS}`);
+    expect(
+        new Set(moves.map((call) => (call.body as { mutationId: string }).mutationId)).size,
+    ).toBe(1);
+    expect(handbook.get().items[0]?.folderId).toBe("hf_d");
+
+    // X holds Y, so X under D would be five levels deep.
+    handbook.moveOpen({ kind: "folder", folderId: "hf_x" as never });
+    handbook.moveSubmit("hf_c" as never);
+    await settled(handbook, () => handbook.get().move?.error !== undefined);
+    expect(handbook.get().move?.error?.code).toBe("invalid");
+    handbook.moveSubmit(null);
+    await settled(handbook, () => handbook.get().move === undefined);
+});
+
+it("shows why a page or folder action did not happen", async () => {
+    const { cluster, handbook } = setup();
+    cluster.folderAdd({ id: "hf_a", name: "A" });
+    cluster.itemAdd({ id: DEPLOYS, title: "Deploys", folderId: "hf_a" });
+    handbook.subscribe(() => undefined);
+    await settled(handbook, () => handbook.get().status === "ready");
+
+    handbook.folderDelete("hf_a" as never);
+    await settled(handbook, () => handbook.get().failure !== undefined);
+    expect(handbook.get().failure?.code).toBe("not_empty");
+    handbook.failureDismiss();
+    expect(handbook.get().failure).toBeUndefined();
+
+    cluster.refuseNext("POST", "v0/handbook", 403, { error: { code: "forbidden" } });
+    await expect(handbook.itemCreate("Untitled", null)).rejects.toThrow();
+    expect(handbook.get().failure).toBeDefined();
+
+    cluster.failNext("POST", `v0/handbook/${DEPLOYS}/discard`);
+    handbook.itemDiscard(DEPLOYS);
+    await settled(handbook, () => handbook.get().failure?.message !== undefined);
+
+    cluster.refuseNext("POST", `v0/handbook/${DEPLOYS}/remove`, 409, {
+        error: { code: "removed" },
+    });
+    expect(await handbook.itemRemove(DEPLOYS)).toBe(false);
+    expect(handbook.get().failure).toBeDefined();
+    expect(await handbook.itemRemove(DEPLOYS)).toBe(true);
+    expect(handbook.get().failure).toBeUndefined();
+
+    const id = await handbook.itemCreate("Forecast", "hf_a" as never);
+    expect(cluster.folderOf(id)).toBe("hf_a");
+});
